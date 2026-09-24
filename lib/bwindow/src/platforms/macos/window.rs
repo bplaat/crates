@@ -380,6 +380,7 @@ impl PlatformWindow {
             let window: Allocated<Object> = msg_send![class!(NSWindow), alloc];
             let window: Retained<Object> = msg_send![window, initWithContentRect:NSRect::new(NSPoint::new(0.0, 0.0), window_rect.size),
                 styleMask:window_style_mask, backing:NS_BACKING_STORE_BUFFERED, defer:Bool::NO];
+            let _: () = msg_send![&window, setReleasedWhenClosed:Bool::NO];
             let _: () = msg_send![&window, setFrameOrigin:window_rect.origin];
             let _: () = msg_send![&window, setTitle:&*NSString::new(&builder.title)];
             if builder.should_fullscreen {
