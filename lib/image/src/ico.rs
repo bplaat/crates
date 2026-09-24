@@ -8,6 +8,7 @@ use std::time::Duration;
 
 use super::{DecodeError, Format, Image, LoopCount, Reader, Result, bmp, png};
 
+// MARK: Decoder
 #[derive(Clone, Copy)]
 struct Entry {
     width: u32,
@@ -92,6 +93,7 @@ const fn dimension(value: u8) -> u32 {
     if value == 0 { 256 } else { value as u32 }
 }
 
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;
