@@ -4,8 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use super::{Budget, DecodeError, Format, Image, Reader, Result, pixel_len};
+use super::{Bitmap, Budget, DecodeError, EncodeError, Format, Image, Reader, Result, pixel_len};
 
+// MARK: Decoder
 #[derive(Clone, Copy, Eq, PartialEq)]
 enum Compression {
     Rgb,
@@ -561,9 +562,226 @@ fn put(pixels: &mut [u8], offset: usize, index: u8, palette: &[[u8; 4]]) -> Resu
     Ok(())
 }
 
+// MARK: Encoder
+fn bmp_palette_slot(lookup: &[u64; 512], key: u32) -> usize {
+    let mut slot = (key.wrapping_mul(0x9e37_79b1) as usize) & (lookup.len() - 1);
+    while lookup[slot] != 0 && lookup[slot] >> 9 != u64::from(key) {
+        slot = (slot + 1) & (lookup.len() - 1);
+    }
+    slot
+}
+
+pub(super) fn encode(bitmap: &Bitmap) -> std::result::Result<Vec<u8>, EncodeError> {
+    let width = i32::try_from(bitmap.width).map_err(|_| EncodeError::InvalidDimensions)?;
+    let height = i32::try_from(bitmap.height).map_err(|_| EncodeError::InvalidDimensions)?;
+    let opaque = bitmap.data.as_chunks::<4>().0.iter().all(|p| p[3] == 255);
+    let mut indexed = None;
+    if opaque {
+        let mut colors = Vec::<[u8; 3]>::with_capacity(256);
+        let mut lookup = [0u64; 512];
+        let mut indices = Vec::new();
+        indices
+            .try_reserve_exact(bitmap.data.len() / 4)
+            .map_err(|_| EncodeError::ImageTooLarge)?;
+        for pixel in bitmap.data.as_chunks::<4>().0 {
+            let rgb = [pixel[0], pixel[1], pixel[2]];
+            let key = u32::from_be_bytes([0, rgb[0], rgb[1], rgb[2]]);
+            let slot = bmp_palette_slot(&lookup, key);
+            if lookup[slot] == 0 {
+                if colors.len() == 256 {
+                    colors.clear();
+                    break;
+                }
+                let index = colors.len();
+                colors.push(rgb);
+                lookup[slot] = (u64::from(key) << 9) | (index as u64 + 1);
+            }
+            indices.push((lookup[slot] - 1) as u8);
+        }
+        if !colors.is_empty() {
+            indexed = Some((colors, indices));
+        }
+    }
+    let rgb_stride = u64::from(bitmap.width)
+        .checked_mul(3)
+        .ok_or(EncodeError::ImageTooLarge)?
+        .div_ceil(4)
+        * 4;
+    let indexed_depth = match indexed.as_ref().map(|(colors, _)| colors.len()) {
+        Some(1..=2) => 1u16,
+        Some(3..=16) => 4,
+        _ => 8,
+    };
+    let indexed_row_len = (u64::from(bitmap.width) * u64::from(indexed_depth)).div_ceil(8);
+    let indexed_stride = indexed_row_len.div_ceil(4) * 4;
+    let rle = indexed
+        .as_ref()
+        .map(|(_, indices)| bmp_rle8(indices, bitmap.width as usize));
+    let rgb_size = 54 + rgb_stride * u64::from(bitmap.height);
+    let indexed_size = indexed.as_ref().map(|(colors, _)| {
+        54 + colors.len() as u64 * 4 + indexed_stride * u64::from(bitmap.height)
+    });
+    let rle_size = indexed
+        .as_ref()
+        .zip(rle.as_ref())
+        .map(|((colors, _), bytes)| 54 + colors.len() as u64 * 4 + bytes.len() as u64);
+    let use_rle =
+        rle_size.is_some_and(|size| size < rgb_size && indexed_size.is_none_or(|raw| size < raw));
+    let use_indexed = use_rle || indexed_size.is_some_and(|size| size < rgb_size);
+    let depth: u16 = if use_rle {
+        8
+    } else if use_indexed {
+        indexed_depth
+    } else if opaque {
+        24
+    } else {
+        32
+    };
+    let stride = match depth {
+        1 | 4 | 8 => indexed_stride,
+        24 => rgb_stride,
+        _ => u64::from(bitmap.width) * 4,
+    };
+    let palette_len = if use_indexed {
+        indexed.as_ref().expect("indexed data").0.len()
+    } else {
+        0
+    };
+    let offset = if depth == 32 {
+        70u64
+    } else {
+        54 + palette_len as u64 * 4
+    };
+    let image_size = if use_rle {
+        rle.as_ref().expect("RLE data").len() as u64
+    } else {
+        stride
+            .checked_mul(u64::from(bitmap.height))
+            .ok_or(EncodeError::ImageTooLarge)?
+    };
+    let size = offset
+        .checked_add(image_size)
+        .ok_or(EncodeError::ImageTooLarge)?;
+    let size = u32::try_from(size).map_err(|_| EncodeError::ImageTooLarge)?;
+    let mut out = Vec::new();
+    out.try_reserve_exact(size as usize)
+        .map_err(|_| EncodeError::ImageTooLarge)?;
+    out.extend_from_slice(b"BM");
+    out.extend_from_slice(&size.to_le_bytes());
+    out.extend_from_slice(&[0; 4]);
+    out.extend_from_slice(&(offset as u32).to_le_bytes());
+    out.extend_from_slice(&(if depth == 32 { 56u32 } else { 40 }).to_le_bytes());
+    out.extend_from_slice(&width.to_le_bytes());
+    out.extend_from_slice(&height.to_le_bytes());
+    out.extend_from_slice(&1u16.to_le_bytes());
+    out.extend_from_slice(&depth.to_le_bytes());
+    out.extend_from_slice(
+        &(if depth == 32 {
+            3u32
+        } else if use_rle {
+            1
+        } else {
+            0
+        })
+        .to_le_bytes(),
+    );
+    out.extend_from_slice(&(image_size as u32).to_le_bytes());
+    out.extend_from_slice(&[0; 8]);
+    out.extend_from_slice(&(palette_len as u32).to_le_bytes());
+    out.extend_from_slice(&0u32.to_le_bytes());
+    if depth == 32 {
+        for mask in [0x00ff_0000u32, 0x0000_ff00, 0x0000_00ff, 0xff00_0000] {
+            out.extend_from_slice(&mask.to_le_bytes());
+        }
+    }
+    if let Some((colors, indices)) = indexed.as_ref().filter(|_| use_indexed) {
+        for color in colors {
+            out.extend_from_slice(&[color[2], color[1], color[0], 0]);
+        }
+        if use_rle {
+            out.extend_from_slice(rle.as_ref().expect("RLE data"));
+        } else {
+            for row in indices.chunks_exact(bitmap.width as usize).rev() {
+                if depth == 8 {
+                    out.extend_from_slice(row);
+                } else {
+                    let per_byte = 8 / usize::from(depth);
+                    for chunk in row.chunks(per_byte) {
+                        let mut byte = 0u8;
+                        for (i, &index) in chunk.iter().enumerate() {
+                            byte |= index << (8 - usize::from(depth) * (i + 1));
+                        }
+                        out.push(byte);
+                    }
+                }
+                out.resize(out.len() + (stride - indexed_row_len) as usize, 0);
+            }
+        }
+    } else {
+        for row in bitmap.data.chunks_exact(bitmap.width as usize * 4).rev() {
+            for pixel in row.as_chunks::<4>().0 {
+                out.extend_from_slice(&[pixel[2], pixel[1], pixel[0]]);
+                if depth == 32 {
+                    out.push(pixel[3]);
+                }
+            }
+            out.resize(
+                out.len() + (stride as usize - bitmap.width as usize * usize::from(depth / 8)),
+                0,
+            );
+        }
+    }
+    Ok(out)
+}
+
+fn bmp_run(row: &[u8], limit: usize) -> usize {
+    row.iter()
+        .take(limit)
+        .take_while(|&&value| value == row[0])
+        .count()
+}
+
+fn bmp_rle8(indices: &[u8], width: usize) -> Vec<u8> {
+    let mut out = Vec::new();
+    for row in indices.chunks_exact(width).rev() {
+        let mut x = 0;
+        while x < width {
+            // Absolute mode stores distinct indices at one byte each instead of two.
+            let mut end = x;
+            while end < width && end - x < 255 && bmp_run(&row[end..], 3) < 3 {
+                end += 1;
+            }
+            if end - x >= 3 {
+                out.extend_from_slice(&[0, (end - x) as u8]);
+                out.extend_from_slice(&row[x..end]);
+                if (end - x) % 2 == 1 {
+                    out.push(0);
+                }
+                x = end;
+                continue;
+            }
+            let count = bmp_run(&row[x..], if end > x { end - x } else { 255 });
+            out.extend_from_slice(&[count as u8, row[x]]);
+            x += count;
+        }
+        out.extend_from_slice(&[0, 0]);
+    }
+    out.extend_from_slice(&[0, 1]);
+    out
+}
+
+// MARK: Tests
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::{EncodeOptions, EncodingStyle, Format, encode, encode_with_options};
+
+    fn smallest() -> EncodeOptions {
+        EncodeOptions {
+            style: EncodingStyle::MaxCompression,
+            ..EncodeOptions::default()
+        }
+    }
 
     #[test]
     fn compression_values_are_validated() {
@@ -802,5 +1020,80 @@ mod tests {
             decode(&data).expect("OS/2 RLE24 bitmap").pixels(),
             &[1, 2, 3, 255, 1, 2, 3, 255]
         );
+    }
+
+    #[cfg(feature = "bmp")]
+    #[test]
+    fn bmp_packs_indexed_pixels_in_both_styles() {
+        let bitmap = Bitmap::new(32, 16, [255, 0, 0, 255].repeat(512)).unwrap();
+        let normal = encode(&bitmap, Format::Bmp).unwrap();
+        let small = encode_with_options(&bitmap, Format::Bmp, smallest()).unwrap();
+        assert_eq!(small, normal);
+        assert_eq!(u16::from_le_bytes([small[28], small[29]]), 1);
+        assert_eq!(u32::from_le_bytes(small[30..34].try_into().unwrap()), 0);
+        assert_eq!(crate::decode(&small).unwrap().pixels(), bitmap.data());
+
+        let mut pixels = Vec::new();
+        for i in 0..256u16 {
+            pixels.extend_from_slice(&[(i % 4) as u8 * 60, 0, 0, 255]);
+        }
+        let bitmap = Bitmap::new(32, 8, pixels).unwrap();
+        let small = encode_with_options(&bitmap, Format::Bmp, smallest()).unwrap();
+        assert_eq!(u16::from_le_bytes([small[28], small[29]]), 4);
+        assert_eq!(crate::decode(&small).unwrap().pixels(), bitmap.data());
+    }
+
+    #[test]
+    fn bmp_rle8_uses_absolute_mode_for_distinct_indices() {
+        let row = [1, 2, 3, 4, 5, 9, 9, 9, 9, 6, 7, 7, 8];
+        assert_eq!(
+            bmp_rle8(&row, row.len()),
+            [0, 5, 1, 2, 3, 4, 5, 0, 4, 9, 0, 4, 6, 7, 7, 8, 0, 0, 0, 1]
+        );
+
+        let mut pixels = Vec::new();
+        for i in 0..32 * 32 {
+            let index = if i % 32 < 8 { i % 20 } else { 3 };
+            pixels.extend_from_slice(&[index as u8 * 12, 0, 0, 255]);
+        }
+        let bitmap = Bitmap::new(32, 32, pixels).unwrap();
+        let encoded = encode(&bitmap, Format::Bmp).unwrap();
+        assert_eq!(u32::from_le_bytes(encoded[30..34].try_into().unwrap()), 1);
+        assert_eq!(crate::decode(&encoded).unwrap().pixels(), bitmap.data());
+    }
+
+    #[cfg(feature = "bmp")]
+    #[test]
+    fn bmp_keeps_packed_indexed_when_rle_grows() {
+        let mut pixels = Vec::new();
+        for i in 0..1024 {
+            pixels.extend_from_slice(if i % 2 == 0 {
+                &[255, 0, 0, 255]
+            } else {
+                &[0, 0, 255, 255]
+            });
+        }
+        let bitmap = Bitmap::new(32, 32, pixels).unwrap();
+        let small = encode_with_options(&bitmap, Format::Bmp, smallest()).unwrap();
+        assert_eq!(u16::from_le_bytes([small[28], small[29]]), 1);
+        assert_eq!(u32::from_le_bytes(small[30..34].try_into().unwrap()), 0);
+        assert_eq!(crate::decode(&small).unwrap().pixels(), bitmap.data());
+    }
+
+    #[cfg(feature = "bmp")]
+    #[test]
+    fn compact_bmp_uses_24_bit_for_opaque_photos() {
+        let mut pixels = Vec::new();
+        for i in 0..300u16 {
+            pixels.extend_from_slice(&[(i & 255) as u8, (i >> 8) as u8, 17, 255]);
+        }
+        let bitmap = Bitmap::new(20, 15, pixels).unwrap();
+        let normal = encode(&bitmap, Format::Bmp).unwrap();
+        assert_eq!(
+            EncodeOptions::default().style,
+            EncodingStyle::NormalCompression
+        );
+        assert_eq!(u16::from_le_bytes([normal[28], normal[29]]), 24);
+        assert_eq!(crate::decode(&normal).unwrap().pixels(), bitmap.data());
     }
 }
