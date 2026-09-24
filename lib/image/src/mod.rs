@@ -296,6 +296,15 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
     if _data.starts_with(b"BM") {
         return bmp::decode(_data);
     }
+    #[cfg(feature = "bmp")]
+    if let Some(length) = _data.first_chunk::<4>()
+        && matches!(
+            u32::from_le_bytes(*length),
+            12 | 40 | 52 | 56 | 64 | 108 | 124
+        )
+    {
+        return bmp::decode_dib(_data);
+    }
     #[cfg(feature = "ico")]
     if _data.starts_with(b"\0\0\x01\0") {
         return ico::decode(_data);

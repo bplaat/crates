@@ -268,6 +268,20 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
     ))
 }
 
+pub(super) fn decode_dib(data: &[u8]) -> Result<Image> {
+    let mut r = Reader::new(data);
+    let header = BmpHeader::parse_dib(&mut r, false, 0)?;
+    let (palette, palette_len) = header.read_palette(&mut r)?;
+    let mut budget = Budget::default();
+    let (pixels, _) = header.decode_pixels(&data[r.pos..], &palette[..palette_len], &mut budget)?;
+    Ok(Image::still(
+        Format::Bmp,
+        header.width,
+        header.height,
+        pixels,
+    ))
+}
+
 #[cfg(feature = "ico")]
 pub(super) fn decode_icon(
     data: &[u8],
@@ -824,6 +838,15 @@ mod tests {
         }
         out.extend_from_slice(pixels);
         out
+    }
+
+    #[test]
+    fn decodes_standalone_dib() {
+        let bmp = bitmap(1, 1, 24, 0, &[], &[], &[3, 2, 1, 0]);
+        assert_eq!(
+            decode_dib(&bmp[14..]).expect("standalone DIB").pixels(),
+            decode(&bmp).expect("BMP file").pixels()
+        );
     }
 
     #[test]
