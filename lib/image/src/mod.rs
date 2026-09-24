@@ -9,6 +9,12 @@
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
+mod encoder;
+pub use encoder::{
+    EncodeError, EncodeOptions, EncodingStyle, encode, encode_animation,
+    encode_animation_with_options, encode_with_options,
+};
+
 #[cfg(feature = "bmp")]
 mod bmp;
 #[cfg(feature = "gif")]
@@ -84,6 +90,16 @@ pub struct Bitmap {
 }
 
 impl Bitmap {
+    /// Creates a bitmap from tightly packed RGBA8 pixels.
+    pub fn new(width: u32, height: u32, data: Vec<u8>) -> std::result::Result<Self, EncodeError> {
+        encoder::validate_pixels(width, height, &data)?;
+        Ok(Self {
+            width,
+            height,
+            data,
+        })
+    }
+
     /// Returns the width in pixels.
     pub const fn width(&self) -> u32 {
         self.width
@@ -108,6 +124,11 @@ pub struct Frame {
 }
 
 impl Frame {
+    /// Creates a displayed frame with its duration.
+    pub const fn new(bitmap: Bitmap, delay: Duration) -> Self {
+        Self { bitmap, delay }
+    }
+
     /// Returns the complete displayed bitmap.
     pub const fn bitmap(&self) -> &Bitmap {
         &self.bitmap
@@ -135,6 +156,24 @@ pub struct Image {
 }
 
 impl Image {
+    /// Encodes the image in the requested raster format.
+    pub fn encode(&self, format: Format) -> std::result::Result<Vec<u8>, EncodeError> {
+        self.encode_with_options(format, EncodeOptions::default())
+    }
+
+    /// Encodes the image in the requested raster format with options.
+    pub fn encode_with_options(
+        &self,
+        format: Format,
+        options: EncodeOptions,
+    ) -> std::result::Result<Vec<u8>, EncodeError> {
+        if self.is_animated {
+            encode_animation_with_options(format, &self.frames, self.loop_count, options)
+        } else {
+            encode_with_options(&self.frames[0].bitmap, format, options)
+        }
+    }
+
     /// Returns the encoded format.
     pub const fn format(&self) -> Format {
         self.format
@@ -509,6 +548,7 @@ impl Area {
     }
 }
 
+// MARK: Tests
 #[cfg(all(
     test,
     any(
