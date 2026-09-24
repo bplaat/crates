@@ -7,8 +7,10 @@
 #![allow(missing_docs)]
 
 use std::hint::black_box;
+use std::time::Duration;
 
 use criterion::{Criterion, Throughput, criterion_group, criterion_main};
+use image::{Bitmap, EncodeOptions, EncodingStyle, Format, Frame, LoopCount};
 
 // Builds a bottom-up 24-bit BMP gradient, avoiding a large checked-in fixture.
 fn bmp(width: u32, height: u32) -> Vec<u8> {
@@ -116,5 +118,158 @@ fn decode(c: &mut Criterion) {
     raster.finish();
 }
 
-criterion_group!(benches, decode);
+fn encode(c: &mut Criterion) {
+    let mut pixels = Vec::with_capacity(128 * 128 * 4);
+    for y in 0..128u8 {
+        for x in 0..128u8 {
+            pixels.extend_from_slice(&[x, y, x ^ y, 255]);
+        }
+    }
+    let bitmap = Bitmap::new(128, 128, pixels).expect("valid bitmap");
+    let formats: &[(&str, Format)] = &[
+        #[cfg(feature = "qoi")]
+        ("qoi", Format::Qoi),
+        #[cfg(feature = "jpeg")]
+        ("jpeg", Format::Jpeg),
+        #[cfg(feature = "png")]
+        ("png", Format::Png),
+        #[cfg(feature = "gif")]
+        ("gif", Format::Gif),
+        #[cfg(feature = "bmp")]
+        ("bmp", Format::Bmp),
+    ];
+    let styles = [
+        ("normal", EncodingStyle::NormalCompression),
+        ("max", EncodingStyle::MaxCompression),
+    ];
+    let mut raster = c.benchmark_group("image_encode_raster");
+    raster.throughput(Throughput::Elements(128 * 128));
+    for &(name, format) in formats {
+        for &(style_name, style) in &styles {
+            let bench_name = format!("{name}_{style_name}");
+            let options = EncodeOptions {
+                style,
+                ..EncodeOptions::default()
+            };
+            raster.bench_function(&bench_name, |b| {
+                b.iter(|| {
+                    black_box(
+                        image::encode_with_options(black_box(&bitmap), format, options)
+                            .expect("encode bitmap"),
+                    )
+                });
+            });
+        }
+    }
+    let mut palette_pixels = Vec::with_capacity(128 * 128 * 4);
+    for y in 0..128u8 {
+        for x in 0..128u8 {
+            palette_pixels.extend_from_slice(&match (x / 8 + y / 8) % 4 {
+                0 => [255, 0, 0, 255],
+                1 => [0, 255, 0, 255],
+                2 => [0, 0, 255, 255],
+                _ => [255, 255, 0, 255],
+            });
+        }
+    }
+    let palette_bitmap = Bitmap::new(128, 128, palette_pixels).expect("valid bitmap");
+    let palette_formats: &[(&str, Format)] = &[
+        #[cfg(feature = "png")]
+        ("png_palette", Format::Png),
+        #[cfg(feature = "gif")]
+        ("gif_palette", Format::Gif),
+        #[cfg(feature = "bmp")]
+        ("bmp_palette", Format::Bmp),
+    ];
+    for &(name, format) in palette_formats {
+        for &(style_name, style) in &styles {
+            let bench_name = format!("{name}_{style_name}");
+            let options = EncodeOptions {
+                style,
+                ..EncodeOptions::default()
+            };
+            raster.bench_function(&bench_name, |b| {
+                b.iter(|| {
+                    black_box(
+                        image::encode_with_options(black_box(&palette_bitmap), format, options)
+                            .expect("encode bitmap"),
+                    )
+                });
+            });
+        }
+    }
+    #[cfg(feature = "png")]
+    {
+        let mut transparent_pixels = bitmap.data().to_vec();
+        transparent_pixels[3] = 0;
+        let transparent = Bitmap::new(128, 128, transparent_pixels).expect("valid bitmap");
+        for &(style_name, style) in &styles {
+            let bench_name = format!("png_transparent_{style_name}");
+            let options = EncodeOptions {
+                style,
+                ..EncodeOptions::default()
+            };
+            raster.bench_function(&bench_name, |b| {
+                b.iter(|| {
+                    black_box(
+                        image::encode_with_options(black_box(&transparent), Format::Png, options)
+                            .expect("encode bitmap"),
+                    )
+                });
+            });
+        }
+    }
+    raster.finish();
+
+    let mut second = bitmap.data().to_vec();
+    for y in 32..96 {
+        for x in 32..96 {
+            let offset = (y * 128 + x) * 4;
+            second[offset..offset + 4].copy_from_slice(&[255, 0, 0, 255]);
+        }
+    }
+    let frames = [
+        Frame::new(
+            Bitmap::new(128, 128, bitmap.data().to_vec()).expect("valid bitmap"),
+            Duration::from_millis(100),
+        ),
+        Frame::new(
+            Bitmap::new(128, 128, second).expect("valid bitmap"),
+            Duration::from_millis(100),
+        ),
+    ];
+    let animated_formats: &[(&str, Format)] = &[
+        #[cfg(feature = "png")]
+        ("apng", Format::Png),
+        #[cfg(feature = "gif")]
+        ("gif", Format::Gif),
+    ];
+    let mut animation = c.benchmark_group("image_encode_animation");
+    animation.throughput(Throughput::Elements(128 * 128 * frames.len() as u64));
+    for &(name, format) in animated_formats {
+        for &(style_name, style) in &styles {
+            let bench_name = format!("{name}_{style_name}");
+            let options = EncodeOptions {
+                style,
+                ..EncodeOptions::default()
+            };
+            animation.bench_function(&bench_name, |b| {
+                b.iter(|| {
+                    black_box(
+                        image::encode_animation_with_options(
+                            format,
+                            black_box(&frames),
+                            LoopCount::Infinite,
+                            options,
+                        )
+                        .expect("encode animation"),
+                    )
+                });
+            });
+        }
+    }
+    animation.finish();
+}
+
+criterion_group!(benches, decode, encode);
 criterion_main!(benches);
