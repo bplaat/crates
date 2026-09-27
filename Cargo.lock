@@ -519,6 +519,7 @@ dependencies = [
 name = "hmac"
 version = "0.13.0+patch"
 dependencies = [
+ "criterion",
  "digest",
  "sha2",
 ]
