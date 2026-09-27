@@ -6,5 +6,12 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
+[dev-dependencies]
+criterion = { path = "../criterion" }
+
+[[bench]]
+name = "base64"
+harness = false
+
 [lints]
 workspace = true

@@ -44,6 +44,9 @@ dependencies = [
 [[package]]
 name = "base64"
 version = "0.23.1+patch"
+dependencies = [
+ "criterion",
+]
 
 [[package]]
 name = "basic-toml"
