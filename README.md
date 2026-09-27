@@ -130,6 +130,7 @@ These libraries are minimal replacements for commonly used crates.
 - [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
+- [criterion](lib/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
 - [digest](lib/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
