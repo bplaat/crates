@@ -182,6 +182,14 @@ These libraries are minimal replacements for commonly used crates.
 
 ### Additional tools
 
+- Run the local [criterion](lib/criterion) benchmarks with:
+
+    ```sh
+    cargo bench -p base64 --bench base64
+    cargo bench -p image --bench image
+    cargo bench -p sha2 --bench sha2
+    ```
+
 - For coverage reports, install the `llvm-tools` and `cargo-llvm-cov` tool:
 
     ```sh
