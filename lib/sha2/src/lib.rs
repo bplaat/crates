@@ -18,6 +18,7 @@ const K: [u32; 64] = [
 ];
 
 /// A SHA-256 hasher
+#[derive(Clone)]
 pub struct Sha256 {
     state: [u32; 8],
     buffer: [u8; 64],
