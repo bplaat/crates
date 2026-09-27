@@ -1567,6 +1567,7 @@ name = "zip"
 version = "8.6.0+patch"
 dependencies = [
  "bitflags",
+ "criterion",
  "miniz_oxide",
 ]
 
