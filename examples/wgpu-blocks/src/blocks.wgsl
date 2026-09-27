@@ -56,7 +56,7 @@ struct Out {
     out.position = vec4(dot(relative, right) * focal / scene.settings.y,
         dot(relative, up) * focal, (500.0 * depth - 500.0) / 499.0, depth);
     out.uv = vec2(select(0.0, 1.0, corner == 1u || corner == 2u), select(1.0, 0.0, corner >= 2u));
-    out.shade = (0.42 + 0.58 * max(dot(normal, normalize(vec3(0.45, 0.78, 0.30))), 0.0)) * data.position.w;
+    out.shade = (0.42 + 0.58 * max(dot(normal, normalize(vec3(0.45, 0.78, 0.30))), 0.0)) * data.position.w / 255.0;
     out.fog = clamp((length(relative) - 120.0) / 180.0, 0.0, 1.0);
     out.layer = data.data.y;
     out.water = data.data.z;

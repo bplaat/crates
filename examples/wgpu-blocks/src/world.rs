@@ -134,7 +134,11 @@ impl World {
                 highest = highest.max(value);
             }
         }
-        let span = (highest - lowest).max(0.001);
+        let span = if highest - lowest < 0.001 {
+            1.0
+        } else {
+            highest - lowest
+        };
         let mut histogram = [0; SIZE];
         for (height, value) in self.heights.iter_mut().zip(raw) {
             let level = 6 + ((value - lowest) / span * 44.0) as usize;
@@ -209,7 +213,7 @@ impl World {
                             [x as f32 * 0.075, y as f32 * 0.11, z as f32 * 0.075],
                             2,
                         );
-                        if (0.615..0.715).contains(&cave) {
+                        if cave > 0.615 && cave < 0.715 {
                             kind = AIR;
                         }
                     }
@@ -272,6 +276,7 @@ impl World {
         self.set(x + 6, base + 2, z + 3, AIR);
         self.set(x + 1, base + 5, z + 1, GREYSTONE);
         self.set(x + 1, base + 6, z + 1, GREYSTONE);
+        self.heights[x + 1 + (z + 1) * SIZE] = (base + 6) as u8;
     }
 
     fn grow_plants(&mut self) {
@@ -332,20 +337,20 @@ impl World {
         self.voxels[x + y * SIZE + z * SIZE * SIZE] = kind;
     }
 
-    fn ambient_occlusion(&self, x: i32, y: i32, z: i32) -> f32 {
+    fn ambient_occlusion(&self, x: i32, y: i32, z: i32) -> u8 {
         let mut blocked = 0;
         for dz in -1..=1 {
             for dy in -1..=1 {
                 for dx in -1..=1 {
                     if (dx != 0 || dy != 0 || dz != 0)
-                        && matches!(self.get(x + dx, y + dy, z + dz), 1..=10 | 12..=16)
+                        && !matches!(self.get(x + dx, y + dy, z + dz), AIR | WATER)
                     {
                         blocked += 1;
                     }
                 }
             }
         }
-        1.0 - 0.45 * blocked as f32 / 26.0
+        (255.0 * (1.0 - 0.45 * blocked as f32 / 26.0)) as u8
     }
 
     pub(crate) fn faces(&self, materials: &[[u32; 3]]) -> (Vec<Face>, u32) {
@@ -359,6 +364,7 @@ impl World {
                         if kind == AIR || (kind == WATER) != water {
                             continue;
                         }
+                        let mut occlusion = None;
                         for (face, offset) in FACES.iter().enumerate() {
                             let neighbor = self.get(
                                 x as i32 + offset[0],
@@ -368,7 +374,9 @@ impl World {
                             if neighbor != AIR && !(neighbor == WATER && !water) {
                                 continue;
                             }
-                            let shade = self.ambient_occlusion(x as i32, y as i32, z as i32);
+                            let shade = *occlusion.get_or_insert_with(|| {
+                                self.ambient_occlusion(x as i32, y as i32, z as i32)
+                            });
                             let layer = materials[kind as usize][if face == 4 {
                                 1
                             } else if face == 5 {
@@ -377,7 +385,7 @@ impl World {
                                 0
                             }];
                             faces.push(Face {
-                                position: [x as f32, y as f32, z as f32, shade],
+                                position: [x as f32, y as f32, z as f32, f32::from(shade)],
                                 data: [face as u32, layer, u32::from(water), 0],
                             });
                         }
@@ -403,4 +411,37 @@ pub(crate) fn face_bytes(faces: &[Face]) -> Vec<u8> {
         }
     }
     bytes
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ambient_occlusion_counts_only_opaque_neighbors() {
+        let mut world = World {
+            voxels: vec![AIR; SIZE * SIZE * SIZE],
+            heights: vec![0; SIZE * SIZE],
+            seed: 0,
+            sea: 0,
+        };
+        assert_eq!(world.ambient_occlusion(32, 32, 32), 255);
+
+        world.set(33, 32, 32, WATER);
+        assert_eq!(world.ambient_occlusion(32, 32, 32), 255);
+
+        world.set(33, 32, 32, STONE);
+        assert_eq!(world.ambient_occlusion(32, 32, 32), 250);
+
+        for z in 31..=33 {
+            for y in 31..=33 {
+                for x in 31..=33 {
+                    if (x, y, z) != (32, 32, 32) {
+                        world.set(x, y, z, STONE);
+                    }
+                }
+            }
+        }
+        assert_eq!(world.ambient_occlusion(32, 32, 32), 140);
+    }
 }
