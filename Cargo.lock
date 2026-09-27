@@ -528,6 +528,7 @@ dependencies = [
 name = "image"
 version = "0.1.0"
 dependencies = [
+ "criterion",
  "miniz_oxide",
  "xmlparser",
 ]
