@@ -71,7 +71,9 @@ pixels directly without another decoder or test dependency. The checked-in
 subset covers
 16-bit and interlaced PNG, APNG disposal and blending, GIF animation and
 interlacing, BMP depth/bitfield/top-down variants, ICO masks and PNG payloads,
-progressive JPEG, and QOI. Inputs are stored below `tests/images` and flat RGBA8
+progressive JPEG, and QOI. Subsampled baseline JPEGs with restart markers and a
+one-pixel 4:2:2 edge case were encoded with libjpeg and use its decoded output as
+references. Inputs are stored below `tests/images` and flat RGBA8
 output below `tests/reference`. The QOI cases include `edgecase`, `qoi_logo`,
 `testcard`, and `testcard_rgba` from the format project's published
 [`qoi_test_images.zip`](https://qoiformat.org/qoi_test_images.zip), identified by
@@ -97,6 +99,14 @@ examples repository at revision `b8d8c7e88ed221f2ce1100f9e25b5c6e7e6dc78d`.
 The image crate validates each TinyVG document and its reference dimensions, and
 the macOS renderer renders every document and compares its pixels with the
 published PNG reference.
+
+## Benchmarks
+
+Run `cargo bench -p image --bench image`. Raster benchmarks decode 800x600
+fixtures below `benches/images`, generated from the `dice` image of the QOI test
+set flattened onto white: QOI, baseline 4:2:0 and progressive JPEG, RGB PNG, and
+255-color GIF. The BMP input is a 24-bit gradient built in memory to avoid a
+large fixture.
 
 ## License
 

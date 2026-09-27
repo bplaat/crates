@@ -12,11 +12,16 @@ const ZIGZAG: [usize; 64] = [
     52, 45, 38, 31, 39, 46, 53, 60, 61, 54, 47, 55, 62, 63,
 ];
 
+// Codes up to this length decode with a single table lookup.
+const LOOKUP_BITS: u32 = 9;
+
 struct Huffman {
     first: [u32; 17],
     count: [u32; 17],
     offset: [usize; 17],
     values: [u8; 256],
+    // Code length in the high byte and symbol in the low byte; zero marks longer codes.
+    lookup: [u16; 1 << LOOKUP_BITS],
 }
 
 impl Huffman {
@@ -45,20 +50,41 @@ impl Huffman {
         }
         let mut values = [0; 256];
         values[..total].copy_from_slice(r.take(total)?);
+        let mut lookup = [0; 1 << LOOKUP_BITS];
+        for len in 1..=LOOKUP_BITS as usize {
+            let spread = LOOKUP_BITS as usize - len;
+            for i in 0..count[len] {
+                let entry = (len as u16) << 8 | u16::from(values[offset[len] + i as usize]);
+                let start = ((first[len] + i) as usize) << spread;
+                lookup[start..start + (1 << spread)].fill(entry);
+            }
+        }
         Ok(Self {
             first,
             count,
             offset,
             values,
+            lookup,
         })
     }
 
     fn symbol(&self, bits: &mut Bits<'_, '_>) -> Result<u8> {
-        let mut code = 0;
-        for len in 1..=16 {
-            code = (code << 1) | bits.get(1)?;
-            let delta = code.wrapping_sub(self.first[len]);
+        if bits.count < 16 {
+            bits.fill();
+        }
+        let entry = self.lookup[(bits.acc >> (64 - LOOKUP_BITS)) as usize];
+        let len = u32::from(entry >> 8);
+        if entry != 0 && len <= bits.count {
+            bits.consume(len);
+            return Ok(entry as u8);
+        }
+        for len in LOOKUP_BITS as usize + 1..=16 {
+            if len as u32 > bits.count {
+                break;
+            }
+            let delta = ((bits.acc >> (64 - len)) as u32).wrapping_sub(self.first[len]);
             if delta < self.count[len] {
+                bits.consume(len as u32);
                 return Ok(self.values[self.offset[len] + delta as usize]);
             }
         }
@@ -66,28 +92,60 @@ impl Huffman {
     }
 }
 
+/// An MSB-first entropy bit reader that removes byte stuffing and stops before markers.
 struct Bits<'a, 'b> {
     r: &'b mut Reader<'a>,
-    byte: u8,
-    left: u8,
+    acc: u64,
+    count: u32,
 }
 
-impl Bits<'_, '_> {
-    fn get(&mut self, count: u8) -> Result<u32> {
-        // JPEG escapes literal 0xff entropy bytes with a zero byte.
-        let mut result = 0;
-        for _ in 0..count {
-            if self.left == 0 {
-                self.byte = self.r.byte()?;
-                if self.byte == 255 && self.r.byte()? != 0 {
-                    return Err(DecodeError::InvalidData);
-                }
-                self.left = 8;
-            }
-            self.left -= 1;
-            result = (result << 1) | u32::from((self.byte >> self.left) & 1);
+impl<'a, 'b> Bits<'a, 'b> {
+    const fn new(r: &'b mut Reader<'a>) -> Self {
+        Self {
+            r,
+            acc: 0,
+            count: 0,
         }
-        Ok(result)
+    }
+
+    fn fill(&mut self) {
+        // JPEG escapes literal 0xff entropy bytes with a zero byte.
+        while self.count <= 56 {
+            let Some(&byte) = self.r.data.get(self.r.pos) else {
+                return;
+            };
+            if byte == 0xff {
+                if self.r.data.get(self.r.pos + 1) != Some(&0) {
+                    return;
+                }
+                self.r.pos += 2;
+            } else {
+                self.r.pos += 1;
+            }
+            self.acc |= u64::from(byte) << (56 - self.count);
+            self.count += 8;
+        }
+    }
+
+    const fn consume(&mut self, count: u32) {
+        self.acc <<= count;
+        self.count -= count;
+    }
+
+    fn get(&mut self, count: u8) -> Result<u32> {
+        let count = u32::from(count);
+        if count == 0 {
+            return Ok(0);
+        }
+        if self.count < count {
+            self.fill();
+            if self.count < count {
+                return Err(DecodeError::InvalidData);
+            }
+        }
+        let value = (self.acc >> (64 - count)) as u32;
+        self.consume(count);
+        Ok(value)
     }
 
     fn signed(&mut self, size: u8) -> Result<i32> {
@@ -103,10 +161,13 @@ impl Bits<'_, '_> {
     }
 
     const fn align(&mut self) -> Result<()> {
-        if self.left != 0 && self.byte & ((1 << self.left) - 1) != (1 << self.left) - 1 {
+        // Only the one-bit padding of the current byte may remain before the next marker.
+        let padding = self.count % 8;
+        if self.count >= 8 || (padding != 0 && self.acc >> (64 - padding) != (1 << padding) - 1) {
             return Err(DecodeError::InvalidData);
         }
-        self.left = 0;
+        self.acc = 0;
+        self.count = 0;
         Ok(())
     }
 }
@@ -125,35 +186,103 @@ struct Component {
     approximation: [i8; 64],
 }
 
+/// A bilinear tap between two neighboring samples, weighted in 1/256 steps.
 #[derive(Clone, Copy)]
-struct Sampling {
-    width: usize,
-    height: usize,
-    max_h: usize,
-    max_v: usize,
+struct Tap {
+    near: usize,
+    far: usize,
+    weight: u32,
 }
 
-impl Component {
-    fn sample(&self, plane: &[u8], x: usize, y: usize, sampling: Sampling) -> u8 {
-        let stride = self.blocks_w * 8;
-        if self.h == sampling.max_h && self.v == sampling.max_v {
-            return plane[y * stride + x];
+impl Tap {
+    // Centers output samples on the component grid, matching libjpeg's fancy upsampling at 2x.
+    fn table(len: usize, factor: usize, max: usize, budget: &mut Budget) -> Result<Vec<Self>> {
+        budget.claim(len * size_of::<Self>())?;
+        let last = (len * factor).div_ceil(max) - 1;
+        Ok((0..len)
+            .map(|i| {
+                let position = ((i as f32 + 0.5) * factor as f32 / max as f32 - 0.5).max(0.0);
+                let near = (position as usize).min(last);
+                Self {
+                    near,
+                    far: (near + 1).min(last),
+                    weight: (position.fract() * 256.0).round() as u32,
+                }
+            })
+            .collect())
+    }
+}
+
+/// Upsamples one subsampled component plane to full-resolution rows.
+struct Upsampler {
+    columns: Vec<Tap>,
+    rows: Vec<Tap>,
+    double: bool,
+    blend: Vec<u16>,
+    output: Vec<u8>,
+}
+
+impl Upsampler {
+    fn new(
+        c: &Component,
+        width: usize,
+        height: usize,
+        max: (usize, usize),
+        budget: &mut Budget,
+    ) -> Result<Self> {
+        let double = c.h * 2 == max.0;
+        Ok(Self {
+            columns: if double {
+                Vec::new()
+            } else {
+                Tap::table(width, c.h, max.0, budget)?
+            },
+            rows: Tap::table(height, c.v, max.1, budget)?,
+            double,
+            blend: budget.zeroed((width * c.h).div_ceil(max.0))?,
+            output: budget.zeroed(width)?,
+        })
+    }
+
+    fn row(&mut self, plane: &[u8], stride: usize, y: usize) -> &[u8] {
+        let Tap { near, far, weight } = self.rows[y];
+        let len = self.blend.len();
+        let top = &plane[near * stride..][..len];
+        let bottom = &plane[far * stride..][..len];
+        let weight = weight as u16;
+        for ((blend, &top), &bottom) in self.blend.iter_mut().zip(top).zip(bottom) {
+            *blend = u16::from(top) * (256 - weight) + u16::from(bottom) * weight;
         }
-        let sx = ((x as f32 + 0.5) * self.h as f32 / sampling.max_h as f32 - 0.5).max(0.0);
-        let sy = ((y as f32 + 0.5) * self.v as f32 / sampling.max_v as f32 - 0.5).max(0.0);
-        let max_x = (sampling.width * self.h).div_ceil(sampling.max_h) - 1;
-        let max_y = (sampling.height * self.v).div_ceil(sampling.max_v) - 1;
-        let x0 = (sx as usize).min(max_x);
-        let x1 = (x0 + 1).min(max_x);
-        let y0 = (sy as usize).min(max_y);
-        let y1 = (y0 + 1).min(max_y);
-        let fx = sx.fract();
-        let fy = sy.fract();
-        let top = f32::from(plane[y0 * stride + x0]) * (1.0 - fx)
-            + f32::from(plane[y0 * stride + x1]) * fx;
-        let bottom = f32::from(plane[y1 * stride + x0]) * (1.0 - fx)
-            + f32::from(plane[y1 * stride + x1]) * fx;
-        (top * (1.0 - fy) + bottom * fy).round().clamp(0.0, 255.0) as u8
+        if self.double {
+            // Output pairs straddle each sample with fixed 3/4 and 1/4 taps; edges repeat.
+            let blend = &self.blend;
+            let last = len - 1;
+            let pair = |i: usize, output: &mut [u8]| {
+                let near = u32::from(blend[i]) * 3 + 512;
+                output[0] = ((near + u32::from(blend[i.saturating_sub(1)])) >> 10) as u8;
+                if let Some(output) = output.get_mut(1) {
+                    *output = ((near + u32::from(blend[(i + 1).min(last)])) >> 10) as u8;
+                }
+            };
+            pair(0, &mut self.output[..]);
+            let interior = self.output.as_chunks_mut::<2>().0.iter_mut().skip(1);
+            for (output, window) in interior.zip(blend.windows(3)) {
+                let near = u32::from(window[1]) * 3 + 512;
+                output[0] = ((near + u32::from(window[0])) >> 10) as u8;
+                output[1] = ((near + u32::from(window[2])) >> 10) as u8;
+            }
+            if last > 0 {
+                pair(last, &mut self.output[last * 2..]);
+            }
+        } else {
+            for (output, tap) in self.output.iter_mut().zip(&self.columns) {
+                *output = ((u32::from(self.blend[tap.near]) * (256 - tap.weight)
+                    + u32::from(self.blend[tap.far]) * tap.weight
+                    + 32768)
+                    >> 16) as u8;
+            }
+        }
+        &self.output
     }
 }
 
@@ -438,11 +567,7 @@ impl Jpeg {
         } else {
             (self.mcus_w, self.mcus_h)
         };
-        let mut bits = Bits {
-            r,
-            byte: 0,
-            left: 0,
-        };
+        let mut bits = Bits::new(r);
         let mut predictors = [0i32; 4];
         let mut eob = 0u32;
         let mut restart_index = 0;
@@ -542,30 +667,18 @@ impl Jpeg {
 
     fn render(mut self, budget: &mut Budget) -> Result<Image> {
         // Transform component blocks, upsample chroma, convert to RGB, then apply EXIF orientation.
-        let mut matrix = [[0f32; 8]; 8];
-        for (u, row) in matrix.iter_mut().enumerate() {
-            for (x, value) in row.iter_mut().enumerate() {
-                *value = ((2 * x + 1) as f32 * u as f32 * std::f32::consts::PI / 16.0).cos()
-                    * if u == 0 {
-                        std::f32::consts::FRAC_1_SQRT_2 / 2.0
-                    } else {
-                        0.5
-                    };
-            }
-        }
         let mut planes = budget.zeroed::<Vec<u8>>(self.components.len())?;
         for (c, output) in self.components.iter_mut().zip(&mut planes) {
             let stride = c.blocks_w * 8;
             let mut plane = budget.zeroed::<u8>(stride * c.blocks_h * 8)?;
-            let quant = c.quant.ok_or(DecodeError::InvalidData)?;
+            let table = idct_table(&c.quant.ok_or(DecodeError::InvalidData)?);
             let coefficients = std::mem::take(&mut c.coefficients);
             for by in 0..c.blocks_h {
                 for bx in 0..c.blocks_w {
                     let offset = (by * c.blocks_w + bx) * 64;
                     idct(
                         &coefficients[offset..offset + 64],
-                        &quant,
-                        &matrix,
+                        &table,
                         &mut plane[(by * 8 * stride + bx * 8)..],
                         stride,
                     );
@@ -585,32 +698,50 @@ impl Jpeg {
         if self.adobe.is_some_and(|v| v > 2) {
             return Err(DecodeError::UnsupportedFeature);
         }
-        let sampling = Sampling {
-            width: self.width as usize,
-            height: self.height as usize,
-            max_h: self.max_h,
-            max_v: self.max_v,
-        };
-        for (y, row) in pixels.chunks_exact_mut(self.width as usize * 4).enumerate() {
-            for (x, p) in row.as_chunks_mut::<4>().0.iter_mut().enumerate() {
-                let mut values = [0u8; 4];
-                for (i, c) in self.components.iter().enumerate() {
-                    values[i] = c.sample(&planes[i], x, y, sampling);
-                }
-                match self.components.len() {
-                    1 => p.copy_from_slice(&[values[0], values[0], values[0], 255]),
-                    3 => {
-                        let color = if rgb {
-                            [values[0], values[1], values[2]]
-                        } else {
-                            ycbcr(values)
-                        };
-                        p[..3].copy_from_slice(&color);
-                        p[3] = 255;
+        let width = self.width as usize;
+        let mut upsamplers = Vec::with_capacity(self.components.len());
+        for c in &self.components {
+            upsamplers.push(if c.h == self.max_h && c.v == self.max_v {
+                None
+            } else {
+                Some(Upsampler::new(
+                    c,
+                    width,
+                    self.height as usize,
+                    (self.max_h, self.max_v),
+                    budget,
+                )?)
+            });
+        }
+        for (y, row) in pixels.chunks_exact_mut(width * 4).enumerate() {
+            let mut rows: [&[u8]; 4] = [&[]; 4];
+            for (i, (c, upsampler)) in self.components.iter().zip(&mut upsamplers).enumerate() {
+                let stride = c.blocks_w * 8;
+                rows[i] = match upsampler {
+                    Some(upsampler) => upsampler.row(&planes[i], stride, y),
+                    None => &planes[i][y * stride..][..width],
+                };
+            }
+            let row = row.as_chunks_mut::<4>().0;
+            match self.components.len() {
+                1 => {
+                    for (p, &l) in row.iter_mut().zip(rows[0]) {
+                        *p = [l, l, l, 255];
                     }
-                    4 => {
+                }
+                3 => {
+                    for (p, ((&a, &b), &c)) in
+                        row.iter_mut().zip(rows[0].iter().zip(rows[1]).zip(rows[2]))
+                    {
+                        let [r, g, b] = if rgb { [a, b, c] } else { ycbcr(a, b, c) };
+                        *p = [r, g, b, 255];
+                    }
+                }
+                4 => {
+                    for (x, p) in row.iter_mut().enumerate() {
+                        let values = [rows[0][x], rows[1][x], rows[2][x], rows[3][x]];
                         let color = if self.adobe == Some(2) {
-                            ycbcr(values).map(|v| 255 - v)
+                            ycbcr(values[0], values[1], values[2]).map(|v| 255 - v)
                         } else if self.adobe.is_some() {
                             [values[0], values[1], values[2]]
                         } else {
@@ -626,8 +757,8 @@ impl Jpeg {
                         }
                         p[3] = 255;
                     }
-                    _ => unreachable!("component count checked"),
                 }
+                _ => unreachable!("component count checked"),
             }
         }
         let (width, height, pixels) =
@@ -755,47 +886,85 @@ fn ac_refine(
     Ok(())
 }
 
-fn idct(block: &[i32], quant: &[u16; 64], matrix: &[[f32; 8]; 8], dest: &mut [u8], stride: usize) {
+// AAN scale factors: 1 for k = 0, otherwise cos(k * PI / 16) * sqrt(2).
+const AAN_SCALE: [f32; 8] = [
+    1.0,
+    1.387_039_8,
+    1.306_563,
+    1.175_875_6,
+    1.0,
+    0.785_694_96,
+    0.541_196_1,
+    0.275_899_38,
+];
+
+/// Folds the AAN scale factors and the final division by 8 into a dequantization table.
+fn idct_table(quant: &[u16; 64]) -> [f32; 64] {
+    std::array::from_fn(|i| f32::from(quant[i]) * AAN_SCALE[i / 8] * AAN_SCALE[i % 8] / 8.0)
+}
+
+// The AAN 8-point inverse DCT butterfly, as in libjpeg's jidctflt.
+fn idct_1d(v: [f32; 8]) -> [f32; 8] {
+    use std::f32::consts::SQRT_2;
+    let tmp10 = v[0] + v[4];
+    let tmp11 = v[0] - v[4];
+    let tmp13 = v[2] + v[6];
+    let tmp12 = (v[2] - v[6]) * SQRT_2 - tmp13;
+    let even = [tmp10 + tmp13, tmp11 + tmp12, tmp11 - tmp12, tmp10 - tmp13];
+    let z13 = v[5] + v[3];
+    let z10 = v[5] - v[3];
+    let z11 = v[1] + v[7];
+    let z12 = v[1] - v[7];
+    let tmp7 = z11 + z13;
+    let tmp11 = (z11 - z13) * SQRT_2;
+    let z5 = (z10 + z12) * 1.847_759;
+    let tmp10 = 1.082_392_2 * z12 - z5;
+    let tmp12 = -2.613_126 * z10 + z5;
+    let tmp6 = tmp12 - tmp7;
+    let tmp5 = tmp11 - tmp6;
+    let tmp4 = tmp10 + tmp5;
+    [
+        even[0] + tmp7,
+        even[1] + tmp6,
+        even[2] + tmp5,
+        even[3] - tmp4,
+        even[3] + tmp4,
+        even[2] - tmp5,
+        even[1] - tmp6,
+        even[0] - tmp7,
+    ]
+}
+
+fn idct(block: &[i32], table: &[f32; 64], dest: &mut [u8], stride: usize) {
+    // Float-to-u8 casts saturate, which clamps every output sample to 0..=255.
     if block[1..].iter().all(|v| *v == 0) {
-        let value = (block[0] as f32 * f32::from(quant[0]) / 8.0 + 128.0)
-            .round()
-            .clamp(0.0, 255.0) as u8;
+        let value = (block[0] as f32 * table[0] + 128.0).round() as u8;
         for row in dest.chunks_mut(stride).take(8) {
             row[..8].fill(value);
         }
         return;
     }
-    // Keep independent x values adjacent in the innermost loops so the optimizer
-    // can schedule each row as one multiply-add kernel.
-    let mut temp = [[0.0f32; 8]; 8];
-    for v in 0..8 {
-        for u in 0..8 {
-            let coefficient = block[v * 8 + u] as f32 * f32::from(quant[v * 8 + u]);
-            for (value, basis) in temp[v].iter_mut().zip(&matrix[u]) {
-                *value += coefficient * basis;
-            }
-        }
+    let mut columns = [[0.0f32; 8]; 8];
+    for (x, column) in columns.iter_mut().enumerate() {
+        let input = std::array::from_fn(|y| block[y * 8 + x] as f32 * table[y * 8 + x]);
+        *column = if input[1..].iter().all(|v| *v == 0.0) {
+            [input[0]; 8]
+        } else {
+            idct_1d(input)
+        };
     }
-
-    let mut output = [[128.0f32; 8]; 8];
-    for v in 0..8 {
-        for (row, basis) in output.iter_mut().zip(&matrix[v]) {
-            for (value, temp) in row.iter_mut().zip(&temp[v]) {
-                *value += temp * basis;
-            }
-        }
-    }
-    for (source, dest) in output.iter().zip(dest.chunks_mut(stride)) {
-        for (source, dest) in source.iter().zip(dest) {
-            *dest = source.round().clamp(0.0, 255.0) as u8;
+    for (y, dest) in dest.chunks_mut(stride).take(8).enumerate() {
+        let row = idct_1d(std::array::from_fn(|x| columns[x][y]));
+        for (dest, value) in dest.iter_mut().zip(row) {
+            *dest = (value + 128.0).round() as u8;
         }
     }
 }
 
-fn ycbcr(v: [u8; 4]) -> [u8; 3] {
-    let y = i32::from(v[0]) * 65536;
-    let cb = i32::from(v[1]) - 128;
-    let cr = i32::from(v[2]) - 128;
+fn ycbcr(y: u8, cb: u8, cr: u8) -> [u8; 3] {
+    let y = i32::from(y) * 65536;
+    let cb = i32::from(cb) - 128;
+    let cr = i32::from(cr) - 128;
     [
         (y + 91881 * cr + 32768) >> 16,
         (y - 22554 * cb - 46802 * cr + 32768) >> 16,
@@ -880,6 +1049,79 @@ fn orient(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn huffman_decodes_lookup_and_long_codes_until_a_marker() {
+        // One code per length: symbol `s` is `s` one bits followed by a zero bit.
+        let mut table = vec![1u8; 16];
+        table.extend(0..16u8);
+        let huffman = Huffman::read(&mut Reader::new(&table)).expect("Huffman table");
+        let symbols = [15u8, 0, 9, 8, 10, 3, 14, 1];
+        let mut stream = Vec::new();
+        for &symbol in &symbols {
+            stream.extend(std::iter::repeat_n(1, symbol as usize));
+            stream.push(0);
+        }
+        stream.resize(stream.len().next_multiple_of(8), 1);
+        let mut data = Vec::new();
+        for byte in stream.chunks(8) {
+            let byte = byte.iter().fold(0u8, |byte, bit| byte << 1 | bit);
+            data.push(byte);
+            if byte == 0xff {
+                data.push(0);
+            }
+        }
+        data.extend_from_slice(&[0xff, 0xd9]);
+        let mut r = Reader::new(&data);
+        let mut bits = Bits::new(&mut r);
+        for symbol in symbols {
+            assert_eq!(huffman.symbol(&mut bits), Ok(symbol));
+        }
+        assert_eq!(bits.align(), Ok(()));
+        assert_eq!(r.remaining(), 2);
+        let mut r = Reader::new(&data[data.len() - 2..]);
+        assert!(huffman.symbol(&mut Bits::new(&mut r)).is_err());
+    }
+
+    #[test]
+    fn idct_matches_reference_transform() {
+        let mut state = 0x1234_5678u32;
+        let mut quant = [0u16; 64];
+        for q in &mut quant {
+            state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+            *q = (state >> 24) as u16 % 16 + 1;
+        }
+        for _ in 0..64 {
+            let mut block = [0i32; 64];
+            for value in &mut block {
+                state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                *value = (state >> 25) as i32 % 32 - 16;
+            }
+            let mut actual = [0u8; 64];
+            idct(&block, &idct_table(&quant), &mut actual, 8);
+            for (i, actual) in actual.into_iter().enumerate() {
+                let (x, y) = ((i % 8) as f64, (i / 8) as f64);
+                let mut sum = 0.0;
+                for (k, &value) in block.iter().enumerate() {
+                    let (u, v) = ((k % 8) as f64, (k / 8) as f64);
+                    let scale = |n: f64| {
+                        if n == 0.0 {
+                            std::f64::consts::FRAC_1_SQRT_2
+                        } else {
+                            1.0
+                        }
+                    };
+                    sum += scale(u)
+                        * scale(v)
+                        * f64::from(value * i32::from(quant[k]))
+                        * ((2.0 * x + 1.0) * u * std::f64::consts::PI / 16.0).cos()
+                        * ((2.0 * y + 1.0) * v * std::f64::consts::PI / 16.0).cos();
+                }
+                let expected = (sum / 4.0 + 128.0).round().clamp(0.0, 255.0) as u8;
+                assert!(actual.abs_diff(expected) <= 1, "{actual} vs {expected}");
+            }
+        }
+    }
 
     #[test]
     fn jpeg_applies_all_exif_orientations() {

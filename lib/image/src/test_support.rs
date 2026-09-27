@@ -163,8 +163,8 @@ fn raster_cases() -> Vec<RasterCase> {
             directory: "jpeg",
             extension: "jpg",
             format: Format::Jpeg,
-            inputs: 2,
-            references: 2,
+            inputs: 4,
+            references: 4,
             tolerance: PixelTolerance::Lossy {
                 maximum: 4,
                 mean: 1.0,

@@ -498,18 +498,15 @@ fn chunk<'a>(r: &mut Reader<'a>) -> Result<(&'a [u8], &'a [u8])> {
     }
     let bytes = r.take(len)?;
     let expected = r.be32()?;
-    let mut crc = !0u32;
-    for byte in kind.iter().chain(bytes) {
-        crc = CRC_TABLE[((crc as u8) ^ byte) as usize] ^ (crc >> 8);
-    }
-    if !crc != expected {
+    if !crc32(crc32(!0, kind), bytes) != expected {
         return Err(DecodeError::InvalidData);
     }
     Ok((kind, bytes))
 }
 
-const CRC_TABLE: [u32; 256] = {
-    let mut table = [0; 256];
+// Slicing-by-8 tables: `CRC_TABLES[k][i]` advances the CRC of byte `i` by `k` zero bytes.
+const CRC_TABLES: [[u32; 256]; 8] = {
+    let mut tables = [[0; 256]; 8];
     let mut i = 0;
     while i < 256 {
         let mut c = i as u32;
@@ -518,11 +515,42 @@ const CRC_TABLE: [u32; 256] = {
             c = (c >> 1) ^ (0xedb8_8320 & 0u32.wrapping_sub(c & 1));
             j += 1;
         }
-        table[i] = c;
+        tables[0][i] = c;
         i += 1;
     }
-    table
+    let mut k = 1;
+    while k < 8 {
+        let mut i = 0;
+        while i < 256 {
+            let previous = tables[k - 1][i];
+            tables[k][i] = (previous >> 8) ^ tables[0][(previous & 0xff) as usize];
+            i += 1;
+        }
+        k += 1;
+    }
+    tables
 };
+
+fn crc32(mut crc: u32, bytes: &[u8]) -> u32 {
+    let t = &CRC_TABLES;
+    let (chunks, rest) = bytes.as_chunks::<8>();
+    for chunk in chunks {
+        let low = crc ^ u32::from_le_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
+        let high = u32::from_le_bytes([chunk[4], chunk[5], chunk[6], chunk[7]]);
+        crc = t[7][(low & 0xff) as usize]
+            ^ t[6][(low >> 8 & 0xff) as usize]
+            ^ t[5][(low >> 16 & 0xff) as usize]
+            ^ t[4][(low >> 24) as usize]
+            ^ t[3][(high & 0xff) as usize]
+            ^ t[2][(high >> 8 & 0xff) as usize]
+            ^ t[1][(high >> 16 & 0xff) as usize]
+            ^ t[0][(high >> 24) as usize];
+    }
+    for &byte in rest {
+        crc = t[0][((crc as u8) ^ byte) as usize] ^ (crc >> 8);
+    }
+    crc
+}
 
 fn over(d: &mut [u8], s: &[u8]) {
     let sa = u32::from(s[3]);
@@ -590,8 +618,10 @@ impl Header {
             .map_err(|_| DecodeError::ImageTooLarge)?;
         raw.resize(expected, 0);
         let mut inflater = miniz_oxide::inflate::core::DecompressorOxide::new();
+        // Chunk CRCs already cover the compressed stream, so skip the redundant Adler-32.
         let flags = miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_PARSE_ZLIB_HEADER
-            | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF;
+            | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_USING_NON_WRAPPING_OUTPUT_BUF
+            | miniz_oxide::inflate::core::inflate_flags::TINFL_FLAG_IGNORE_ADLER32;
         let (status, consumed, written) =
             miniz_oxide::inflate::core::decompress(&mut inflater, compressed, &mut raw, 0, flags);
         if status != miniz_oxide::inflate::TINFLStatus::Done
@@ -626,107 +656,96 @@ impl Header {
                     unfilter(scan, None, bpp, filter)?;
                     scan
                 };
-                for col in 0..w {
-                    let dest = ((y + row * dy) * width + x + col * dx) * 4;
-                    let p = &mut pixels[dest..dest + 4];
-                    match self.color {
-                        ColorType::Grayscale if self.depth == 16 => {
-                            let sample = sample16(scan, col * 2)?;
-                            let value = scale_16_to_8(sample);
-                            p.copy_from_slice(&[
-                                value,
-                                value,
-                                value,
-                                if transparency.is_some_and(|t| t[0] == sample) {
-                                    0
-                                } else {
-                                    255
-                                },
-                            ]);
-                        }
-                        ColorType::Grayscale | ColorType::Indexed => {
-                            let bit = col * self.depth as usize;
-                            let sample = (scan[bit / 8] >> (8 - self.depth as usize - bit % 8))
-                                & ((1u16 << self.depth) - 1) as u8;
-                            if self.color == ColorType::Indexed {
-                                p.copy_from_slice(
-                                    palette
-                                        .get(sample as usize)
-                                        .ok_or(DecodeError::InvalidData)?,
-                                );
-                            } else {
-                                let value =
-                                    (u16::from(sample) * 255 / ((1 << self.depth) - 1)) as u8;
-                                p.copy_from_slice(&[
-                                    value,
-                                    value,
-                                    value,
-                                    if transparency.is_some_and(|t| t[0] == u16::from(sample)) {
-                                        0
-                                    } else {
-                                        255
-                                    },
-                                ]);
-                            }
-                        }
-                        ColorType::Truecolor => {
-                            if self.depth == 16 {
-                                let offset = col * 6;
-                                let samples = [
-                                    sample16(scan, offset)?,
-                                    sample16(scan, offset + 2)?,
-                                    sample16(scan, offset + 4)?,
-                                ];
-                                p.copy_from_slice(&[
-                                    scale_16_to_8(samples[0]),
-                                    scale_16_to_8(samples[1]),
-                                    scale_16_to_8(samples[2]),
-                                    if transparency == Some(samples) {
-                                        0
-                                    } else {
-                                        255
-                                    },
-                                ]);
-                            } else {
-                                let s = &scan[col * 3..col * 3 + 3];
-                                p[..3].copy_from_slice(s);
-                                p[3] = if transparency
-                                    == Some([u16::from(s[0]), u16::from(s[1]), u16::from(s[2])])
-                                {
-                                    0
-                                } else {
-                                    255
-                                };
-                            }
-                        }
-                        ColorType::GrayscaleAlpha => {
-                            if self.depth == 16 {
-                                let offset = col * 4;
-                                let value = scale_16_to_8(sample16(scan, offset)?);
-                                let alpha = scale_16_to_8(sample16(scan, offset + 2)?);
-                                p.copy_from_slice(&[value, value, value, alpha]);
-                            } else {
-                                let s = &scan[col * 2..col * 2 + 2];
-                                p.copy_from_slice(&[s[0], s[0], s[0], s[1]]);
-                            }
-                        }
-                        ColorType::TruecolorAlpha => {
-                            if self.depth == 16 {
-                                let offset = col * 8;
-                                for (channel, value) in p.iter_mut().enumerate() {
-                                    *value = scale_16_to_8(sample16(scan, offset + channel * 2)?);
-                                }
-                            } else {
-                                p.copy_from_slice(&scan[col * 4..col * 4 + 4]);
-                            }
-                        }
-                    }
-                }
+                let start = (y + row * dy) * width + x;
+                let dest = pixels.as_chunks_mut::<4>().0[start..]
+                    .iter_mut()
+                    .step_by(dx)
+                    .take(w);
+                self.expand(scan, dest, palette, transparency)?;
                 previous = Some(scan_start);
                 cursor += bytes;
             }
         }
         Ok(pixels)
+    }
+}
+
+impl Header {
+    // Converts one unfiltered scanline to RGBA8, choosing the sample layout once per row.
+    fn expand<'a>(
+        &self,
+        scan: &[u8],
+        dest: impl Iterator<Item = &'a mut [u8; 4]>,
+        palette: &[[u8; 4]],
+        transparency: Option<[u16; 3]>,
+    ) -> Result<()> {
+        let alpha = |key: bool| if key { 0 } else { 255 };
+        match (self.color, self.depth) {
+            (ColorType::TruecolorAlpha, 8) => {
+                for (p, s) in dest.zip(scan.as_chunks::<4>().0) {
+                    *p = *s;
+                }
+            }
+            (ColorType::TruecolorAlpha, _) => {
+                for (p, s) in dest.zip(scan.as_chunks::<8>().0) {
+                    *p = std::array::from_fn(|i| scale_16_to_8(sample16(s, i)));
+                }
+            }
+            (ColorType::Truecolor, 8) => {
+                let key = transparency.map(|t| t.map(|v| v as u8));
+                for (p, s) in dest.zip(scan.as_chunks::<3>().0) {
+                    *p = [s[0], s[1], s[2], alpha(key == Some(*s))];
+                }
+            }
+            (ColorType::Truecolor, _) => {
+                for (p, s) in dest.zip(scan.as_chunks::<6>().0) {
+                    let samples = std::array::from_fn(|i| sample16(s, i));
+                    let [r, g, b] = samples.map(scale_16_to_8);
+                    *p = [r, g, b, alpha(transparency == Some(samples))];
+                }
+            }
+            (ColorType::GrayscaleAlpha, 8) => {
+                for (p, s) in dest.zip(scan.as_chunks::<2>().0) {
+                    *p = [s[0], s[0], s[0], s[1]];
+                }
+            }
+            (ColorType::GrayscaleAlpha, _) => {
+                for (p, s) in dest.zip(scan.as_chunks::<4>().0) {
+                    let value = scale_16_to_8(sample16(s, 0));
+                    *p = [value, value, value, scale_16_to_8(sample16(s, 1))];
+                }
+            }
+            (ColorType::Grayscale, 16) => {
+                for (p, s) in dest.zip(scan.as_chunks::<2>().0) {
+                    let sample = sample16(s, 0);
+                    let value = scale_16_to_8(sample);
+                    *p = [
+                        value,
+                        value,
+                        value,
+                        alpha(transparency.is_some_and(|t| t[0] == sample)),
+                    ];
+                }
+            }
+            (ColorType::Grayscale | ColorType::Indexed, depth) => {
+                let depth = depth as usize;
+                let mask = ((1u16 << depth) - 1) as u8;
+                for (col, p) in dest.enumerate() {
+                    let bit = col * depth;
+                    let sample = (scan[bit / 8] >> (8 - depth - bit % 8)) & mask;
+                    *p = if self.color == ColorType::Indexed {
+                        *palette
+                            .get(sample as usize)
+                            .ok_or(DecodeError::InvalidData)?
+                    } else {
+                        let value = (u16::from(sample) * 255 / u16::from(mask)) as u8;
+                        let key = transparency.is_some_and(|t| t[0] == u16::from(sample));
+                        [value, value, value, alpha(key)]
+                    };
+                }
+            }
+        }
+        Ok(())
     }
 }
 
@@ -739,14 +758,9 @@ fn png_row_bytes(width: usize, channels: usize, depth: u8) -> Result<usize> {
         .ok_or(DecodeError::ImageTooLarge)
 }
 
-fn sample16(bytes: &[u8], offset: usize) -> Result<u16> {
-    Ok(u16::from_be_bytes(
-        bytes
-            .get(offset..offset + 2)
-            .ok_or(DecodeError::InvalidData)?
-            .try_into()
-            .expect("two bytes"),
-    ))
+// Reads the big-endian 16-bit sample at `index`.
+const fn sample16(bytes: &[u8], index: usize) -> u16 {
+    u16::from_be_bytes([bytes[index * 2], bytes[index * 2 + 1]])
 }
 
 const fn scale_16_to_8(value: u16) -> u8 {
@@ -754,40 +768,67 @@ const fn scale_16_to_8(value: u16) -> u8 {
 }
 
 fn unfilter(row: &mut [u8], previous: Option<&[u8]>, bpp: usize, filter: u8) -> Result<()> {
-    if previous.is_some_and(|previous| row.len() != previous.len()) {
+    if filter > 4 || previous.is_some_and(|previous| row.len() != previous.len()) {
         return Err(DecodeError::InvalidData);
     }
-    match (filter, previous) {
-        (0, _) | (2, None) => {}
-        (1 | 4, None) | (1, Some(_)) => {
-            for i in bpp..row.len() {
-                row[i] = row[i].wrapping_add(row[i - bpp]);
-            }
-        }
-        (2, Some(previous)) => {
-            add_bytes(row, previous);
-        }
-        (3, None) => {
-            for i in bpp..row.len() {
-                row[i] = row[i].wrapping_add(row[i - bpp] / 2);
-            }
-        }
-        (filter @ (3 | 4), Some(previous)) => {
-            for i in 0..row.len() {
-                let a = if i >= bpp { row[i - bpp] } else { 0 };
-                let b = previous[i];
-                let c = if i >= bpp { previous[i - bpp] } else { 0 };
-                let predictor = if filter == 3 {
-                    ((u16::from(a) + u16::from(b)) / 2) as u8
-                } else {
-                    paeth(a, b, c)
-                };
-                row[i] = row[i].wrapping_add(predictor);
-            }
-        }
-        _ => return Err(DecodeError::InvalidData),
+    if let (2, Some(previous)) = (filter, previous) {
+        add_bytes(row, previous);
+        return Ok(());
+    }
+    // Rows of 8- and 16-bit samples hold whole pixels; packed samples use one-byte pixels.
+    match bpp {
+        1 => unfilter_pixels::<1>(row, previous, filter),
+        2 => unfilter_pixels::<2>(row, previous, filter),
+        3 => unfilter_pixels::<3>(row, previous, filter),
+        4 => unfilter_pixels::<4>(row, previous, filter),
+        6 => unfilter_pixels::<6>(row, previous, filter),
+        8 => unfilter_pixels::<8>(row, previous, filter),
+        _ => unreachable!("PNG pixels are 1, 2, 3, 4, 6 or 8 bytes"),
     }
     Ok(())
+}
+
+// Carries the left pixel `a` and upper-left pixel `c` in registers across the row.
+fn unfilter_pixels<const N: usize>(row: &mut [u8], previous: Option<&[u8]>, filter: u8) {
+    let row = row.as_chunks_mut::<N>().0;
+    let mut a = [0u8; N];
+    match (filter, previous) {
+        (1 | 4, None) | (1, Some(_)) => {
+            for x in row {
+                for k in 0..N {
+                    x[k] = x[k].wrapping_add(a[k]);
+                }
+                a = *x;
+            }
+        }
+        (3, None) => {
+            for x in row {
+                for k in 0..N {
+                    x[k] = x[k].wrapping_add(a[k] / 2);
+                }
+                a = *x;
+            }
+        }
+        (3, Some(previous)) => {
+            for (x, b) in row.iter_mut().zip(previous.as_chunks::<N>().0) {
+                for k in 0..N {
+                    x[k] = x[k].wrapping_add(((u16::from(a[k]) + u16::from(b[k])) / 2) as u8);
+                }
+                a = *x;
+            }
+        }
+        (4, Some(previous)) => {
+            let mut c = [0u8; N];
+            for (x, b) in row.iter_mut().zip(previous.as_chunks::<N>().0) {
+                for k in 0..N {
+                    x[k] = x[k].wrapping_add(paeth(a[k], b[k], c[k]));
+                }
+                a = *x;
+                c = *b;
+            }
+        }
+        _ => {}
+    }
 }
 
 fn add_bytes(dest: &mut [u8], source: &[u8]) {
@@ -804,17 +845,13 @@ fn add_bytes(dest: &mut [u8], source: &[u8]) {
 }
 
 fn paeth(a: u8, b: u8, c: u8) -> u8 {
-    let p = i16::from(a) + i16::from(b) - i16::from(c);
-    let pa = (p - i16::from(a)).abs();
-    let pb = (p - i16::from(b)).abs();
-    let pc = (p - i16::from(c)).abs();
-    if pa <= pb && pa <= pc {
-        a
-    } else if pb <= pc {
-        b
-    } else {
-        c
-    }
+    let (a16, b16, c16) = (i16::from(a), i16::from(b), i16::from(c));
+    let pa = (b16 - c16).abs();
+    let pb = (a16 - c16).abs();
+    let pc = (a16 + b16 - 2 * c16).abs();
+    // Selects rather than branches; ties prefer a, then b, as the specification requires.
+    let (predictor, best) = if pb < pa { (b, pb) } else { (a, pa) };
+    if pc < best { c } else { predictor }
 }
 
 #[cfg(test)]
@@ -1077,6 +1114,48 @@ mod tests {
         let mut budget = Budget::default();
         budget.claim(MAX_BYTES).expect("limit");
         assert_eq!(budget.claim(1), Err(DecodeError::ImageTooLarge));
+    }
+
+    #[test]
+    fn zlib_trailer_is_required_but_its_checksum_is_not_verified() {
+        let mut zlib = miniz_oxide::deflate::compress_to_vec_zlib(&[0, 1, 2, 3, 4], 6);
+        let len = zlib.len();
+        zlib[len - 1] ^= 0xff;
+        let png = |zlib: &[u8]| {
+            let mut out = png_header(1, 1, 8, 6);
+            chunk(&mut out, b"IDAT", zlib);
+            chunk(&mut out, b"IEND", &[]);
+            out
+        };
+        assert_eq!(
+            decode(&png(&zlib))
+                .expect("chunk CRCs cover the data")
+                .pixels(),
+            [1, 2, 3, 4]
+        );
+        assert!(decode(&png(&zlib[..len - 4])).is_err());
+    }
+
+    #[test]
+    fn paeth_matches_specification() {
+        for a in 0..=255u8 {
+            for b in 0..=255u8 {
+                for c in 0..=255u8 {
+                    let p = i16::from(a) + i16::from(b) - i16::from(c);
+                    let pa = (p - i16::from(a)).abs();
+                    let pb = (p - i16::from(b)).abs();
+                    let pc = (p - i16::from(c)).abs();
+                    let expected = if pa <= pb && pa <= pc {
+                        a
+                    } else if pb <= pc {
+                        b
+                    } else {
+                        c
+                    };
+                    assert_eq!(paeth(a, b, c), expected, "{a} {b} {c}");
+                }
+            }
+        }
     }
 
     #[test]

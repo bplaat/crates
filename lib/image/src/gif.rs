@@ -176,15 +176,16 @@ impl<'a> Decoder<'a> {
         }
         let mut local = [[0; 4]; 256];
         let local_len = Self::read_table(&mut self.reader, flags, &mut local)?;
-        let palette = if local_len != 0 {
-            &local[..local_len]
+        // Keep the full 256-entry table so validated indexes need no per-pixel bounds checks.
+        let (palette, palette_len) = if local_len != 0 {
+            (&local, local_len)
         } else {
-            &self.global_palette[..self.global_palette_len]
+            (&self.global_palette, self.global_palette_len)
         };
-        if palette.is_empty()
+        if palette_len == 0
             || control
                 .transparent_index
-                .is_some_and(|t| t as usize >= palette.len())
+                .is_some_and(|t| t as usize >= palette_len)
         {
             return Err(DecodeError::InvalidData);
         }
@@ -192,6 +193,9 @@ impl<'a> Decoder<'a> {
         let min_code = self.reader.byte()?;
         let compressed = Self::read_blocks(&mut self.reader, &mut self.budget)?;
         let indices = lzw(&compressed, min_code, w * h, &mut self.budget)?;
+        if indices.iter().copied().max().unwrap_or(0) as usize >= palette_len {
+            return Err(DecodeError::InvalidData);
+        }
         if self.canvas.is_empty() {
             self.canvas = self.budget.zeroed(self.pixel_len)?;
         }
@@ -209,17 +213,17 @@ impl<'a> Decoder<'a> {
         for &(start, step) in passes {
             for row in (start..h).step_by(step) {
                 let dest = ((y + row) * self.width as usize + x) * 4;
-                for (p, index) in self.canvas[dest..dest + w * 4]
-                    .as_chunks_mut::<4>()
-                    .0
-                    .iter_mut()
-                    .zip(&indices[source_row * w..(source_row + 1) * w])
-                {
-                    let color = palette
-                        .get(*index as usize)
-                        .ok_or(DecodeError::InvalidData)?;
-                    if Some(*index) != control.transparent_index {
-                        p.copy_from_slice(color);
+                let dest = self.canvas[dest..dest + w * 4].as_chunks_mut::<4>().0;
+                let indices = &indices[source_row * w..(source_row + 1) * w];
+                if let Some(transparent) = control.transparent_index {
+                    for (p, &index) in dest.iter_mut().zip(indices) {
+                        if index != transparent {
+                            *p = palette[index as usize];
+                        }
+                    }
+                } else {
+                    for (p, &index) in dest.iter_mut().zip(indices) {
+                        *p = palette[index as usize];
                     }
                 }
                 source_row += 1;
@@ -296,12 +300,11 @@ fn lzw(data: &[u8], min: u8, len: usize, budget: &mut Budget) -> Result<Vec<u8>>
     let end = clear + 1;
     let mut next = clear + 2;
     let mut size = min + 1;
-    let mut prefix = [0u16; 4096];
-    let mut suffix = [0u8; 4096];
-    let mut stack = [0u8; 4096];
-    let mut previous = None;
-    let mut first = 0;
-    let mut bit = 0usize;
+    // Every dictionary entry is the previous string plus the next string's first byte, which
+    // always sits contiguously in the output, so entries are stored as output ranges.
+    let mut offsets = [0usize; 4096];
+    let mut lengths = [0usize; 4096];
+    let mut previous: Option<(usize, usize)> = None;
     let bit_len = data
         .len()
         .checked_mul(8)
@@ -309,25 +312,27 @@ fn lzw(data: &[u8], min: u8, len: usize, budget: &mut Budget) -> Result<Vec<u8>>
     // A code can expand to at most one byte per preceding code, capped by the
     // dictionary size. Reject impossible dimensions before allocating their output.
     let code_count = bit_len / usize::from(min + 1);
-    let max_output = code_count.saturating_mul(code_count.min(prefix.len()));
+    let max_output = code_count.saturating_mul(code_count.min(offsets.len()));
     if len > max_output {
         return Err(DecodeError::InvalidData);
     }
     let mut output = budget.zeroed(len)?;
     let mut written = 0;
+    let mut acc = 0u64;
+    let mut acc_bits = 0u32;
+    let mut pos = 0;
     loop {
-        if bit + size as usize > bit_len {
+        while acc_bits <= 56 && pos < data.len() {
+            acc |= u64::from(data[pos]) << acc_bits;
+            acc_bits += 8;
+            pos += 1;
+        }
+        if acc_bits < u32::from(size) {
             return Err(DecodeError::InvalidData);
         }
-        let mut word = u32::from(data[bit / 8]);
-        if let Some(v) = data.get(bit / 8 + 1) {
-            word |= u32::from(*v) << 8;
-        }
-        if let Some(v) = data.get(bit / 8 + 2) {
-            word |= u32::from(*v) << 16;
-        }
-        let code = ((word >> (bit % 8)) & ((1 << size) - 1)) as usize;
-        bit += size as usize;
+        let code = (acc & ((1 << size) - 1)) as usize;
+        acc >>= size;
+        acc_bits -= u32::from(size);
         if code == clear {
             next = clear + 2;
             size = min + 1;
@@ -341,46 +346,50 @@ fn lzw(data: &[u8], min: u8, len: usize, budget: &mut Budget) -> Result<Vec<u8>>
                 Err(DecodeError::InvalidData)
             };
         }
-        let mut current = code;
-        let mut count = 0;
-        if code == next
-            && let Some(old) = previous
-        {
-            stack[count] = first;
-            count += 1;
-            current = old;
-        } else if code >= next {
-            return Err(DecodeError::InvalidData);
-        }
-        while current >= clear {
-            if current >= next || count >= stack.len() - 1 {
+        let start = written;
+        if code < clear {
+            if written == len {
                 return Err(DecodeError::InvalidData);
             }
-            stack[count] = suffix[current];
-            count += 1;
-            current = prefix[current] as usize;
-        }
-        first = current as u8;
-        stack[count] = first;
-        count += 1;
-        if count > len - written {
+            output[written] = code as u8;
+            written += 1;
+        } else if code < next {
+            let (offset, count) = (offsets[code], lengths[code]);
+            if count > len - written {
+                return Err(DecodeError::InvalidData);
+            }
+            if count <= 16 && written + 16 <= len {
+                // Copy short strings as one block; bytes past `count` are overwritten later.
+                let block: [u8; 16] = output[offset..offset + 16].try_into().expect("16 bytes");
+                output[written..written + 16].copy_from_slice(&block);
+            } else {
+                output.copy_within(offset..offset + count, written);
+            }
+            written += count;
+        } else if code == next
+            && let Some((offset, count)) = previous
+        {
+            // The code being defined: the previous string followed by its own first byte.
+            if count >= len - written {
+                return Err(DecodeError::InvalidData);
+            }
+            output.copy_within(offset..offset + count, written);
+            output[written + count] = output[offset];
+            written += count + 1;
+        } else {
             return Err(DecodeError::InvalidData);
         }
-        for v in stack[..count].iter().rev() {
-            output[written] = *v;
-            written += 1;
-        }
-        if let Some(old) = previous
+        if let Some((offset, count)) = previous
             && next < 4096
         {
-            prefix[next] = old as u16;
-            suffix[next] = first;
+            offsets[next] = offset;
+            lengths[next] = count + 1;
             next += 1;
             if next == 1 << size && size < 12 {
                 size += 1;
             }
         }
-        previous = Some(code);
+        previous = Some((start, written - start));
     }
 }
 
@@ -395,6 +404,78 @@ mod tests {
             Ok(DisposalMethod::Previous)
         ));
         assert!(DisposalMethod::try_from(4).is_err());
+    }
+
+    // A reference GIF LZW encoder that resets the dictionary once it is full.
+    fn lzw_encode(data: &[u8], min: u8) -> Vec<u8> {
+        let clear = 1u32 << min;
+        let (mut out, mut acc, mut acc_bits) = (Vec::new(), 0u64, 0u32);
+        let mut emit = |code: u32, size: u32| {
+            acc |= u64::from(code) << acc_bits;
+            acc_bits += size;
+            while acc_bits >= 8 {
+                out.push(acc as u8);
+                acc >>= 8;
+                acc_bits -= 8;
+            }
+        };
+        let mut dictionary = std::collections::HashMap::new();
+        let mut next = clear + 2;
+        let mut size = u32::from(min) + 1;
+        emit(clear, size);
+        let mut prefix = u32::from(data[0]);
+        for &byte in &data[1..] {
+            if let Some(&code) = dictionary.get(&(prefix, byte)) {
+                prefix = code;
+                continue;
+            }
+            emit(prefix, size);
+            if next < 4096 {
+                dictionary.insert((prefix, byte), next);
+                next += 1;
+                if next > 1 << size && size < 12 {
+                    size += 1;
+                }
+            } else {
+                emit(clear, size);
+                dictionary.clear();
+                next = clear + 2;
+                size = u32::from(min) + 1;
+            }
+            prefix = u32::from(byte);
+        }
+        emit(prefix, size);
+        emit(clear + 1, size);
+        if acc_bits > 0 {
+            out.push(acc as u8);
+        }
+        out
+    }
+
+    #[test]
+    fn lzw_round_trips_growth_resets_and_long_strings() {
+        let mut state = 7u32;
+        let mut data = Vec::new();
+        for _ in 0..4000 {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            // Short noisy runs grow the code width; long runs build long dictionary strings.
+            let run = if state.is_multiple_of(16) {
+                300
+            } else {
+                state as usize % 8 + 1
+            };
+            data.extend(std::iter::repeat_n((state >> 8) as u8 & 3, run));
+        }
+        for min in [2, 8] {
+            let encoded = lzw_encode(&data, min);
+            assert_eq!(
+                lzw(&encoded, min, data.len(), &mut Budget::default()).as_deref(),
+                Ok(&data[..])
+            );
+            assert!(lzw(&encoded, min, data.len() - 1, &mut Budget::default()).is_err());
+        }
     }
 
     #[test]

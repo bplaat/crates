@@ -62,54 +62,59 @@ impl<'a> Decoder<'a> {
             return Err(DecodeError::InvalidData);
         }
         let mut budget = Budget::default();
-        let mut pixels = budget.zeroed(output_len)?;
+        let mut pixels = budget.zeroed::<u8>(output_len)?;
+        let output = pixels.as_chunks_mut::<4>().0;
         let mut written = 0;
-        while written < output_len {
-            let byte = self.take()?;
-            let run = match byte {
+        while written < output.len() {
+            if self.cursor >= self.stream_end {
+                return Err(DecodeError::InvalidData);
+            }
+            // The end marker follows the stream, so operand bytes can be read before the
+            // cursor is validated against the stream end.
+            let bytes = &self.data[self.cursor..self.cursor + 5];
+            let byte = bytes[0];
+            let (len, run) = match byte {
                 0xfe => {
-                    self.pixel[0] = self.take()?;
-                    self.pixel[1] = self.take()?;
-                    self.pixel[2] = self.take()?;
-                    1
+                    self.pixel[..3].copy_from_slice(&bytes[1..4]);
+                    (4, 1)
                 }
                 0xff => {
-                    self.pixel[0] = self.take()?;
-                    self.pixel[1] = self.take()?;
-                    self.pixel[2] = self.take()?;
-                    self.pixel[3] = self.take()?;
-                    1
+                    self.pixel.copy_from_slice(&bytes[1..5]);
+                    (5, 1)
                 }
                 _ if byte & 0xc0 == 0x00 => {
                     self.pixel = self.index[usize::from(byte & 0x3f)];
-                    1
+                    (1, 1)
                 }
                 _ if byte & 0xc0 == 0x40 => {
                     self.pixel[0] = self.pixel[0].wrapping_add((byte >> 4 & 3).wrapping_sub(2));
                     self.pixel[1] = self.pixel[1].wrapping_add((byte >> 2 & 3).wrapping_sub(2));
                     self.pixel[2] = self.pixel[2].wrapping_add((byte & 3).wrapping_sub(2));
-                    1
+                    (1, 1)
                 }
                 _ if byte & 0xc0 == 0x80 => {
-                    let second = self.take()?;
+                    let second = bytes[1];
                     let green = (byte & 0x3f).wrapping_sub(32);
                     self.pixel[0] = self.pixel[0]
                         .wrapping_add(green.wrapping_add((second >> 4).wrapping_sub(8)));
                     self.pixel[1] = self.pixel[1].wrapping_add(green);
                     self.pixel[2] = self.pixel[2]
                         .wrapping_add(green.wrapping_add((second & 15).wrapping_sub(8)));
-                    1
+                    (2, 1)
                 }
-                _ => usize::from(byte & 0x3f) + 1,
+                _ => (1, usize::from(byte & 0x3f) + 1),
             };
-            let remaining = (output_len - written) / 4;
-            if run > remaining {
+            self.cursor += len;
+            if self.cursor > self.stream_end || run > output.len() - written {
                 return Err(DecodeError::InvalidData);
             }
             self.index[Self::pixel_hash(self.pixel)] = self.pixel;
-            let end = written + run * 4;
-            pixels[written..end].as_chunks_mut::<4>().0.fill(self.pixel);
-            written = end;
+            if run == 1 {
+                output[written] = self.pixel;
+            } else {
+                output[written..written + run].fill(self.pixel);
+            }
+            written += run;
         }
         if self.cursor != self.stream_end {
             return Err(DecodeError::InvalidData);
@@ -121,15 +126,6 @@ impl<'a> Decoder<'a> {
             ColorSpace::LinearSrgb
         };
         Ok(image)
-    }
-
-    const fn take(&mut self) -> Result<u8, DecodeError> {
-        if self.cursor >= self.stream_end {
-            return Err(DecodeError::InvalidData);
-        }
-        let byte = self.data[self.cursor];
-        self.cursor += 1;
-        Ok(byte)
     }
 
     const fn pixel_hash(pixel: [u8; 4]) -> usize {
