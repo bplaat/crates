@@ -817,6 +817,7 @@ name = "pbkdf2"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "criterion",
  "getrandom 0.4.3+patch",
  "hmac",
  "sha2",

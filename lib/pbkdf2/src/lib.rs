@@ -6,7 +6,7 @@
 
 #![doc = include_str!("../README.md")]
 
-use hmac::hmac;
+use hmac::Hmac;
 use sha2::Sha256;
 
 pub use crate::utils::{
@@ -27,25 +27,66 @@ pub fn pbkdf2_hmac_sha256(password: &[u8], salt: &[u8], iterations: u32, dklen: 
         "PBKDF2 derived key is too large"
     );
 
-    fn f(password: &[u8], salt: &[u8], iterations: u32, block_index: u32) -> [u8; 32] {
-        let mut u_input = Vec::with_capacity(salt.len() + 4);
-        u_input.extend_from_slice(salt);
-        u_input.extend_from_slice(&block_index.to_be_bytes());
-        let mut u = hmac::<Sha256>(password, &u_input);
-        let mut t = u;
-        for _ in 1..iterations {
-            u = hmac::<Sha256>(password, &u);
-            for (ti, ui) in t.iter_mut().zip(u.iter()) {
-                *ti ^= ui;
-            }
-        }
-        t
-    }
-
+    let mac = Hmac::<Sha256>::new(password);
+    let mut input = Vec::with_capacity(salt.len() + 4);
+    input.extend_from_slice(salt);
+    input.extend_from_slice(&[0; 4]);
     let mut derived_key = Vec::with_capacity(dklen);
     for i in 1..=dklen.div_ceil(32) {
-        derived_key.extend(f(password, salt, iterations, i as u32));
+        input[salt.len()..].copy_from_slice(&(i as u32).to_be_bytes());
+        let mut u = mac.sign(&input);
+        let mut block = u;
+        for _ in 1..iterations {
+            u = mac.sign(&u);
+            for (byte, next) in block.iter_mut().zip(u) {
+                *byte ^= next;
+            }
+        }
+        derived_key.extend_from_slice(&block);
     }
     derived_key.truncate(dklen);
     derived_key
+}
+
+#[cfg(test)]
+mod tests {
+    use super::pbkdf2_hmac_sha256;
+
+    #[test]
+    fn known_sha256_vectors() {
+        for (iterations, length, expected) in [
+            (
+                1,
+                32,
+                "120fb6cffcf8b32c43e7225256c4f837a86548c92ccc35480805987cb70be17b",
+            ),
+            (
+                2,
+                64,
+                "ae4d0c95af6b46d32d0adff928f06dd02a303f8ef3c251dfd6e2d85a95474c43\
+                 830651afcb5c862f0b249bd031f7a67520d136470f5ec271ece91c07773253d9",
+            ),
+        ] {
+            let actual = pbkdf2_hmac_sha256(b"password", b"salt", iterations, length);
+            let actual = actual
+                .iter()
+                .map(|byte| format!("{byte:02x}"))
+                .collect::<String>();
+            assert_eq!(actual, expected);
+        }
+    }
+
+    #[test]
+    fn long_password_and_multiple_blocks() {
+        let actual = pbkdf2_hmac_sha256(&[b'P'; 100], &[b'S'; 40], 3, 65);
+        let actual = actual
+            .iter()
+            .map(|byte| format!("{byte:02x}"))
+            .collect::<String>();
+        assert_eq!(
+            actual,
+            "59a7bfa5e66f9b96abca53f6606357f1b8ab0c076a293f6d9984e5f695716e4\
+             727ba252dca1883182d8d15d7149c5a175ca72804c7c78ca5c9e9a7f8e5c40a6c99"
+        );
+    }
 }
