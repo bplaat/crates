@@ -9,5 +9,16 @@ repository.workspace = true
 [dependencies]
 digest = "0.11.3"
 
+[features]
+disable-software = []
+disable-simd = []
+
+[dev-dependencies]
+criterion = { path = "../criterion" }
+
+[[bench]]
+name = "sha2"
+harness = false
+
 [lints]
 workspace = true

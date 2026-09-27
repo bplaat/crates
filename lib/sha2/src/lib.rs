@@ -47,46 +47,61 @@ impl Sha256 {
     pub fn digest(data: impl AsRef<[u8]>) -> [u8; 32] {
         let mut h = Self::new();
         h.update(data);
-        h.finalize_reset()
+        h.finalize()
     }
 
     /// Update the hasher with new data
     pub fn update(&mut self, data: impl AsRef<[u8]>) {
         let mut data = data.as_ref();
-        while !data.is_empty() {
-            let buffer_len = self.length as usize % 64;
-            let to_copy = std::cmp::min(64 - buffer_len, data.len());
+        let input_len = data.len();
+        let buffer_len = self.length as usize % 64;
+        if buffer_len != 0 {
+            let to_copy = (64 - buffer_len).min(data.len());
             self.buffer[buffer_len..buffer_len + to_copy].copy_from_slice(&data[..to_copy]);
-            self.length += to_copy as u64;
             data = &data[to_copy..];
-            if self.length.is_multiple_of(64) {
-                self.process_block();
+            if buffer_len + to_copy == 64 {
+                let block = self.buffer;
+                self.process_blocks(std::slice::from_ref(&block));
             }
         }
+        let (blocks, remaining) = data.as_chunks::<64>();
+        if !blocks.is_empty() {
+            self.process_blocks(blocks);
+        }
+        data = remaining;
+        self.buffer[..data.len()].copy_from_slice(data);
+        self.length += input_len as u64;
     }
 
     /// Finalize the hash and return the digest
     pub fn finalize(mut self) -> [u8; 32] {
-        self.finalize_reset()
+        self.finalize_inner()
     }
 
     /// Finalize the hash, reset the hasher, and return the digest
     pub fn finalize_reset(&mut self) -> [u8; 32] {
-        let mut padding = [0u8; 64];
-        padding[0] = 0x80;
+        let result = self.finalize_inner();
+        self.reset();
+        result
+    }
+
+    fn finalize_inner(&mut self) -> [u8; 32] {
         let length_bits = self.length * 8;
-        let padding_len = if self.length % 64 < 56 {
-            56 - self.length % 64
-        } else {
-            64 + 56 - self.length % 64
-        };
-        self.update(&padding[..padding_len as usize]);
-        self.update(length_bits.to_be_bytes());
+        let used = self.length as usize % 64;
+        self.buffer[used] = 0x80;
+        self.buffer[used + 1..].fill(0);
+        if used >= 56 {
+            let block = self.buffer;
+            self.process_blocks(std::slice::from_ref(&block));
+            self.buffer.fill(0);
+        }
+        self.buffer[56..].copy_from_slice(&length_bits.to_be_bytes());
+        let block = self.buffer;
+        self.process_blocks(std::slice::from_ref(&block));
         let mut result = [0u8; 32];
         for (i, chunk) in result.chunks_mut(4).enumerate() {
             chunk.copy_from_slice(&self.state[i].to_be_bytes());
         }
-        self.reset();
         result
     }
 
@@ -95,34 +110,58 @@ impl Sha256 {
     }
 
     #[allow(unsafe_code)]
-    fn process_block(&mut self) {
+    fn process_blocks(&mut self, blocks: &[[u8; 64]]) {
+        if blocks.is_empty() {
+            return;
+        }
+        if cfg!(all(
+            feature = "disable-simd",
+            not(feature = "disable-software")
+        )) {
+            for block in blocks {
+                self.process_block_software(block);
+            }
+            return;
+        }
         cfg_select! {
             target_arch = "x86_64" => {
                 if is_x86_feature_detected!("sha")
                     && is_x86_feature_detected!("ssse3")
                     && is_x86_feature_detected!("sse4.1")
                 {
-                    // SAFETY: Runtime detection confirmed every non-baseline CPU feature used by this code path.
-                    unsafe { self.process_block_x86_sha() }
+                    for block in blocks {
+                        // SAFETY: Runtime detection confirmed every required CPU feature.
+                        unsafe { self.process_block_x86_sha(block) }
+                    }
                     return;
                 }
             }
             target_arch = "aarch64" => {
                 if std::arch::is_aarch64_feature_detected!("sha2") {
-                    // SAFETY: is_aarch64_feature_detected! confirmed the sha2 hardware feature is available.
-                    unsafe { self.process_block_aarch64_sha() }
+                    for block in blocks {
+                        // SAFETY: Runtime detection confirmed the sha2 CPU feature.
+                        unsafe { self.process_block_aarch64_sha(block) }
+                    }
                     return;
                 }
             }
             _ => {}
         }
-        self.process_block_software();
+        if cfg!(all(
+            feature = "disable-software",
+            not(feature = "disable-simd")
+        )) {
+            panic!("SHA-256 SIMD acceleration is unavailable");
+        }
+        for block in blocks {
+            self.process_block_software(block);
+        }
     }
 
     // MARK: Software
-    fn process_block_software(&mut self) {
+    fn process_block_software(&mut self, block: &[u8; 64]) {
         let mut w = [0u32; 64];
-        for (i, chunk) in self.buffer.chunks(4).enumerate() {
+        for (i, chunk) in block.chunks(4).enumerate() {
             w[i] = u32::from_be_bytes([chunk[0], chunk[1], chunk[2], chunk[3]]);
         }
         for i in 16..64 {
@@ -179,8 +218,8 @@ impl Sha256 {
     #[cfg(target_arch = "x86_64")]
     #[target_feature(enable = "sha,sse2,ssse3,sse4.1")]
     #[allow(unsafe_code)]
-    unsafe fn process_block_x86_sha(&mut self) {
-        // SAFETY: The caller verified sha/sse2/ssse3/sse4.1 feature availability; self.state and self.buffer are properly initialized.
+    unsafe fn process_block_x86_sha(&mut self, block: &[u8; 64]) {
+        // SAFETY: The caller verified sha/sse2/ssse3/sse4.1 feature availability; self.state and block are properly initialized.
         unsafe {
             use std::arch::x86_64::*;
 
@@ -201,13 +240,10 @@ impl Sha256 {
             let state0_save = state0;
             let state1_save = state1;
 
-            let mut msg0 = _mm_shuffle_epi8(_mm_loadu_si128(self.buffer.as_ptr().cast()), mask);
-            let mut msg1 =
-                _mm_shuffle_epi8(_mm_loadu_si128(self.buffer.as_ptr().add(16).cast()), mask);
-            let mut msg2 =
-                _mm_shuffle_epi8(_mm_loadu_si128(self.buffer.as_ptr().add(32).cast()), mask);
-            let mut msg3 =
-                _mm_shuffle_epi8(_mm_loadu_si128(self.buffer.as_ptr().add(48).cast()), mask);
+            let mut msg0 = _mm_shuffle_epi8(_mm_loadu_si128(block.as_ptr().cast()), mask);
+            let mut msg1 = _mm_shuffle_epi8(_mm_loadu_si128(block.as_ptr().add(16).cast()), mask);
+            let mut msg2 = _mm_shuffle_epi8(_mm_loadu_si128(block.as_ptr().add(32).cast()), mask);
+            let mut msg3 = _mm_shuffle_epi8(_mm_loadu_si128(block.as_ptr().add(48).cast()), mask);
 
             let mut tmp;
 
@@ -374,8 +410,8 @@ impl Sha256 {
     #[cfg(target_arch = "aarch64")]
     #[target_feature(enable = "sha2")]
     #[allow(unsafe_code)]
-    unsafe fn process_block_aarch64_sha(&mut self) {
-        // SAFETY: The caller verified sha2 feature availability; self.state and self.buffer are properly initialized.
+    unsafe fn process_block_aarch64_sha(&mut self, block: &[u8; 64]) {
+        // SAFETY: The caller verified sha2 feature availability; self.state and block are properly initialized.
         unsafe {
             use std::arch::aarch64::*;
 
@@ -387,16 +423,16 @@ impl Sha256 {
 
             // Load and byte-swap message words
             let mut msg0 = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(vld1q_u32(
-                self.buffer.as_ptr().cast(),
+                block.as_ptr().cast(),
             ))));
             let mut msg1 = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(vld1q_u32(
-                self.buffer.as_ptr().add(16).cast(),
+                block.as_ptr().add(16).cast(),
             ))));
             let mut msg2 = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(vld1q_u32(
-                self.buffer.as_ptr().add(32).cast(),
+                block.as_ptr().add(32).cast(),
             ))));
             let mut msg3 = vreinterpretq_u32_u8(vrev32q_u8(vreinterpretq_u8_u32(vld1q_u32(
-                self.buffer.as_ptr().add(48).cast(),
+                block.as_ptr().add(48).cast(),
             ))));
 
             let mut tmp0;
@@ -545,6 +581,10 @@ impl digest::Digest for Sha256 {
     fn finalize_reset(&mut self) -> Self::Output {
         self.finalize_reset()
     }
+
+    fn finalize(self) -> Self::Output {
+        Sha256::finalize(self)
+    }
 }
 
 // MARK: Tests
@@ -601,5 +641,39 @@ mod test {
             to_hex(&hasher.finalize_reset()),
             "9f86d081884c7d659a2feaa0c55ad015a3bf4f1b2b0b822cd15d6c15b0f00a08"
         );
+    }
+
+    #[test]
+    fn test_sha256_update_boundaries() {
+        for len in [0, 1, 55, 56, 63, 64, 65, 127, 128, 129, 1024] {
+            let input = (0..len).map(|i| i as u8).collect::<Vec<_>>();
+            let expected = Sha256::digest(&input);
+            assert_eq!(<Sha256 as digest::Digest>::digest(&input), expected);
+            let reference = match len {
+                55 => Some("463eb28e72f82e0a96c0a4cc53690c571281131f672aa229e0d45ae59b598b59"),
+                56 => Some("da2ae4d6b36748f2a318f23e7ab1dfdf45acdc9d049bd80e59de82a60895f562"),
+                63 => Some("29af2686fd53374a36b0846694cc342177e428d1647515f078784d69cdb9e488"),
+                64 => Some("fdeab9acf3710362bd2658cdc9a29e8f9c757fcf9811603a8c447cd1d9151108"),
+                65 => Some("4bfd2c8b6f1eec7a2afeb48b934ee4b2694182027e6d0fc075074f2fabb31781"),
+                127 => Some("92ca0fa6651ee2f97b884b7246a562fa71250fedefe5ebf270d31c546bfea976"),
+                128 => Some("471fb943aa23c511f6f72f8d1652d9c880cfa392ad80503120547703e56a2be5"),
+                129 => Some("5099c6a56203f9687f7d33f4bfdf576d31dc91f6b695ecea38b2770c87631135"),
+                _ => None,
+            };
+            if let Some(reference) = reference {
+                assert_eq!(to_hex(&expected), reference, "len={len}");
+            }
+            for chunk_size in [1, 7, 63, 64, 65, 128] {
+                let mut hasher = Sha256::new();
+                for chunk in input.chunks(chunk_size) {
+                    hasher.update(chunk);
+                }
+                assert_eq!(
+                    hasher.finalize(),
+                    expected,
+                    "len={len}, chunk_size={chunk_size}"
+                );
+            }
+        }
     }
 }
