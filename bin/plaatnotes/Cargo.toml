@@ -18,7 +18,7 @@ chrono = { version = "0.4.45", default-features = false, features = [
     "serde",
 ] }
 getrandom = "0.4.3"
-miniz_oxide = "0.9.1"
+gzip = { path = "../../lib/gzip" }
 dotenvy = "0.15.7"
 from_derive = { path = "../../lib/from_derive" }
 log = "0.4.34"

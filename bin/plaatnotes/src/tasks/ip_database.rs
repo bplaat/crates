@@ -6,46 +6,6 @@
 
 use crate::context::Context;
 
-fn inflate_gzip(data: &[u8]) -> Option<Vec<u8>> {
-    // Validate gzip magic and compression method
-    if data.len() < 18 || data[0] != 0x1f || data[1] != 0x8b || data[2] != 0x08 {
-        return None;
-    }
-    let flags = data[3];
-    let mut offset = 10usize;
-    // FEXTRA
-    if flags & 0x04 != 0 {
-        if offset + 2 > data.len() {
-            return None;
-        }
-        let xlen = u16::from_le_bytes([data[offset], data[offset + 1]]) as usize;
-        offset += 2 + xlen;
-    }
-    // FNAME - null-terminated string
-    if flags & 0x08 != 0 {
-        while offset < data.len() && data[offset] != 0 {
-            offset += 1;
-        }
-        offset += 1;
-    }
-    // FCOMMENT - null-terminated string
-    if flags & 0x10 != 0 {
-        while offset < data.len() && data[offset] != 0 {
-            offset += 1;
-        }
-        offset += 1;
-    }
-    // FHCRC
-    if flags & 0x02 != 0 {
-        offset += 2;
-    }
-    if offset > data.len().saturating_sub(8) {
-        return None;
-    }
-    // Decompress raw DEFLATE payload (strip 8-byte gzip footer)
-    miniz_oxide::inflate::decompress_to_vec(&data[offset..data.len() - 8]).ok()
-}
-
 fn try_download_mmdb(mmdb_path: &str) {
     let date = chrono::Utc::now().naive_utc().date();
     let date_str = format!("{date}");
@@ -60,7 +20,7 @@ fn try_download_mmdb(mmdb_path: &str) {
         let url = format!("https://download.db-ip.com/free/dbip-city-lite-{y}-{m:02}.mmdb.gz");
         log::info!("Downloading DB-IP city lite database from {url}...");
         match small_http::Request::get(&url).fetch() {
-            Ok(res) if res.status == small_http::Status::Ok => match inflate_gzip(&res.body) {
+            Ok(res) if res.status == small_http::Status::Ok => match gzip::decompress(&res.body) {
                 Some(decompressed) => match std::fs::write(mmdb_path, &decompressed) {
                     Ok(()) => {
                         log::info!("DB-IP city lite database saved to {mmdb_path}");
