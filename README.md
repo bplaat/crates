@@ -135,6 +135,7 @@ These libraries are minimal replacements for commonly used crates.
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
 - [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
+- [gzip](lib/gzip) A gzip library and command-line utility with a benchmark
 - [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 - [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate

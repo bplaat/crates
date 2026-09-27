@@ -1,0 +1,20 @@
+[package]
+name = "gzip"
+version = "0.1.0"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[dependencies]
+miniz_oxide = "0.9.1"
+
+[dev-dependencies]
+criterion = { path = "../criterion" }
+
+[[bench]]
+name = "gzip"
+harness = false
+
+[lints]
+workspace = true
