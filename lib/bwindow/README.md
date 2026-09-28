@@ -34,10 +34,8 @@ Native input uses DOM-like names with typed Rust payloads:
 | `Wheel`                    | `wheel`                    |
 | `Focus` / `Blur`           | `focus` / `blur`           |
 
-`KeyboardEvent.code` identifies the physical key, while `key` is layout-dependent.
-`KeyCode::KeyA` corresponds to DOM `code = "KeyA"`, not the deprecated numeric
-`keyCode`. `repeat` marks auto-repeat presses. Press/release is expressed by the
-event variant, not duplicated in its payload.
+`code` is the physical key (`KeyCode::KeyA` is DOM `code = "KeyA"`), `key` is
+layout-dependent and `repeat` marks auto-repeat presses.
 
 ```rust,no_run
 use bwindow::{Event, EventLoopBuilder, Key, WindowEvent};
@@ -55,20 +53,17 @@ event_loop.run(|event| {
 });
 ```
 
-Modifiers provide `shift_key()`, `ctrl_key()`, `alt_key()`, and `meta_key()`.
-`Modifiers::META` means Command on macOS and Windows/Super elsewhere; `COMMAND`,
-`SUPER`, and `OPTION` remain aliases for native terminology.
+- `Modifiers::META` is Command on macOS and Windows/Super elsewhere.
+- Mouse positions are logical client-area pixels, like `clientX`/`clientY`.
+- Wheel deltas are in pixels or lines; positive values scroll right/down.
+- Only close requests can be cancelled, with `prevent_default()`.
+- IME text input is not supported.
 
-Mouse positions are logical client-area pixels, analogous to `clientX`/`clientY`.
-Wheel deltas carry pixel or line units, with positive values scrolling right/down.
-Close requests support `prevent_default()` and `default_prevented()`; other events
-are not cancelable. Key mappings are a subset of DOM values, and IME text input is
-not yet supported.
+## Redrawing
 
-Use `request_redraw()` for state changes and `request_animation_frame()` for one
-display-synchronized animation frame. Requests made before an animation frame is
-delivered coalesce. Schedule the next frame from its `RedrawRequested` callback
-to animate continuously at the display's native cadence.
+Use `request_redraw()` after state changes. For animation, call
+`request_animation_frame()` and request the next frame from its
+`RedrawRequested` callback.
 
 ## Window Content
 
