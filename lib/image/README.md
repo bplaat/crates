@@ -1,112 +1,52 @@
 # Image
 
-A small, safe Rust decoder for JPEG, PNG/APNG, GIF, BMP, ICO, QOI, SVG (subset), and TinyVG
-images. Raster decoding returns straight-alpha RGBA8 pixels; vector decoding returns
-a backend-neutral display list.
+A safe Rust decoder for JPEG, PNG/APNG, GIF, BMP, ICO, QOI, SVG (subset), and
+TinyVG. Raster images decode to straight-alpha RGBA8; vector images decode to a
+backend-neutral display list.
 
-## Example
+## Usage
 
 ```rs
 let bytes = std::fs::read("picture.png").expect("read image");
 let image = image::decode(&bytes).expect("decode image");
-println!("{}x{}", image.width(), image.height());
 for frame in image.frames() {
     let bitmap = frame.bitmap();
-    println!("{}x{}: {} RGBA bytes, {:?}", bitmap.width(), bitmap.height(), bitmap.data().len(), frame.delay());
+    println!("{}x{}: {:?}", bitmap.width(), bitmap.height(), frame.delay());
 }
 ```
 
-Each animation frame contains a `Bitmap` with the complete canvas after blending
-and before disposal, plus its display delay. Static images have one frame.
-`image.is_animated()` reports animation even when an animated file contains one
-frame. `image.loop_count()` returns `LoopCount::Infinite` or
-`LoopCount::Finite(plays)`; static images return `Finite(1)`. Animation delays
-are preserved, and JPEG EXIF orientation is applied to the pixels and dimensions.
+Animation frames contain the full canvas after blending and before disposal.
+Static images have one frame. The decoder supports progressive JPEG, Adam7 PNG,
+GIF interlacing, BMP bitfields and RLE, and animation disposal. It applies JPEG
+EXIF orientation and converts 16-bit PNG samples to RGBA8. ICO selects the
+largest embedded image. Decoding has a cumulative 1 GiB allocation limit.
 
-The decoder supports common JPEG, PNG/APNG, GIF, BMP, ICO, and QOI variants,
-including progressive JPEG, Adam7 PNG, GIF interlacing, BMP bitfields/RLE, and
-animation disposal. PNG samples wider than 8 bits are reduced to the same RGBA8
-output used by the other raster formats. ICO decoding selects its largest image
-and supports embedded PNG or the same DIB variants as the BMP decoder. It does
-not support HDR output, encoding, incremental decoding, or ICC color management.
-Decoding has a cumulative 1 GiB allocation limit.
-TinyVG variable-width path strokes preserve their width transitions as tapered,
-round-capped outlines.
+All formats are enabled by default. Use `default-features = false` with the
+`qoi`, `jpeg`, `png`, `gif`, `bmp`, `ico`, `svg`, or `tinyvg` features to select
+decoders. Encoding, incremental decoding, HDR output, and ICC color management
+are not supported.
 
-All formats are enabled by default. Disable default features and select from
-`qoi`, `jpeg`, `png`, `gif`, `bmp`, `ico`, `svg`, and `tinyvg` to build only the
-required decoders.
+## SVG subset
 
-## SVG support
+Static SVG supports common geometry, viewports, transforms, CSS presentation
+styles, gradients, clipping, masks, markers, and paint order. Valid but
+unsupported content, including text, images, filters, scripts, animation, and
+external resources, is skipped.
 
-The decoder supports this practical static SVG subset:
+## Tests and benchmarks
 
-- Documents: static UTF-8 SVG with root or nested viewports, `viewBox`,
-  `preserveAspectRatio`, the standard 300x150 default viewport, zero-sized
-  view-box suppression, clipping, percentages, and standard units.
-- Geometry: SVG 1.1 path commands with valid-prefix recovery, rectangles, circles,
-  ellipses, lines, polygons, polylines, CSS geometry properties, path-length dash
-  normalization on paths and shapes, transform lists, and CSS
-  transforms with transform origins.
-- Appearance: inherited presentation attributes, inline `style=""` values, and
-  bounded embedded stylesheets with basic type, class, ID, compound, and direct-child selectors
-  for fills, strokes, opacity, visibility, fill rules, caps, joins, dashes,
-  complete inherited paint order, z-index ordering, overflow, transforms, blend
-  modes, isolation, and gradient color interpolation.
-- Paint and reuse: CSS colors, paint fallbacks, inherited linear or radial gradient
-  templates, local `defs`, viewport-aware `symbol` and `use`, clip paths, and nested
-  alpha or luminance masks, and bounded, viewport-clipped local markers with
-  context paint.
+Run `cargo test -p image` and `cargo bench -p image --bench image`.
+Raster tests compare decoded RGBA8 pixels against checked-in references under
+`tests/reference`. Fixtures cover raster variants, animation, SVG reftests, and
+TinyVG examples. The raster corpus is pinned to image-rs revision
+`6812e732343b0eaaeeef90ca751dd0e73430fb15`; SVG reftests to WPT revision
+`987a2d0c1a45f1a193f1f05d9508c4efc307c3bf`; and TinyVG examples to
+revisions `e7c4c624fbe9276740fff2a9b6231ff86e01a89c` and
+`b8d8c7e88ed221f2ce1100f9e25b5c6e7e6dc78d`.
 
-Unsupported content is skipped when the XML is valid. This includes text, images,
-filters, patterns, complex or external stylesheets, animation, scripts
-and events, links, `foreignObject`, and external resources.
-
-## Tests
-
-The raster tests use a compact subset of the image-rs test corpus pinned at
-`6812e732343b0eaaeeef90ca751dd0e73430fb15`. Its independently generated PNG
-references were converted once to flat RGBA8 files, so tests compare expected
-pixels directly without another decoder or test dependency. The checked-in
-subset covers
-16-bit and interlaced PNG, APNG disposal and blending, GIF animation and
-interlacing, BMP depth/bitfield/top-down variants, ICO masks and PNG payloads,
-progressive JPEG, and QOI. Subsampled baseline JPEGs with restart markers and a
-one-pixel 4:2:2 edge case were encoded with libjpeg and use its decoded output as
-references. Inputs are stored below `tests/images` and flat RGBA8
-output below `tests/reference`. The QOI cases include `edgecase`, `qoi_logo`,
-`testcard`, and `testcard_rgba` from the format project's published
-[`qoi_test_images.zip`](https://qoiformat.org/qoi_test_images.zip), identified by
-SHA-256 `bd557fb208222478d9eefcae59fb473d10e047fd7a8885fcff48861f86599165`.
-The runner discovers each format directory and pairs inputs with either a
-same-name `.rgba` file or sorted `.anim_NN.rgba` frames. Adding a fixture does not
-require another Rust path table; pinned per-format counts catch accidental corpus
-changes and every reference must be used.
-
-The normal offline SVG tests also include all 93 currently passing WPT reftests
-whose test and SVG reference total at most 8 KiB. They are pinned at WPT revision
-`987a2d0c1a45f1a193f1f05d9508c4efc307c3bf`. Test documents are stored below
-`tests/images/svg`, and their 41 shared or named SVG references are stored below
-`tests/reference/svg`. The image crate validates every declared pair and the
-macOS renderer performs WPT-compatible pixel comparisons, including each test's
-fuzzy tolerance.
-
-The TinyVG corpus contains the official shield, app icon, flowchart, chart,
-comic, tiger, and `everything` examples with losslessly optimized copies of their
-published PNG references. The website examples are pinned at revision
-`e7c4c624fbe9276740fff2a9b6231ff86e01a89c`; `everything` is pinned from the
-examples repository at revision `b8d8c7e88ed221f2ce1100f9e25b5c6e7e6dc78d`.
-The image crate validates each TinyVG document and its reference dimensions, and
-the macOS renderer renders every document and compares its pixels with the
-published PNG reference.
-
-## Benchmarks
-
-Run `cargo bench -p image --bench image`. Raster benchmarks decode 800x600
-fixtures below `benches/images`, generated from the `dice` image of the QOI test
-set flattened onto white: QOI, baseline 4:2:0 and progressive JPEG, RGB PNG, and
-255-color GIF. The BMP input is a 24-bit gradient built in memory to avoid a
-large fixture.
+Benchmarks include 800x600 raster fixtures, a three-frame GIF, smaller format
+edge cases, SVG, and TinyVG. Raster throughput counts decoded canvas pixels
+across all frames.
 
 ## License
 

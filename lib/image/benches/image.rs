@@ -55,14 +55,44 @@ fn decode(c: &mut Criterion) {
             &include_bytes!("images/dice-progressive.jpg")[..],
         ),
         (
+            "jpeg_restart_420",
+            cfg!(feature = "jpeg"),
+            &include_bytes!("../tests/images/jpeg/subsampled/restart-420.jpg")[..],
+        ),
+        (
             "png",
             cfg!(feature = "png"),
             &include_bytes!("images/dice.png")[..],
         ),
         (
+            "png_interlaced",
+            cfg!(feature = "png"),
+            &include_bytes!("../tests/images/png/interlaced/basi2c08.png")[..],
+        ),
+        (
+            "png_rgba16",
+            cfg!(feature = "png"),
+            &include_bytes!("../tests/images/png/16bpc/basn6a16.png")[..],
+        ),
+        (
+            "apng",
+            cfg!(feature = "png"),
+            &include_bytes!("../tests/images/png/apng/wpt/fcTL-dispose-in-region-previous.png")[..],
+        ),
+        (
             "gif",
             cfg!(feature = "gif"),
             &include_bytes!("images/dice.gif")[..],
+        ),
+        (
+            "gif_animated",
+            cfg!(feature = "gif"),
+            &include_bytes!("images/dice-animated.gif")[..],
+        ),
+        (
+            "gif_interlaced",
+            cfg!(feature = "gif"),
+            &include_bytes!("../tests/images/gif/anim/interlaced.gif")[..],
         ),
         ("bmp", cfg!(feature = "bmp"), &bmp[..]),
         (
@@ -74,7 +104,11 @@ fn decode(c: &mut Criterion) {
         if !enabled {
             continue;
         }
-        raster.throughput(Throughput::Bytes(bytes.len() as u64));
+        let decoded = image::decode(bytes).expect("valid raster image");
+        let pixels = u64::from(decoded.width())
+            * u64::from(decoded.height())
+            * decoded.frames().len() as u64;
+        raster.throughput(Throughput::Elements(pixels));
         raster.bench_function(name, |b| {
             b.iter(|| black_box(image::decode(black_box(bytes)).expect("valid raster image")));
         });

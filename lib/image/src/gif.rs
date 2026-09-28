@@ -199,7 +199,9 @@ impl<'a> Decoder<'a> {
         if self.canvas.is_empty() {
             self.canvas = self.budget.zeroed(self.pixel_len)?;
         }
-        let previous = if control.disposal == DisposalMethod::Previous {
+        // Once the trailer follows, the canvas can become the output frame without a copy.
+        let last_frame = self.reader.data.get(self.reader.pos) == Some(&0x3b);
+        let previous = if !last_frame && control.disposal == DisposalMethod::Previous {
             Some(area.snapshot(&self.canvas, self.width as usize, &mut self.budget)?)
         } else {
             None
@@ -229,7 +231,11 @@ impl<'a> Decoder<'a> {
                 source_row += 1;
             }
         }
-        let pixels = self.budget.copy(&self.canvas)?;
+        let pixels = if last_frame {
+            mem::take(&mut self.canvas)
+        } else {
+            self.budget.copy(&self.canvas)?
+        };
         self.budget.frame(
             &mut self.frames,
             self.width,
@@ -237,6 +243,9 @@ impl<'a> Decoder<'a> {
             pixels,
             control.delay,
         )?;
+        if last_frame {
+            return Ok(());
+        }
         match control.disposal {
             DisposalMethod::Background => {
                 area.clear(&mut self.canvas, self.width as usize, bg);
@@ -514,6 +523,12 @@ mod tests {
         let image = decode(&single_frame).expect("single-frame GIF");
         assert!(!image.is_animated());
         assert_eq!(image.loop_count(), LoopCount::Finite(1));
+
+        let mut final_previous = single_frame[..19].to_vec();
+        gif_frame(&mut final_previous, 0, 0, 3, false);
+        final_previous.push(0x3b);
+        let image = decode(&final_previous).expect("final frame with previous disposal");
+        assert_eq!(image.frames()[0].pixels(), &[255, 0, 0, 255]);
 
         for (repeats, expected) in [(0u16, LoopCount::Infinite), (2, LoopCount::Finite(3))] {
             let mut animated = single_frame[..19].to_vec();
