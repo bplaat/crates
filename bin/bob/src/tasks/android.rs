@@ -128,9 +128,8 @@ impl AndroidVars {
     }
 }
 
-// Android tooling works best with JDK 17. This function checks the current
-// JAVA_HOME and, if it is not JDK 17, searches for one. If JDK 17 is not
-// found it falls back to JDK 21. Returns `None` when no override is needed.
+// Returns a JDK 17 (or else JDK 21) JAVA_HOME for Android tooling, or `None` when the
+// current JAVA_HOME is already JDK 17.
 fn find_android_java_home() -> Option<String> {
     let version = get_java_major_version(&jdk_bin("java"))?;
     if version == 17 {
