@@ -39,37 +39,18 @@ first matching uDMX automatically when it is plugged in.
 
 ### Windows
 
-BassieLight uses Microsoft's WinUSB driver. Download Zadig only from the
-[official Zadig site](https://zadig.akeo.ie/), connect uDMX, and then:
+BassieLight uses the WinUSB driver. Install it with [Zadig](https://zadig.akeo.ie/):
 
-1. Open **Options > List All Devices**.
-2. Select the uDMX device and verify that the displayed USB ID is exactly
-   `16C0:05DC`. Do not continue if the device name or ID differs.
+1. Connect uDMX and open **Options > List All Devices**.
+2. Select the device and check that its USB ID is `16C0:05DC`.
 3. Open **Device > Load Preset Device** and load
    [`meta/windows/bassielight-udmx-zadig.cfg`](meta/windows/bassielight-udmx-zadig.cfg).
-4. Verify again that the target driver shown on the right is **WinUSB**, not
-   libusbK or libusb-win32.
-5. Choose **Install Driver** or **Replace Driver**, reconnect uDMX, and verify
-   that BassieLight reports it as connected.
+4. Check that the target driver is **WinUSB** (presets cannot select it), then choose
+   **Install Driver** or **Replace Driver** and reconnect uDMX.
 
-The preset matches only `USB\VID_16C0&PID_05DC` and registers interface GUID
-`{0DD9BE09-BBEA-44A0-AB59-2F098406949C}`. Zadig device presets cannot select a
-driver, so always confirm that the target driver is WinUSB before installing.
-
-If stale Zadig packages prevent a clean installation, use the supplied
-[`remove-zadig-udmx.ps1`](meta/windows/remove-zadig-udmx.ps1):
-
-1. Unplug uDMX.
-2. Start an elevated PowerShell, run the script without `-Apply`, and inspect
-   every package it found.
-3. Run it again with `-Apply` to delete only the confirmed packages.
-4. Reboot if Windows still retains a stale device node.
-5. Reconnect uDMX and reinstall WinUSB with the supplied preset.
-
-The script only considers `oem*.inf` packages containing the exact uDMX
-hardware ID, a Zadig/libwdi-style provider, and a WinUSB, libusbK, or
-libusb-win32 service. It never targets Microsoft's inbox `winusb.inf`,
-`winusb.sys`, or packages for other USB IDs.
+To remove stale Zadig driver packages for uDMX, unplug it and run
+[`remove-zadig-udmx.ps1`](meta/windows/remove-zadig-udmx.ps1) in an elevated PowerShell.
+It lists matching packages; run it again with `-Apply` to delete them, then reinstall WinUSB.
 
 ### Linux
 
@@ -81,9 +62,7 @@ sudo udevadm control --reload-rules
 sudo udevadm trigger
 ```
 
-Run BassieLight as your normal desktop user, never as root. The rule grants
-the active logged-in user access through `TAG+="uaccess"` while retaining mode
-`0660`.
+The rule grants the logged-in user access, so BassieLight does not need root.
 
 ## License
 
