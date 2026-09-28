@@ -12,9 +12,7 @@ use crate::encode::Encoding;
 use crate::ffi::{class_getInstanceMethod, class_getName, method_getTypeEncoding, object_getClass};
 use crate::runtime::{AnyClass, AnyObject, Sel};
 
-// Consume one complete ObjC type token from `s`, skipping trailing digits (offset).
-// Returns `(token, remaining)` or `None` if empty.
-// Returns the byte length of one ObjC type token in `s` (no leading/trailing digit stripping).
+// Returns the byte length of one ObjC type token in `s`.
 fn enc_type_len(s: &str) -> Option<usize> {
     let first = s.chars().next()?;
     match first {

@@ -95,10 +95,7 @@ impl std::fmt::Display for Encoding {
 ///
 /// # Safety
 ///
-/// The implementor must ensure that `ENCODING` accurately describes the memory layout of
-/// `Self` as seen by the Objective-C runtime. An incorrect encoding causes type confusion
-/// when values are passed through `msg_send!` or used as ivar types, leading to undefined
-/// behavior.
+/// `ENCODING` must exactly describe the memory layout of `Self`.
 pub unsafe trait Encode {
     /// The encoding of the type
     const ENCODING: Encoding;

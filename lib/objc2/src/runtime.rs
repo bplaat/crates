@@ -295,10 +295,8 @@ unsafe impl Encode for Bool {
 ///
 /// # Safety
 ///
-/// The implementor must ensure that the function pointer returned by `imp_ptr()` has a
-/// signature that exactly matches the encoding returned by `type_encoding()`. A mismatch
-/// causes the ObjC runtime to call the function with incorrectly typed arguments, resulting
-/// in undefined behavior.
+/// The function pointer returned by `imp_ptr()` must exactly match the signature described by
+/// `type_encoding()`.
 pub unsafe trait MethodImpl: Copy {
     /// Returns the function pointer cast to `*const c_void`.
     fn imp_ptr(self) -> *const c_void;
