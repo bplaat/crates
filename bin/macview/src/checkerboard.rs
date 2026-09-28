@@ -172,8 +172,7 @@ mod tests {
     fn tile_colors_do_not_flip_while_resizing() {
         for width in SIZES {
             let (_, half_columns, half_rows) = checker_grid(bounds_of(width, width));
-            // Index 0 is the first tile past the center for every size, so the color of the tiles
-            // around the center never depends on how many tiles the current size needs.
+            // Tile 0 is always next to the center, so center colors do not depend on the size.
             assert!((-half_columns..half_columns).contains(&0));
             assert!((-half_rows..half_rows).contains(&0));
             assert!(tile_is_filled(0, 0));

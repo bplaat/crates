@@ -251,8 +251,7 @@ mod tests {
             );
             // SAFETY: The types live in the autorelease pool around this call.
             let siblings = unsafe { openable_siblings(&folder.join("2.png"), &image_types()) };
-            // A name with a number in it sorts by that number, the hidden file, the folder and the
-            // text file are all left out.
+            // Numbers sort naturally, hidden and unreadable files are excluded.
             assert_eq!(names_of(&siblings), ["2.png", "10.png", "photo.jpeg"]);
             let _ = std::fs::remove_dir_all(&folder);
         });
@@ -266,7 +265,7 @@ mod tests {
             // SAFETY: The types live in the autorelease pool around this call.
             let siblings = unsafe { openable_siblings(&open, &image_types()) };
             assert_eq!(names_of(&siblings), ["drawing.unknown", "photo.png"]);
-            // A file of the same unreadable type that is not open stays out of the list.
+            // An unopened file of an unreadable type is excluded.
             // SAFETY: The types live in the autorelease pool around this call.
             let siblings = unsafe { openable_siblings(&folder.join("photo.png"), &image_types()) };
             assert_eq!(names_of(&siblings), ["photo.png"]);

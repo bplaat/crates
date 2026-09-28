@@ -241,8 +241,7 @@ pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
         return Ok(image);
     }
 
-    // NSData must own the bytes because callers such as Quick Look retain the NSImage in a view,
-    // then drop this Rust wrapper. A no-copy NSData backed only by the wrapper would dangle.
+    // Copy the bytes, Quick Look keeps the NSImage alive after this wrapper is dropped.
     // SAFETY: NSData copies the byte slice during this call.
     let data: *mut Object = unsafe {
         msg_send![class!(NSData),
@@ -297,9 +296,8 @@ unsafe fn decode_native_image(data: *mut Object) -> Result<Image, String> {
 unsafe fn finish_image(image: Retained<Object>) -> Image {
     // SAFETY: image is a valid, initialized NSImage.
     let size = unsafe { msg_send![&*image, size] };
-    // SAFETY: image owns its representations. Asking representations that expose CGImage for it
-    // realizes their existing pixel storage on this worker without creating an application-owned
-    // copy. Other representation types are left lazy.
+    // SAFETY: image owns its representations. Asking for CGImage realizes existing pixel storage
+    // on this worker without copying.
     let pixel_size = unsafe {
         let representations: *mut Object = msg_send![&*image, representations];
         let count: usize = msg_send![representations, count];
@@ -353,8 +351,7 @@ pub fn create_image_view(frame: Rect, image: &Image) -> Retained<Object> {
 
 fn decode_custom_image(bytes: &[u8]) -> Result<Option<Image>, String> {
     let decoded = image::decode(bytes).map_err(|error| error.to_string())?;
-    // NSImageView natively plays animated NSBitmapImageRep objects and preserves their frame
-    // durations and loop count. Leave animations encoded so AppKit can create that representation.
+    // NSImageView plays animated NSBitmapImageRep natively, so leave animations to AppKit.
     if decoded.is_animated() {
         return Ok(None);
     }
@@ -367,9 +364,8 @@ fn decode_custom_image(bytes: &[u8]) -> Result<Option<Image>, String> {
     )
     .ok_or_else(|| String::from("Could not create the decoded image"))?;
     // SAFETY: The frame was constructed as an owned, initialized NSImage.
-    // NSImage may expose the CGImage representation in backing pixels on a Retina display, so
-    // keep the decoder's format dimensions as the authoritative value.
     let mut image = unsafe { finish_image(native_image) };
+    // NSImage may report Retina backing pixels, so use the decoded size.
     image.pixel_size = Some(Size {
         width: f64::from(decoded.width()),
         height: f64::from(decoded.height()),
@@ -656,8 +652,7 @@ mod tests {
 
     #[test]
     fn a_window_of_shrunk_media_keeps_the_shape_of_the_media() {
-        // Media that is taller than the bounds allow used to open in a window as wide as itself,
-        // which left a band of background along the sides.
+        // Tall media must not open in a window as wide as the media itself.
         for media in [
             Size {
                 width: 1152.0,
@@ -680,8 +675,7 @@ mod tests {
 
     #[test]
     fn media_that_is_shrunk_below_the_smallest_window_keeps_a_band_of_background() {
-        // A panorama is 1200 points wide long before it is 240 points tall, and a window this
-        // short is one no window gets, so the background shows above and below it.
+        // A wide panorama hits the maximum width before the minimum height.
         let content = preferred_content_size(Size {
             width: 4000.0,
             height: 500.0,

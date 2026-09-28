@@ -147,8 +147,8 @@ impl Document {
             // SAFETY: NSFilePresenter keeps the document alive for this callback.
             unsafe { Retained::retain(this) }.expect("cannot retain a null document"),
         );
-        // NSDocument delivers file-presenter callbacks on a private queue. Capture its URL on the
-        // main queue, then coordinate, read and decode the changed file on a worker.
+        // File-presenter callbacks arrive on a private queue: capture the URL on the main queue, then
+        // read and decode on a worker.
         dispatch_async_main(move || {
             // SAFETY: retained owns the document until start_presented_item_reload moves that
             // ownership into the worker continuation.
@@ -222,9 +222,8 @@ impl Document {
                 let refresh = self.ivars().media.borrow().is_some();
                 self.install_media(media, version);
                 if refresh {
-                    // NSDocument can read on its private file-presenter queue. AppKit views must
-                    // be replaced on the main queue, and the retained document keeps the decoded
-                    // media alive until then.
+                    // Views must be replaced on the main queue, the retained document keeps the media alive
+                    // until then.
                     let this = self as *const Self as *mut Object;
                     let retained = MainQueueObject(
                         // SAFETY: this comes from a live shared reference to the document.
@@ -436,24 +435,21 @@ impl Document {
             ];
             let _: () =
                 msg_send![&*window, setContentMinSize: Size { width: 240.0, height: 180.0 }];
-            // A window that is created in code takes no part in full screen until it says so,
-            // which leaves the green button of the title bar zooming only.
+            // Enable full screen, code-created windows only zoom by default.
             let behavior: u64 = msg_send![&*window, collectionBehavior];
             let _: () = msg_send![&*window,
                 setCollectionBehavior: behavior | NS_WINDOW_COLLECTION_BEHAVIOR_FULL_SCREEN_PRIMARY
             ];
             let _: () = msg_send![&*window, center];
 
-            // The media keeps its own size and the scroll view magnifies it, so that zooming
-            // redraws the vector formats instead of scaling a picture of them.
+            // The scroll view magnifies the media, so vector formats redraw sharply when zooming.
             let checkerboard = create_checkerboard_view(rect);
             let media_view = self.create_media_view(Rect {
                 origin: Point { x: 0.0, y: 0.0 },
                 size: media_size,
             });
             let scroll_view = create_scroll_view(rect, media_view.as_ptr());
-            // A window opens on the zoom the Zoom to Fit item sets, so that the media is shown
-            // the same way however it got there.
+            // Open windows zoomed to fit.
             let _: () = msg_send![&*scroll_view, zoomToFit];
             let _: () = msg_send![&*checkerboard, addSubview: scroll_view.as_ptr()];
             let _: () = msg_send![&*checkerboard,
@@ -1056,8 +1052,7 @@ fn main() {
         let _ = Document::class();
         enable_concurrent_document_reading();
         let application: *mut Object = msg_send![class!(NSApplication), sharedApplication];
-        // Every document gets a window of its own, so the tab items AppKit adds to the Window
-        // menu would control something this application does not have.
+        // Every document has its own window, so disable window tabbing.
         let _: () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: Bool::NO];
         let _: Bool = msg_send![application,
             setActivationPolicy: NS_APPLICATION_ACTIVATION_POLICY_REGULAR

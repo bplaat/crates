@@ -54,12 +54,7 @@ define_class!(
     struct ClipView;
 
     impl ClipView {
-        // Anchors the media at the top left of the window instead of the bottom left.
-        //
-        // A clip view scrolls in its own coordinates, so an unflipped one keeps the bottom of the
-        // media in place while the window is resized, which leaves the view at the end of a taller
-        // image and scrolls the top of it out of sight. Flipping it keeps the top in place, and
-        // what a smaller window loses is scrolled to downwards.
+        // Flipped so the top of the media stays in place while resizing.
         #[unsafe(method(isFlipped))]
         const fn _is_flipped(&self) -> Bool {
             Bool::YES
@@ -70,11 +65,8 @@ define_class!(
             self.constrain_bounds_rect(proposed)
         }
 
-        // Answers for the mouse over the whole media area, instead of the view that draws it.
-        //
-        // An image view tracks clicks of its own and a web view has a menu and a cursor of its
-        // own, none of which belongs to media that is only drawn. Keeping the mouse at the clip
-        // view leaves every format dragging, zooming and scrolling the same way.
+        // Handle the mouse here instead of in the media view, so every format drags, zooms and
+        // scrolls the same way.
         #[unsafe(method(hitTest:))]
         fn _hit_test(&self, point: Point) -> *mut Object {
             self.hit_test(point)
@@ -140,8 +132,7 @@ impl ClipView {
         }
     }
 
-    // Returns the magnification the media is shown at, which is the scale between the media
-    // coordinates the clip view scrolls in and the points of the window.
+    // Returns the scale between media coordinates and window points.
     fn magnification(&self) -> f64 {
         // SAFETY: The clip view is a live view, whose bounds are its frame divided by the
         // magnification of the scroll view around it.
@@ -169,8 +160,7 @@ impl ClipView {
             let media: Rect = msg_send![document, frame];
             let bounds: Rect = msg_send![this, bounds];
             let magnification = self.magnification();
-            // A media that fits exactly is off by a fraction of a point at most, which is not
-            // something that can be dragged into view.
+            // Ignore sub-point overflow from rounding.
             (media.size.width - bounds.size.width) * magnification > 1.0
                 || (media.size.height - bounds.size.height) * magnification > 1.0
         }
@@ -225,11 +215,8 @@ impl ClipView {
             let previous = self.ivars().pointer.replace(location);
             let bounds: Rect = msg_send![this, bounds];
             let magnification = self.magnification();
-            // Every step of the drag moves the media on from where it is now, so that dragging
-            // past an edge runs up no distance that has to be dragged back before the media
-            // follows the pointer again. The media moves the way the pointer does, which is the
-            // way the visible area moves against it, and the clip view is flipped where the
-            // window is not.
+            // Move relative to the current position, so dragging past an edge does not build up
+            // distance. The clip view is flipped, so the y delta is inverted.
             scroll_to(
                 scroll_view,
                 this,
@@ -304,10 +291,7 @@ define_class!(
             self.scroll_wheel(event);
         }
 
-        // Keeps the overlay scrollers that float over the media.
-        //
-        // AppKit switches to the legacy scrollers, which take a strip beside the media, when a
-        // mouse is attached, and switches back whenever that setting changes.
+        // Always use overlay scrollers, AppKit switches to legacy scrollers when a mouse is attached.
         #[unsafe(method(setScrollerStyle:))]
         fn _set_scroller_style(&self, _style: i64) {
             self.set_scroller_style(NS_SCROLLER_STYLE_OVERLAY);
@@ -371,12 +355,7 @@ impl ScrollView {
         }
     }
 
-    // Magnifies the media, keeping `anchor` of it under the point of the window it is under.
-    //
-    // The anchor is in the coordinates the clip view scrolls in, which are the coordinates of the
-    // media itself. Scrolling to where the anchor ends up is what keeps it still: the media is
-    // magnified around the middle of the visible area otherwise, and the scroll view clamps the
-    // magnification it is given to the range it allows.
+    // Magnifies the media while keeping `anchor` (in media coordinates) under the same window point.
     fn magnify_around(&self, magnification: f64, anchor: Point) {
         // SAFETY: The scroll view keeps its clip view alive.
         unsafe {
@@ -386,8 +365,7 @@ impl ScrollView {
             let bounds: Rect = msg_send![clip_view, bounds];
             self.magnify(magnification);
             let after: f64 = msg_send![this, magnification];
-            // The visible area keeps its distance to the anchor, in the media, at the scale the
-            // magnification changed by.
+            // Keep the visible area at the same scaled distance from the anchor.
             let scale = if after > 0.0 { before / after } else { 1.0 };
             scroll_to(
                 this,
@@ -400,13 +378,8 @@ impl ScrollView {
         }
     }
 
-    // Magnifies the media around the pointer for a scroll with Command held, and scrolls the
-    // media for every other scroll.
-    //
-    // A mouse has no pinch gesture of its own, so Command with the wheel magnifies the media the
-    // way two fingers on a trackpad do: continuously, and towards the point under the pointer
-    // instead of the middle of the window. The direction follows the scroll direction the system
-    // is set to, because AppKit reports the scroll the way the media is meant to follow it.
+    // Command + scroll wheel magnifies around the pointer, like a trackpad pinch; other
+    // scrolls pan the media.
     fn scroll_wheel(&self, event: *mut Object) {
         // SAFETY: AppKit passes a valid NSEvent and NSScrollView implements `scrollWheel:` with
         // this argument type.
