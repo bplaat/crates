@@ -6,6 +6,7 @@
 
 use std::net::IpAddr;
 use std::path::Path;
+use std::sync::OnceLock;
 
 use serde::de::DeserializeOwned;
 
@@ -21,6 +22,7 @@ pub struct Reader<S: AsRef<[u8]>> {
     metadata: Metadata,
     buf: S,
     data_offset: usize,
+    ipv4_start: OnceLock<usize>,
 }
 
 impl Reader<Vec<u8>> {
@@ -51,6 +53,7 @@ impl<S: AsRef<[u8]>> Reader<S> {
             metadata,
             buf,
             data_offset,
+            ipv4_start: OnceLock::new(),
         })
     }
 
@@ -85,16 +88,18 @@ impl<S: AsRef<[u8]>> Reader<S> {
         // by following 96 zero bits from node 0 (IPv4-in-IPv6 mapping).
         let (start_node, effective_bits, bit_value) =
             if self.metadata.ip_version == 6 && bit_count == 32 {
-                // Walk 96 zero bits to find IPv4 start node.
-                let mut node = 0usize;
-                for _ in 0..96 {
-                    let record = self.read_record(data, node, false)?;
-                    if record >= node_count {
-                        // IP not in database.
-                        return Ok(LookupResult { data_value: None });
+                let root = if let Some(&node) = self.ipv4_start.get() {
+                    Some(node)
+                } else {
+                    let root = self.ipv4_start_node(data)?;
+                    if let Some(node) = root {
+                        _ = self.ipv4_start.set(node);
                     }
-                    node = record;
-                }
+                    root
+                };
+                let Some(node) = root else {
+                    return Ok(LookupResult { data_value: None });
+                };
                 (node, 32usize, bits)
             } else {
                 (0, bit_count, bits)
@@ -123,6 +128,19 @@ impl<S: AsRef<[u8]>> Reader<S> {
         }
 
         Ok(LookupResult { data_value: None })
+    }
+
+    fn ipv4_start_node(&self, data: &[u8]) -> Result<Option<usize>, MaxMindDbError> {
+        let node_count = self.metadata.node_count as usize;
+        let mut node = 0;
+        for _ in 0..96 {
+            let record = self.read_record(data, node, false)?;
+            if record >= node_count {
+                return Ok(None);
+            }
+            node = record;
+        }
+        Ok(Some(node))
     }
 
     fn read_record(&self, data: &[u8], node: usize, right: bool) -> Result<usize, MaxMindDbError> {

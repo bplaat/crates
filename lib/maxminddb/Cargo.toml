@@ -11,3 +11,10 @@ workspace = true
 
 [dependencies]
 serde = { version = "1.0", features = ["derive"] }
+
+[dev-dependencies]
+criterion = { path = "../criterion" }
+
+[[bench]]
+name = "maxminddb"
+harness = false

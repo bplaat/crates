@@ -13,16 +13,15 @@ use std::process;
 
 use maxminddb::{Reader, geoip2};
 
+fn usage() -> ! {
+    eprintln!("Usage: maxminddb-lookup <path-to.mmdb> <ip-address>");
+    process::exit(1);
+}
+
 fn main() {
     let mut args = std::env::args().skip(1);
-    let db_path = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
-        process::exit(1);
-    });
-    let ip_str = args.next().unwrap_or_else(|| {
-        eprintln!("Usage: lookup <path-to.mmdb> <ip-address>");
-        process::exit(1);
-    });
+    let db_path = args.next().unwrap_or_else(|| usage());
+    let ip_str = args.next().unwrap_or_else(|| usage());
 
     let ip: IpAddr = ip_str.parse().unwrap_or_else(|_| {
         eprintln!("Error: '{ip_str}' is not a valid IP address");

@@ -669,6 +669,7 @@ dependencies = [
 name = "maxminddb"
 version = "0.30.3+patch"
 dependencies = [
+ "criterion",
  "serde",
 ]
 
