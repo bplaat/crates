@@ -6,6 +6,8 @@
 
 #![doc = include_str!("../README.md")]
 
+use std::sync::LazyLock;
+
 use regex::Regex;
 
 // MARK: Rules
@@ -17,6 +19,8 @@ struct Rules {
     user_agent: Vec<UserAgentRule>,
     os: Vec<OsRule>,
 }
+
+static RULES: LazyLock<Rules> = LazyLock::new(Rules::parse);
 
 struct UserAgentRule {
     regex: Regex,
@@ -92,14 +96,12 @@ pub struct OS {
 // MARK: UserAgentParser
 /// User agent parser
 pub struct UserAgentParser {
-    rules: Rules,
+    rules: &'static Rules,
 }
 
 impl Default for UserAgentParser {
     fn default() -> Self {
-        Self {
-            rules: Rules::parse(),
-        }
+        Self { rules: &RULES }
     }
 }
 
