@@ -233,10 +233,8 @@ impl TlsConnector {
             return Err(Error(format!("SSLSetSessionOption failed: {status}")));
         }
 
-        // Require TLS 1.2 minimum. No SSLSetProtocolVersionMax call: without it SecureTransport
-        // negotiates the highest version it supports (TLS 1.2 in practice), which is the correct
-        // "minimum 1.2, negotiate as high as possible" policy. Setting the max to an unrecognised
-        // kTLSProtocol13 constant causes errSSLIllegalParam on current SecureTransport versions.
+        // Only set a minimum: SecureTransport then negotiates its highest version, and setting
+        // kTLSProtocol13 as maximum fails with errSSLIllegalParam.
         // SAFETY: ctx is non-null; K_TLS_PROTOCOL_12 is a valid SSLProtocol value.
         let status = unsafe { SSLSetProtocolVersionMin(ctx, K_TLS_PROTOCOL_12) };
         if status != NO_ERR {

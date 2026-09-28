@@ -35,11 +35,8 @@ With the `vendored` feature, rustls is used on all platforms instead:
 | -------- | -------------------------------- | ------- | ------- |
 | All      | rustls + Graviola + webpki-roots | Yes     | Yes     |
 
-¹ macOS (without `vendored`) uses the legacy SecureTransport API (deprecated since macOS 10.15 but
-still functional). SecureTransport is limited to TLS 1.2. TLS 1.3 on macOS requires
-Network.framework, which exposes only an async, Grand Central Dispatch (GCD) based API - making it
-difficult to wrap in a synchronous `Read`/`Write` interface without a full async runtime or complex
-callback machinery.
+¹ SecureTransport is deprecated and limited to TLS 1.2. TLS 1.3 needs Network.framework, whose
+async-only API does not fit a synchronous `Read`/`Write` interface.
 
 ² TLS 1.3 requires OpenSSL 1.1.1+. OpenSSL 1.0.2 supports TLS 1.2 only.
 
@@ -48,8 +45,7 @@ callback machinery.
 - `vendored` - Use [rustls](https://crates.io/crates/rustls) with the
   [Graviola](https://crates.io/crates/rustls-graviola) crypto provider and embedded CA roots
   ([webpki-roots](https://crates.io/crates/webpki-roots)) on all platforms instead of the native
-  TLS library. Provides a fully self-contained TLS stack with no system library dependencies and
-  supports TLS 1.2 and 1.3 everywhere.
+  TLS library.
 
 ## License
 

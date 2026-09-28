@@ -11,17 +11,10 @@
 //! Fedora, Arch) and 4.x.
 //!
 //! The build script detects the system OpenSSL version and sets cfg flags:
-//! - `openssl_v10x`    for 1.0.x releases
+//! - `openssl_v10x` for 1.0.x releases
 //! - `openssl_v4xx` for 4.x and later
 //!
-//! The two code paths below implement the same public API:
-//!
-//! - **1.0.x** (`#[cfg(openssl_v10x)]`): uses `SSLv23_client_method`,
-//!   `BIO_new_bio_pair` for I/O pumping and `X509_check_host` for hostname
-//!   verification (all available since OpenSSL 1.0.2).
-//! - **1.1.x / 3.x / 4.x** (`#[cfg(not(openssl_v10x))]`): uses
-//!   `TLS_client_method`, a custom BIO method and `SSL_set1_host` (1.1.x/3.x)
-//!   or `SSL_set1_dnsname` (4.x, where `SSL_set1_host` is deprecated).
+//! Both code paths below implement the same public API.
 
 #![allow(unused)]
 
