@@ -25,13 +25,9 @@ driver management.
 | macOS 10.15 and newer                                  | IOKit and IOUSBHost | None                                                                                 |
 | Linux, BSD, and other supported non-Apple Unix systems | libusb-1.0          | The system libusb-1.0 library and permission to access the USB device                |
 
-The Windows backend discovers interface GUIDs from each device's registry properties. It does not
-contain device-specific identifiers or a hard-coded interface GUID.
-
 ### Linux
 
-Install the runtime library. The backend uses direct FFI declarations and links the versioned
-libusb runtime, so development headers are not required.
+Install the libusb runtime library; development headers are not required.
 
 Ubuntu / Debian:
 
@@ -45,11 +41,8 @@ Fedora:
 sudo dnf install libusb1
 ```
 
-USB device permissions must normally be configured with an appropriate udev rule; running the
-application as root is not recommended.
-
-BSD and other Unix systems need their system libusb-1.0 package or base library and suitable USB
-device-node permissions.
+Grant access to the USB device with a udev rule instead of running as root. Other Unix systems
+need libusb-1.0 and similar device permissions.
 
 ## Example
 
@@ -69,10 +62,6 @@ fn print_usb_devices() -> Result<(), rusb::Error> {
     Ok(())
 }
 ```
-
-Native contexts and device references remain alive for as long as their devices and handles need
-them. Native resources and claimed interfaces are released automatically when their Rust owners are
-dropped. Platform FFI and unsafe code remain private to the backend modules.
 
 ## License
 
