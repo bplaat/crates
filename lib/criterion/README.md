@@ -6,8 +6,7 @@ Criterion-style APIs used by the SHA benchmarks and has no dependencies.
 Supported APIs: `Criterion`, `BenchmarkGroup`, `BenchmarkId`, `Throughput`,
 `Bencher::iter`, `iter_batched`, `iter_batched_ref`, `iter_custom`,
 `criterion_group!`, and `criterion_main!`. Results show the median and the
-10th and 90th percentile sample times. These percentiles describe observed
-variation; they are not confidence intervals.
+10th and 90th percentile sample times.
 
 Run a benchmark with Cargo:
 
@@ -27,11 +26,7 @@ Optional arguments after `--`:
 - `--save-baseline PATH` writes median times as tab-separated data.
 - `--baseline PATH` compares each median with a saved baseline.
 
-The runner has no plots, HTML reports, or statistical significance tests.
-The baseline percentage is a direct comparison of two medians. Run competing
-builds under similar system load and repeat close comparisons.
+Baseline comparisons compare medians; there are no plots, reports, or significance tests.
 
-The SHA crates normally select SIMD at runtime and keep a software fallback.
-`disable-simd` benchmarks the software path, while `disable-software` requires
-SIMD support on the host. When both features are enabled (as with
-`--all-features`), they cancel and normal runtime selection applies.
+The SHA crates select SIMD at runtime: `disable-simd` benchmarks the software path and
+`disable-software` the SIMD path. Enabling both restores runtime selection.
