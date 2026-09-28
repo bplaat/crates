@@ -944,6 +944,9 @@ dependencies = [
 [[package]]
 name = "reversi-engine"
 version = "0.1.0"
+dependencies = [
+ "criterion",
+]
 
 [[package]]
 name = "ring"

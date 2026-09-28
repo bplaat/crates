@@ -243,6 +243,9 @@ fn resolve_move(my_disks: &mut u64, opponent_disks: &mut u64, index: usize) {
     let mut captured = 0;
     for direction in 0..DIRECTIONS {
         let mut candidates = shift(new_disk, direction) & *opponent_disks;
+        if candidates == 0 {
+            continue;
+        }
         for _ in 0..5 {
             candidates |= shift(candidates, direction) & *opponent_disks;
         }
@@ -539,6 +542,65 @@ mod tests {
         assert!(game.make_move(Player::Black, Move { row: 2, col: 3 }));
         assert_eq!(game.score(Player::Black), 4);
         assert_eq!(game.score(Player::White), 1);
+    }
+
+    #[test]
+    fn moves_match_stepwise_flips_across_a_game() {
+        fn state(player: Player) -> CellState {
+            match player {
+                Player::Black => CellState::Black,
+                Player::White => CellState::White,
+            }
+        }
+
+        let mut game = Othello::default();
+        let mut player = Player::Black;
+        loop {
+            let moves = game.valid_moves(player);
+            for movement in &moves {
+                let mut expected = game;
+                expected.set_cell_state(movement.row, movement.col, state(player));
+                for (row_step, col_step) in [
+                    (-1, -1),
+                    (-1, 0),
+                    (-1, 1),
+                    (0, -1),
+                    (0, 1),
+                    (1, -1),
+                    (1, 0),
+                    (1, 1),
+                ] {
+                    let mut row = movement.row as i32 + row_step;
+                    let mut col = movement.col as i32 + col_step;
+                    let mut captured = Vec::new();
+                    while (0..8).contains(&row)
+                        && (0..8).contains(&col)
+                        && game.cell_state(row as usize, col as usize) == state(player.other())
+                    {
+                        captured.push((row as usize, col as usize));
+                        row += row_step;
+                        col += col_step;
+                    }
+                    if (0..8).contains(&row)
+                        && (0..8).contains(&col)
+                        && game.cell_state(row as usize, col as usize) == state(player)
+                    {
+                        for (row, col) in captured {
+                            expected.set_cell_state(row, col, state(player));
+                        }
+                    }
+                }
+                let mut actual = game;
+                assert!(actual.make_move(player, *movement));
+                assert_eq!(actual, expected);
+            }
+            if let Some(movement) = moves.first() {
+                assert!(game.make_move(player, *movement));
+            } else if !game.has_valid_move(player.other()) {
+                break;
+            }
+            player = player.other();
+        }
     }
 
     #[test]
