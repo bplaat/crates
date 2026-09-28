@@ -10,11 +10,11 @@ groups, shaders, pipelines, and render passes.
 
 ## Backends
 
-| Operating system | Backends               | Fallback                                                                                                |
-| ---------------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| Windows          | Direct3D 12 (fl 11_0+) | D3D12 hardware, then the D3D12 WARP software renderer                                                   |
-| macOS            | Metal                  | None; Metal does not provide a software-rendering fallback                                              |
-| Linux            | Vulkan 1.1+            | A software Vulkan implementation can be selected when one is installed and exposed by the Vulkan loader |
+| Operating system | Backends               | Fallback                                              |
+| ---------------- | ---------------------- | ----------------------------------------------------- |
+| Windows          | Direct3D 12 (fl 11_0+) | D3D12 hardware, then the D3D12 WARP software renderer |
+| macOS            | Metal                  | None                                                  |
+| Linux            | Vulkan 1.1+            | A software Vulkan implementation, when installed      |
 
 ## Getting Started
 
