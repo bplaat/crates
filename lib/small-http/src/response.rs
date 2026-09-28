@@ -115,10 +115,8 @@ impl Response {
 
     /// Read one response from a stream.
     ///
-    /// This convenience method creates a temporary buffer. It can read past the end of the
-    /// response and discard those bytes when it returns, so only use it when the connection will
-    /// not carry another response or upgraded protocol data. Use
-    /// [`Self::read_from_buffered_stream`] with a persistent buffered reader otherwise.
+    /// Uses a temporary buffer that may discard bytes past the response, so only use it when the
+    /// connection carries nothing else. Use [`Self::read_from_buffered_stream`] otherwise.
     pub fn read_from_stream(stream: &mut dyn Read) -> Result<Self, InvalidResponseError> {
         let mut reader = BufReader::new(stream);
         Self::read_from_buffered_stream(&mut reader)
