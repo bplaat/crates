@@ -37,9 +37,7 @@ impl<S: AsRef<[u8]>> Reader<S> {
     /// Open a MaxMind DB database from anything that implements `AsRef<[u8]>`.
     pub fn from_source(buf: S) -> Result<Self, MaxMindDbError> {
         let (metadata, data_section_start) = Metadata::parse(buf.as_ref())?;
-        // data_section_start is the offset of the metadata marker, which is also
-        // the end of the data section. The search tree + separator precede it.
-        // The data section starts right after the search tree + 16-byte separator.
+        // The data section starts after the search tree and its 16-byte separator.
         let tree_size = ((metadata.record_size as usize * 2) / 8) * metadata.node_count as usize;
         let data_offset = tree_size + 16;
 
