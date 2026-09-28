@@ -24,6 +24,14 @@ fn main() {
 }
 ```
 
+## Command line
+
+Inspect one or more user-agent strings:
+
+```sh
+cargo run -p simple-useragent --bin simple-useragent -- 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:134.0) Gecko/20100101 Firefox/134.0'
+```
+
 ## Features
 
 - **serde**: Enable serialization and deserialization derives of the structs with [serde](https://serde.rs/).
