@@ -2,19 +2,23 @@
 
 A simple and minimal Rust SQLite and MySQL library with an ergonomic API.
 
-SQLite is enabled by default and can be selected explicitly with the `sqlite` feature. The
-MySQL backend is enabled with the `mysql` feature. Add `mysql-tls` for verified TLS over TCP or
-`mysql-native-password` for the legacy MySQL/MariaDB authentication plugin. On Unix targets,
-enabling `mysql` also makes Unix socket transports available. Use `default-features = false` to
-build with only the backend features an application needs. Enable `sqlite-bundled` to compile and
-link the bundled SQLite source instead of using the system library. At least one database backend
-must be enabled.
+## Features
 
-Connections use a thread-safe, lazily grown pool sized by default for `small-http`'s worker pool.
-Pass `PoolOptions` when opening a database to set a custom limit. Transactions keep one pooled
-connection for the complete closure, and `execute` returns an `ExecutionResult` with the affected
-row count and last inserted row ID. Use `PoolOptions::single_connection()` for serialized
-applications that do not benefit from multiple physical connections.
+- `sqlite` (default): SQLite backend using the system library
+- `sqlite-bundled`: compile the bundled SQLite source instead
+- `mysql`: MySQL backend, including Unix socket transports on Unix
+- `mysql-tls`: verified TLS for MySQL over TCP
+- `mysql-native-password`: legacy `mysql_native_password` authentication
+- `derive` (default): `FromRow` and `FromValue` derive macros
+- `chrono`, `uuid`: value conversions for these crates
+
+At least one backend must be enabled.
+
+## Connection pool
+
+Connections use a thread-safe, lazily grown pool sized for `small-http`'s worker pool. Pass
+`PoolOptions` to set a custom limit, or `PoolOptions::single_connection()` for serialized
+applications. A transaction holds one connection for its whole closure.
 
 ## SQLite example
 
@@ -96,10 +100,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 See the [examples](examples/) for many more examples.
 
-File-backed SQLite reserves one connection for serialized writes and transactions, while the
-remaining connections serve concurrent reads. Call `enable_wal_logging` to enable WAL, and enable foreign keys in application setup when needed. In-memory
-SQLite uses one serialized read/write connection because each plain `:memory:` connection owns a
-separate database.
+File-backed SQLite reserves one connection for writes and transactions; the others serve reads.
+Call `enable_wal_logging` to enable WAL. In-memory SQLite uses a single connection, because each
+`:memory:` connection is a separate database.
 
 ## MySQL example
 
@@ -125,15 +128,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-On Unix, use `MysqlTransport::unix("/tmp/mysql.sock")` to connect through a local socket. TCP
-transports support choosing whether verified TLS is required when the `mysql-tls` feature is
-enabled. MySQL pool connections can all handle reads and writes; a transaction exclusively leases
-one until it commits or rolls back.
-Empty-password accounts, MySQL 8.4 `caching_sha2_password`, and the `auth_socket`/`unix_socket`
-account plugins are supported, including server-requested authentication switches. Enable the
-`mysql-native-password` feature for the legacy MySQL/MariaDB `mysql_native_password` plugin.
-Password exchange over TCP requires verified TLS when `caching_sha2_password` requests full
-authentication; insecure RSA password exchange is intentionally not implemented.
+Use `MysqlTransport::unix("/tmp/mysql.sock")` for a local socket. All MySQL pool connections
+handle reads and writes.
+
+Supported authentication: empty passwords, `caching_sha2_password`, `auth_socket`/`unix_socket`
+and, with `mysql-native-password`, `mysql_native_password`. Full `caching_sha2_password`
+authentication over TCP requires TLS; RSA password exchange is not implemented.
 
 ## Design goals
 
