@@ -12,9 +12,7 @@ A self-hosted note-taking web app with rich Markdown support.
 
 ## IP Geolocation Database
 
-PlaatNotes resolves visitor IPs to city/country using a local [DB-IP City Lite](https://db-ip.com/db/download/ip-to-city-lite) database, with ipinfo.io as fallback when the database is unavailable.
-
-On first startup the app automatically downloads the current month's DB-IP City Lite MMDB file from `download.db-ip.com` and stores it in the data directory (`DATA_PATH`). If the download fails, it transparently falls back to ipinfo.io for every login request.
+PlaatNotes resolves visitor IPs to city/country with a local [DB-IP City Lite](https://db-ip.com/db/download/ip-to-city-lite) database. On first startup it downloads the current month's database to `DATA_PATH`; if that fails, it uses ipinfo.io instead.
 
 When PlaatNotes runs behind a reverse proxy, set `TRUSTED_PROXIES` to a comma-separated list of
 proxy IP addresses. Forwarded client IP headers are ignored unless the direct connection comes from
