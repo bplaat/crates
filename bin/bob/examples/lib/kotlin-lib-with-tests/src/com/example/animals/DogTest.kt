@@ -6,7 +6,7 @@ import org.junit.Assert.*
 public class DogTest {
     @Test
     fun testDogNew() {
-        var dog = Dog("Woof");
-        assertEquals(dog.name(), "Woof");
+        val dog = Dog("Woof")
+        assertEquals(dog.name(), "Woof")
     }
 }
