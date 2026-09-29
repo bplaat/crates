@@ -56,6 +56,6 @@ benchmarks. Tests use reference images from image-rs.
 
 ## License
 
-Copyright (c) 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.

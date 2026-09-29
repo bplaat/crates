@@ -36,6 +36,6 @@ Cargo's `OUT_DIR` and rewritten only when their contents change.
 
 ## License
 
-Copyright (c) 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
+Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
 Licensed under the [MIT](../../LICENSE) license.
