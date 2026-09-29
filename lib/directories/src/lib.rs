@@ -146,7 +146,7 @@ impl ProjectDirs {
         })
     }
 
-    /// Returns the path to the project’s cache directory
+    /// Returns the path to the project's cache directory
     pub fn cache_dir(&self) -> PathBuf {
         let cache_dir = {
             cfg_select! {
@@ -162,7 +162,7 @@ impl ProjectDirs {
         cache_dir.join(&self.project_path)
     }
 
-    /// Returns the path to the project’s config directory
+    /// Returns the path to the project's config directory
     pub fn config_dir(&self) -> PathBuf {
         let config_dir = {
             cfg_select! {
@@ -192,7 +192,7 @@ impl UserDirs {
         Some(Self { home_dir })
     }
 
-    /// Returns the path to the user’s audio directory
+    /// Returns the path to the user's audio directory
     pub fn audio_dir(&self) -> PathBuf {
         cfg_select! {
             all(unix, not(target_os = "macos")) => {

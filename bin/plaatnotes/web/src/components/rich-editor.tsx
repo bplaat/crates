@@ -39,7 +39,7 @@ td.addRule('br', {
     filter: 'br',
     replacement: () => '<br>',
 });
-// Empty paragraphs (blank lines in editor) → <br> placeholder in markdown
+// Empty paragraphs (blank lines in editor) become <br> placeholders in markdown
 td.addRule('empty-paragraph', {
     filter: (node) => node.nodeName === 'P' && !node.textContent?.trim(),
     replacement: () => '<br>',

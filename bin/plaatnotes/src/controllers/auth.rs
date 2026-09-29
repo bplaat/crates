@@ -387,7 +387,7 @@ mod test {
         let router = router(ctx.clone());
         insert_test_user(&ctx, "Jane", "Doe", "jane@example.com");
 
-        // The first LOGIN_RATE_LIMIT_MAX_ATTEMPTS attempts should proceed (wrong password → 401)
+        // The first LOGIN_RATE_LIMIT_MAX_ATTEMPTS attempts should proceed (wrong password returns 401)
         for _ in 0..LOGIN_RATE_LIMIT_MAX_ATTEMPTS {
             let res = router.handle(
                 &Request::post("http://localhost/api/auth/login")

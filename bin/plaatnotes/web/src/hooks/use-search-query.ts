@@ -23,7 +23,7 @@ export function useSearchQuery(): string {
     const query = $searchQuery.value;
     const [debouncedQuery, setDebouncedQuery] = useState(query);
 
-    // Sync signal → URL immediately
+    // Sync signal to URL immediately
     useEffect(() => {
         const current = new URLSearchParams(window.location.search).get('q') ?? '';
         if (current === query) return;
