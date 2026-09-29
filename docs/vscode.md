@@ -62,6 +62,10 @@
         "editor.defaultFormatter": "esbenp.prettier-vscode",
         "editor.formatOnSave": true
     },
+    "[xml]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true
+    },
 
     // Clang-format extension
     "[c]": {
@@ -125,3 +129,6 @@
     ]
 }
 ```
+
+Run `cargo xtask configure-vscode` or restart VSCode after creating the files above.
+It adds `rust-analyzer.files.exclude` for packages unsupported on the current platform.
