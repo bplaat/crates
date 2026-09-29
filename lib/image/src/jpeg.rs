@@ -1013,30 +1013,45 @@ fn exif_orientation(bytes: &[u8]) -> Option<u16> {
 fn orient(
     width: u32,
     height: u32,
-    pixels: Vec<u8>,
+    mut pixels: Vec<u8>,
     orientation: u16,
     budget: &mut Budget,
 ) -> Result<(u32, u32, Vec<u8>)> {
     if orientation == 1 {
         return Ok((width, height, pixels));
     }
-    let (w, h) = if orientation >= 5 {
-        (height, width)
-    } else {
-        (width, height)
-    };
+    if (2..=4).contains(&orientation) {
+        let pixel_chunks = pixels.as_chunks_mut::<4>().0;
+        let row_width = width as usize;
+        let row_height = height as usize;
+        match orientation {
+            2 => {
+                for row in pixel_chunks.chunks_exact_mut(row_width) {
+                    row.reverse();
+                }
+            }
+            3 => pixel_chunks.reverse(),
+            4 => {
+                for y in 0..row_height / 2 {
+                    for x in 0..row_width {
+                        pixel_chunks.swap(y * row_width + x, (row_height - 1 - y) * row_width + x);
+                    }
+                }
+            }
+            _ => unreachable!(),
+        }
+        return Ok((width, height, pixels));
+    }
+    let (w, h) = (height, width);
     let mut output = budget.zeroed(pixels.len())?;
     for y in 0..height {
         for x in 0..width {
             let (dx, dy) = match orientation {
-                2 => (width - 1 - x, y),
-                3 => (width - 1 - x, height - 1 - y),
-                4 => (x, height - 1 - y),
                 5 => (y, x),
                 6 => (height - 1 - y, x),
                 7 => (height - 1 - y, width - 1 - x),
                 8 => (y, width - 1 - x),
-                _ => (x, y),
+                _ => unreachable!("orientation was checked"),
             };
             let src = (y as usize * width as usize + x as usize) * 4;
             let dst = (dy as usize * w as usize + dx as usize) * 4;
@@ -1049,6 +1064,20 @@ fn orient(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn jpeg_simple_orientations_reuse_pixel_buffer() {
+        for orientation in 2..=4 {
+            let pixels = (0..16).collect::<Vec<u8>>();
+            let original = pixels.as_ptr();
+            let mut budget = Budget::default();
+            let (width, height, result) =
+                orient(2, 2, pixels, orientation, &mut budget).expect("orientation");
+            assert_eq!((width, height), (2, 2));
+            assert_eq!(result.as_ptr(), original);
+            assert_eq!(budget.used, 0);
+        }
+    }
 
     #[test]
     fn huffman_decodes_lookup_and_long_codes_until_a_marker() {

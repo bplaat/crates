@@ -201,7 +201,7 @@ impl PngState {
         Ok(())
     }
 
-    fn finish_frame(&mut self, header: &Header, budget: &mut Budget) -> Result<()> {
+    fn finish_frame(&mut self, header: &Header, budget: &mut Budget, last: bool) -> Result<()> {
         // Validate an excluded default image even though it is not emitted as a frame.
         let Some(control) = self.control else {
             header.raster(
@@ -222,7 +222,7 @@ impl PngState {
             self.transparency,
             budget,
         )?;
-        let previous = if control.dispose == DisposeOp::Previous {
+        let previous = if !last && control.dispose == DisposeOp::Previous {
             Some(
                 control
                     .area
@@ -247,7 +247,11 @@ impl PngState {
                 }
             }
         }
-        let pixels = budget.copy(&self.canvas)?;
+        let pixels = if last {
+            std::mem::take(&mut self.canvas)
+        } else {
+            budget.copy(&self.canvas)?
+        };
         budget.frame(
             &mut self.frames,
             header.width,
@@ -255,6 +259,9 @@ impl PngState {
             pixels,
             control.delay,
         )?;
+        if last {
+            return Ok(());
+        }
         match control.dispose {
             DisposeOp::Background => {
                 control
@@ -380,7 +387,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                     return Err(DecodeError::InvalidData);
                 }
                 if state.data_phase.has_idat() {
-                    state.finish_frame(&header, &mut budget)?;
+                    state.finish_frame(&header, &mut budget, false)?;
                     state.compressed.clear();
                 } else if state.control.is_some() {
                     return Err(DecodeError::InvalidData);
@@ -464,7 +471,7 @@ pub(super) fn decode(data: &[u8]) -> Result<Image> {
                 if state.frame_data == (FrameData::Fdat { seen: false }) {
                     return Err(DecodeError::InvalidData);
                 }
-                state.finish_frame(&header, &mut budget)?;
+                state.finish_frame(&header, &mut budget, true)?;
                 let (count, plays) = state.animation.expect("animation was checked");
                 if state.frames.len() != count as usize {
                     return Err(DecodeError::InvalidData);

@@ -49,6 +49,7 @@ struct Decoder<'a> {
     global_palette: [[u8; 4]; 256],
     global_palette_len: usize,
     budget: Budget,
+    compressed: Vec<u8>,
     canvas: Vec<u8>,
     frames: Vec<super::Frame>,
     has_loop_extension: bool,
@@ -81,6 +82,7 @@ impl<'a> Decoder<'a> {
             global_palette,
             global_palette_len,
             budget: Budget::default(),
+            compressed: Vec::new(),
             canvas: Vec::new(),
             frames: Vec::new(),
             has_loop_extension: false,
@@ -136,7 +138,9 @@ impl<'a> Decoder<'a> {
                 }
                 let name = self.reader.take(size)?;
                 if matches!(name, b"NETSCAPE2.0" | b"ANIMEXTS1.0") {
-                    let bytes = Self::read_blocks(&mut self.reader, &mut self.budget)?;
+                    self.compressed.clear();
+                    Self::read_blocks(&mut self.reader, &mut self.budget, &mut self.compressed)?;
+                    let bytes = &self.compressed;
                     if bytes.len() != 3 || bytes[0] != 1 {
                         return Err(DecodeError::InvalidData);
                     }
@@ -191,8 +195,9 @@ impl<'a> Decoder<'a> {
         }
         let bg = [0; 4];
         let min_code = self.reader.byte()?;
-        let compressed = Self::read_blocks(&mut self.reader, &mut self.budget)?;
-        let indices = lzw(&compressed, min_code, w * h, &mut self.budget)?;
+        self.compressed.clear();
+        Self::read_blocks(&mut self.reader, &mut self.budget, &mut self.compressed)?;
+        let indices = lzw(&self.compressed, min_code, w * h, &mut self.budget)?;
         if indices.iter().copied().max().unwrap_or(0) as usize >= palette_len {
             return Err(DecodeError::InvalidData);
         }
@@ -278,14 +283,13 @@ impl<'a> Decoder<'a> {
         Ok(count)
     }
 
-    fn read_blocks(reader: &mut Reader<'_>, budget: &mut Budget) -> Result<Vec<u8>> {
-        let mut out = Vec::new();
+    fn read_blocks(reader: &mut Reader<'_>, budget: &mut Budget, out: &mut Vec<u8>) -> Result<()> {
         loop {
             let len = reader.byte()? as usize;
             if len == 0 {
-                return Ok(out);
+                return Ok(());
             }
-            budget.append(&mut out, reader.take(len)?)?;
+            budget.append(out, reader.take(len)?)?;
         }
     }
 
