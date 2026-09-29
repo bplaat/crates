@@ -8,8 +8,7 @@ use super::MAX_ITEMS;
 use super::style::{GeometryStyle, GeometryValue};
 use super::values::NumberParser;
 use super::xml::Element;
-use crate::vector::append_arc;
-use crate::{PathSegment, Point, VectorDecodeError};
+use crate::{PathSegment, Point, VectorDecodeError, append_arc};
 
 impl GeometryStyle {
     pub(super) fn path(
@@ -29,19 +28,10 @@ impl GeometryStyle {
                     y: value(self.y2),
                 }),
             ]),
-            "polyline" | "polygon" => {
-                let points = point_list(element.attr("points").unwrap_or(""))?;
-                if points.is_empty() {
-                    Some(Vec::new())
-                } else {
-                    let mut path = vec![PathSegment::MoveTo(points[0])];
-                    path.extend(points[1..].iter().copied().map(PathSegment::LineTo));
-                    if element.name == "polygon" {
-                        path.push(PathSegment::Close);
-                    }
-                    Some(path)
-                }
-            }
+            "polyline" | "polygon" => Some(point_path(
+                element.attr("points").unwrap_or(""),
+                element.name == "polygon",
+            )?),
             "rect" => {
                 let px = value(self.x);
                 let py = value(self.y);
@@ -395,17 +385,25 @@ fn parse_path_strict(source: &str) -> Result<Vec<PathSegment>, VectorDecodeError
     Ok(path)
 }
 
-pub(super) fn point_list(source: &str) -> Result<Vec<Point>, VectorDecodeError> {
+fn point_path(source: &str, closed: bool) -> Result<Vec<PathSegment>, VectorDecodeError> {
     let mut parser = NumberParser::new(source);
-    let mut points = Vec::new();
+    let mut path = Vec::new();
     while !parser.done() {
-        points.push(Point {
+        let point = Point {
             x: parser.number()?,
             y: parser.number()?,
+        };
+        path.push(if path.is_empty() {
+            PathSegment::MoveTo(point)
+        } else {
+            PathSegment::LineTo(point)
         });
-        if points.len() > MAX_ITEMS {
+        if path.len() > MAX_ITEMS {
             return Err(VectorDecodeError::ResourceLimit);
         }
     }
-    Ok(points)
+    if closed && !path.is_empty() {
+        path.push(PathSegment::Close);
+    }
+    Ok(path)
 }

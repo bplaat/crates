@@ -6,10 +6,9 @@
 
 use super::values::number;
 use super::xml::Element;
-use crate::vector::path_bounds;
 use crate::{
     DrawCommand, LineCap, LineJoin, MaskType, PathSegment, Point, Rect, StrokeStyle, Transform,
-    VectorDecodeError, VectorImage,
+    VectorDecodeError, VectorImage, path_bounds,
 };
 
 pub(super) struct PathMetrics<'a> {

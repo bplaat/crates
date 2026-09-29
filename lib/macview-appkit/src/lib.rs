@@ -22,11 +22,11 @@ pub use crate::headers::{
     __CFConstantStringClassReference, CFConstString, CGContextFillRect, CGContextSetRGBFillColor,
     NS_VIEW_HEIGHT_SIZABLE, NS_VIEW_WIDTH_SIZABLE, Point, Rect, Size, ns_string,
 };
-use crate::vector::create_vector_image;
-pub use crate::vector::fill_white_background;
+use crate::vector_renderer::create_vector_image;
+pub use crate::vector_renderer::fill_white_background;
 
 mod headers;
-mod vector;
+mod vector_renderer;
 
 /// An owned immutable `NSString` that can be transferred between queues.
 pub struct OwnedString {
@@ -194,7 +194,7 @@ pub unsafe fn load_media(url: *mut Object) -> Result<Image, String> {
 }
 
 fn decode_media(bytes: Vec<u8>) -> Result<Image, String> {
-    if image::vector_format(&bytes).is_some() {
+    if vector::vector_format(&bytes).is_some() {
         return decode_vector_image(&bytes);
     }
     decode_image(bytes)
@@ -202,7 +202,7 @@ fn decode_media(bytes: Vec<u8>) -> Result<Image, String> {
 
 /// Returns whether bytes start with a supported vector image document.
 pub fn is_vector(bytes: &[u8]) -> bool {
-    image::vector_format(bytes).is_some()
+    vector::vector_format(bytes).is_some()
 }
 
 // Returns the Rust path represented by a file URL.
@@ -223,7 +223,7 @@ unsafe fn file_path(url: *mut Object) -> Option<PathBuf> {
 
 /// Parses a vector document into an `NSImage` with a vector image representation.
 pub fn decode_vector_image(bytes: &[u8]) -> Result<Image, String> {
-    let document = image::decode_vector(bytes).map_err(|error| error.to_string())?;
+    let document = vector::decode_vector(bytes).map_err(|error| error.to_string())?;
     let image = create_vector_image(document);
     // SAFETY: create_vector_image returns an owned, initialized NSImage whose representation owns
     // the parsed document.
@@ -234,7 +234,7 @@ pub fn decode_vector_image(bytes: &[u8]) -> Result<Image, String> {
 
 /// Decodes an image using the local decoders.
 pub fn decode_image(bytes: Vec<u8>) -> Result<Image, String> {
-    if image::vector_format(&bytes).is_some() {
+    if vector::vector_format(&bytes).is_some() {
         return decode_vector_image(&bytes);
     }
     if let Some(image) = decode_custom_image(&bytes)? {
@@ -270,7 +270,7 @@ pub unsafe fn decode_image_data(data: *mut Object) -> Result<Image, String> {
             std::slice::from_raw_parts(bytes.cast::<u8>(), length)
         }
     };
-    if image::vector_format(bytes).is_some() {
+    if vector::vector_format(bytes).is_some() {
         return decode_vector_image(bytes);
     }
     if let Some(image) = decode_custom_image(bytes)? {

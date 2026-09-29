@@ -169,21 +169,21 @@ unsafe extern "C" {
         auxiliary_info: *const c_void,
     );
     pub(crate) fn CGContextEndTransparencyLayer(context: *mut c_void);
-    pub(crate) fn CGContextConcatCTM(context: *mut c_void, transform: image::Transform);
+    pub(crate) fn CGContextConcatCTM(context: *mut c_void, transform: vector::Transform);
     pub(crate) fn CGContextDrawLinearGradient(
         context: *mut c_void,
         gradient: *const c_void,
-        start: image::Point,
-        end: image::Point,
+        start: vector::Point,
+        end: vector::Point,
         options: u32,
     );
     pub(crate) fn CGContextDrawPath(context: *mut c_void, mode: i32);
     pub(crate) fn CGContextDrawRadialGradient(
         context: *mut c_void,
         gradient: *const c_void,
-        start_center: image::Point,
+        start_center: vector::Point,
         start_radius: f64,
-        end_center: image::Point,
+        end_center: vector::Point,
         end_radius: f64,
         options: u32,
     );

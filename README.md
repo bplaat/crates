@@ -27,6 +27,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
+- [vector](lib/vector) SVG (subset) and TinyVG decoders with a backend-neutral display list
 - [wgpu](lib/wgpu) A native GPU rendering library for bwindow
 - [wgpu-shader-build](lib/wgpu-shader-build) Build-time native WGSL compilation for wgpu
 

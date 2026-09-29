@@ -7,13 +7,13 @@
 use std::ffi::c_void;
 use std::ptr::null;
 
-use image::{
-    BlendMode, Color, ColorSpace, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint,
-    PathSegment, SpreadMethod, Transform, VectorImage,
-};
 use objc2::rc::{Allocated, Retained};
 use objc2::runtime::{AnyObject as Object, Bool};
 use objc2::{class, define_class, msg_send};
+use vector::{
+    BlendMode, Color, ColorSpace, DrawCommand, FillRule, LineCap, LineJoin, MaskType, Paint,
+    PathSegment, SpreadMethod, Transform, VectorImage,
+};
 
 use crate::headers::*;
 
@@ -73,15 +73,15 @@ enum PreparedPaint {
     Solid(Color),
     Linear {
         gradients: GradientSet,
-        start: image::Point,
-        end: image::Point,
+        start: vector::Point,
+        end: vector::Point,
         transform: Transform,
         spread: SpreadMethod,
     },
     Radial {
         gradients: GradientSet,
-        center: image::Point,
-        focal: image::Point,
+        center: vector::Point,
+        focal: vector::Point,
         radius: f64,
         transform: Transform,
         spread: SpreadMethod,
@@ -131,7 +131,7 @@ struct GradientSet {
     luminance_reverse: Option<NativeGradient>,
 }
 impl GradientSet {
-    fn new(stops: &[image::GradientStop], spread: SpreadMethod, modes: u8) -> Self {
+    fn new(stops: &[vector::GradientStop], spread: SpreadMethod, modes: u8) -> Self {
         let has = |mode: RenderMode| modes & mode.bit() != 0;
         let reversed = spread == SpreadMethod::Reflect;
         Self {
@@ -169,7 +169,7 @@ impl GradientSet {
 }
 struct NativeGradient(*const c_void);
 impl NativeGradient {
-    fn new(stops: &[image::GradientStop], reverse: bool, mode: RenderMode) -> Option<Self> {
+    fn new(stops: &[vector::GradientStop], reverse: bool, mode: RenderMode) -> Option<Self> {
         let iter = stops
             .iter()
             .map(|stop| (stop.offset, mask_color(stop.color, mode)));
@@ -554,7 +554,7 @@ unsafe fn draw_path(
     path: usize,
     paint: usize,
     transform: Transform,
-    stroke: Option<&image::StrokeStyle>,
+    stroke: Option<&vector::StrokeStyle>,
     rule: FillRule,
     mode: RenderMode,
 ) {
@@ -688,11 +688,11 @@ unsafe fn draw_gradient(context: *mut c_void, paint: &PreparedPaint, mode: Rende
                             CGContextDrawLinearGradient(
                                 context,
                                 gradient.0,
-                                image::Point {
+                                vector::Point {
                                     x: start.x + dx * index as f64,
                                     y: start.y + dy * index as f64,
                                 },
-                                image::Point {
+                                vector::Point {
                                     x: start.x + dx * (index + 1) as f64,
                                     y: start.y + dy * (index + 1) as f64,
                                 },
@@ -764,7 +764,7 @@ unsafe fn draw_gradient(context: *mut c_void, paint: &PreparedPaint, mode: Rende
     }
 }
 
-fn intersects(bounds: image::Rect, clip: Rect) -> bool {
+fn intersects(bounds: vector::Rect, clip: Rect) -> bool {
     bounds.x + bounds.width >= clip.origin.x
         && bounds.x <= clip.origin.x + clip.size.width
         && bounds.y + bounds.height >= clip.origin.y
@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn renders_wpt_svg_reference_pairs() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vector/tests");
         let image_root = root.join("images/svg");
         let reference_root = root
             .join("reference/svg")
@@ -1091,9 +1091,9 @@ mod tests {
                 .expect("resolve WPT SVG reference");
             assert!(reference_path.starts_with(&reference_root));
             let reference_data = fs::read(reference_path).expect("read WPT SVG reference");
-            let document = image::decode_vector(&data)
+            let document = vector::decode_vector(&data)
                 .unwrap_or_else(|error| panic!("{}: {error}", relative.display()));
-            let reference = image::decode_vector(&reference_data)
+            let reference = vector::decode_vector(&reference_data)
                 .unwrap_or_else(|error| panic!("{} reference: {error}", relative.display()));
             assert_eq!(document.size(), reference.size(), "{}", relative.display());
             let width = document.size().width.ceil() as usize;
@@ -1109,7 +1109,7 @@ mod tests {
 
     #[test]
     fn renders_tinyvg_reference_pngs() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../image/tests");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vector/tests");
         let image_root = root.join("images/tinyvg");
         let reference_root = root.join("reference/tinyvg");
         let mut files = Vec::new();
@@ -1126,7 +1126,7 @@ mod tests {
                 .strip_prefix(&image_root)
                 .expect("relative TinyVG test");
             let data = fs::read(&path).expect("read TinyVG test");
-            let document = image::decode_vector(&data)
+            let document = vector::decode_vector(&data)
                 .unwrap_or_else(|error| panic!("{}: {error}", relative.display()));
             let reference_path = reference_root.join(relative).with_extension("tvg.png");
             let reference_data = fs::read(&reference_path).expect("read TinyVG PNG reference");
@@ -1175,7 +1175,7 @@ mod tests {
             </svg>"##
                 .as_slice(),
         ] {
-            let document = image::decode_vector(svg).expect("masked SVG");
+            let document = vector::decode_vector(svg).expect("masked SVG");
             let pixels = render_pixels(&document, 20, 10);
             assert!(pixels[(5 * 20 + 5) * 4 + 3] > 240);
             assert!(pixels[(5 * 20 + 15) * 4 + 3] < 16);
@@ -1184,7 +1184,7 @@ mod tests {
 
     #[test]
     fn renders_transformed_mask_with_view_box() {
-        let document = image::decode_vector(
+        let document = vector::decode_vector(
             br##"<svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 100 100">
               <mask id="cutout">
                 <rect width="100" height="100" fill="white"/>
@@ -1203,7 +1203,7 @@ mod tests {
 
     #[test]
     fn renders_svg_gradients_in_srgb() {
-        let document = image::decode_vector(
+        let document = vector::decode_vector(
             br##"<svg xmlns="http://www.w3.org/2000/svg" width="256" height="1">
               <linearGradient id="gradient"><stop/><stop offset="1" stop-color="white"/></linearGradient>
               <rect width="256" height="1" fill="url(#gradient)"/>

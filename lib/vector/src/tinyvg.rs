@@ -932,19 +932,15 @@ mod tests {
             let reference_path = corpus.reference_for(&path, ".png");
             assert!(reference_path.is_file(), "{} reference", name.display());
             used_references.insert(reference_path.clone());
-            #[cfg(feature = "png")]
-            {
-                let reference_data =
-                    std::fs::read(&reference_path).expect("read TinyVG PNG reference");
-                let reference = crate::decode(&reference_data)
-                    .unwrap_or_else(|error| panic!("{} reference: {error}", name.display()));
-                assert_eq!(
-                    (f64::from(reference.width()), f64::from(reference.height())),
-                    (vector.size().width, vector.size().height),
-                    "{} reference",
-                    name.display()
-                );
-            }
+            let reference_data = std::fs::read(&reference_path).expect("read TinyVG PNG reference");
+            let reference = image::decode(&reference_data)
+                .unwrap_or_else(|error| panic!("{} reference: {error}", name.display()));
+            assert_eq!(
+                (f64::from(reference.width()), f64::from(reference.height())),
+                (vector.size().width, vector.size().height),
+                "{} reference",
+                name.display()
+            );
         }
 
         assert_eq!(used_references, references.into_iter().collect());

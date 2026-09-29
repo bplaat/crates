@@ -9,33 +9,6 @@
 use std::fmt::{self, Display, Formatter};
 use std::time::Duration;
 
-pub use crate::vector::{
-    BlendMode, Clip, Color, DrawCommand, FillRule, GradientStop, LineCap, LineJoin, Mask, MaskType,
-    Paint, PaintId, PathId, PathSegment, Point, Rect, Size, SpreadMethod, StrokeStyle, Transform,
-    VectorDecodeError, VectorFormat, VectorImage,
-};
-
-#[cfg(all(
-    test,
-    any(
-        feature = "qoi",
-        feature = "jpeg",
-        feature = "png",
-        feature = "gif",
-        feature = "bmp",
-        feature = "ico",
-        feature = "svg",
-        feature = "tinyvg"
-    )
-))]
-mod test_support;
-mod vector;
-
-#[cfg(feature = "svg")]
-mod svg;
-#[cfg(feature = "tinyvg")]
-mod tinyvg;
-
 #[cfg(feature = "bmp")]
 mod bmp;
 #[cfg(feature = "gif")]
@@ -48,6 +21,18 @@ mod jpeg;
 mod png;
 #[cfg(feature = "qoi")]
 mod qoi;
+#[cfg(all(
+    test,
+    any(
+        feature = "qoi",
+        feature = "jpeg",
+        feature = "png",
+        feature = "gif",
+        feature = "bmp",
+        feature = "ico"
+    )
+))]
+mod test_support;
 
 /// The encoded format detected from an image's file signature.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -277,37 +262,6 @@ pub fn decode(_data: &[u8]) -> Result<Image> {
         return ico::decode(_data);
     }
     Err(DecodeError::InvalidMagic)
-}
-
-/// Detects a supported vector format without fully decoding it.
-#[cfg_attr(
-    not(any(feature = "svg", feature = "tinyvg")),
-    allow(clippy::missing_const_for_fn)
-)]
-pub fn vector_format(_data: &[u8]) -> Option<VectorFormat> {
-    #[cfg(feature = "svg")]
-    if svg::is_svg(_data) {
-        return Some(VectorFormat::Svg);
-    }
-    #[cfg(feature = "tinyvg")]
-    if tinyvg::is_tinyvg(_data) {
-        return Some(VectorFormat::TinyVg);
-    }
-    None
-}
-
-/// Decodes a supported vector image to an immutable backend-neutral display list.
-pub fn decode_vector(data: &[u8]) -> std::result::Result<VectorImage, VectorDecodeError> {
-    if data.len() > 64 * 1024 * 1024 {
-        return Err(VectorDecodeError::ResourceLimit);
-    }
-    match vector_format(data) {
-        #[cfg(feature = "svg")]
-        Some(VectorFormat::Svg) => svg::decode(data),
-        #[cfg(feature = "tinyvg")]
-        Some(VectorFormat::TinyVg) => vector::decode_tinyvg(data),
-        _ => Err(VectorDecodeError::InvalidMagic),
-    }
 }
 
 #[cfg(any(

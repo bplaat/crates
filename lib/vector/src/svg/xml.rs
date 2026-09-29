@@ -4,12 +4,15 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::cell::OnceCell;
 use std::collections::HashMap;
 
 use xmlparser::{ElementEnd, Token, Tokenizer};
 
 use super::{MAX_ATTRIBUTES, MAX_DEPTH, MAX_ELEMENTS, SVG_NS, XML_NS, XMLNS_NS};
 use crate::VectorDecodeError;
+
+pub(super) type InlineDeclarations = Vec<(String, String, bool)>;
 
 #[derive(Debug)]
 pub(super) struct Element<'a> {
@@ -20,6 +23,7 @@ pub(super) struct Element<'a> {
     pub(super) parent: Option<usize>,
     pub(super) is_svg: bool,
     pub(super) text: String,
+    pub(super) inline_style: OnceCell<Result<InlineDeclarations, VectorDecodeError>>,
 }
 
 impl Element<'_> {
@@ -49,7 +53,7 @@ impl<'a> XmlDocument<'a> {
         let mut elements = Vec::<Element<'a>>::new();
         let mut stack = Vec::<usize>::new();
         let mut pending = None;
-        let mut roots = Vec::new();
+        let mut root = None;
         let mut ids = HashMap::new();
         let mut attributes = 0usize;
         for token in Tokenizer::from(source) {
@@ -70,6 +74,7 @@ impl<'a> XmlDocument<'a> {
                         parent: None,
                         is_svg: false,
                         text: String::new(),
+                        inline_style: OnceCell::new(),
                     });
                     pending = Some(index);
                 }
@@ -111,7 +116,9 @@ impl<'a> XmlDocument<'a> {
                             elements[parent].children.push(index);
                             elements[index].parent = Some(parent);
                         } else {
-                            roots.push(index);
+                            if root.replace(index).is_some() {
+                                return Err(VectorDecodeError::InvalidData);
+                            }
                         }
                         if matches!(end, ElementEnd::Open) {
                             stack.push(index);
@@ -152,20 +159,18 @@ impl<'a> XmlDocument<'a> {
                 Token::Declaration { .. } | Token::Comment { .. } | Token::DtdEnd { .. } => {}
             }
         }
-        if pending.is_some() || !stack.is_empty() || roots.len() != 1 {
+        if pending.is_some() || !stack.is_empty() {
             return Err(VectorDecodeError::InvalidData);
         }
-        let root = roots[0];
+        let root = root.ok_or(VectorDecodeError::InvalidData)?;
         if elements[root].name != "svg" {
             return Err(VectorDecodeError::InvalidData);
         }
-        let namespaces = (0..elements.len())
-            .map(|index| Self::element_namespace(&elements, index))
-            .collect::<Result<Vec<_>, _>>()?;
-        if namespaces[root].is_some_and(|namespace| namespace != SVG_NS) {
+        if Self::element_namespace(&elements, root)?.is_some_and(|namespace| namespace != SVG_NS) {
             return Err(VectorDecodeError::InvalidData);
         }
-        for (index, namespace) in namespaces.into_iter().enumerate() {
+        for index in 0..elements.len() {
+            let namespace = Self::element_namespace(&elements, index)?;
             elements[index].is_svg = namespace.is_none_or(|namespace| namespace == SVG_NS);
             Self::validate_namespace_declarations(&elements[index])?;
             for &(prefix, _, _) in &elements[index].attributes {

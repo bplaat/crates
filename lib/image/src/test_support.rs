@@ -99,8 +99,7 @@ impl FixtureCorpus {
         feature = "png",
         feature = "gif",
         feature = "bmp",
-        feature = "ico",
-        feature = "tinyvg"
+        feature = "ico"
     ))]
     pub(crate) fn reference_for(&self, image: &Path, suffix: &str) -> PathBuf {
         let relative = image

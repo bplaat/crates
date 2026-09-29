@@ -17,10 +17,9 @@ use super::values::{
 };
 use super::xml::XmlDocument;
 use super::{MAX_ITEMS, MAX_SOURCE_BYTES};
-use crate::vector::path_bounds;
 use crate::{
     DrawCommand, FillRule, Mask, Paint, Point, Rect, Size, Transform, VectorDecodeError,
-    VectorFormat, VectorImage,
+    VectorFormat, VectorImage, path_bounds,
 };
 
 pub(super) struct Decoder<'a> {

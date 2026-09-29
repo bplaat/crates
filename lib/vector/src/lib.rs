@@ -4,15 +4,27 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Backend-neutral vector image display lists.
-
+#![doc = include_str!("../README.md")]
 #![allow(missing_docs)]
 
 use std::fmt::{self, Display, Formatter};
 
-use crate::ColorSpace;
+#[cfg(feature = "svg")]
+mod svg;
 #[cfg(feature = "tinyvg")]
-use crate::tinyvg;
+mod tinyvg;
+
+#[cfg(all(test, any(feature = "svg", feature = "tinyvg")))]
+mod test_support;
+
+/// The interpretation of color channels. Alpha is always linear.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum ColorSpace {
+    /// Standard RGB.
+    Srgb,
+    /// Linear extended sRGB.
+    LinearSrgb,
+}
 
 /// A supported vector file format.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -485,6 +497,37 @@ impl VectorImage {
     #[cfg(feature = "svg")]
     pub(crate) fn drain_commands(&mut self, start: usize) -> Vec<DrawCommand> {
         self.commands.drain(start..).collect()
+    }
+}
+
+/// Detects a supported vector format without fully decoding it.
+#[cfg_attr(
+    not(any(feature = "svg", feature = "tinyvg")),
+    allow(clippy::missing_const_for_fn)
+)]
+pub fn vector_format(_data: &[u8]) -> Option<VectorFormat> {
+    #[cfg(feature = "tinyvg")]
+    if tinyvg::is_tinyvg(_data) {
+        return Some(VectorFormat::TinyVg);
+    }
+    #[cfg(feature = "svg")]
+    if svg::is_svg(_data) {
+        return Some(VectorFormat::Svg);
+    }
+    None
+}
+
+/// Decodes a supported vector image to an immutable backend-neutral display list.
+pub fn decode_vector(data: &[u8]) -> Result<VectorImage, VectorDecodeError> {
+    if data.len() > 64 * 1024 * 1024 {
+        return Err(VectorDecodeError::ResourceLimit);
+    }
+    match vector_format(data) {
+        #[cfg(feature = "svg")]
+        Some(VectorFormat::Svg) => svg::decode(data),
+        #[cfg(feature = "tinyvg")]
+        Some(VectorFormat::TinyVg) => decode_tinyvg(data),
+        _ => Err(VectorDecodeError::InvalidMagic),
     }
 }
 

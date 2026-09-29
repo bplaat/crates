@@ -294,9 +294,17 @@ impl Stylesheet {
         let mut uses_z_index = elements.iter().any(|element| {
             element.attr("z-index").is_some()
                 || element.attr("style").is_some_and(|style| {
-                    css_declarations(style).is_ok_and(|declarations| {
-                        declarations.iter().any(|(name, _, _)| name == "z-index")
-                    })
+                    style
+                        .as_bytes()
+                        .windows(b"z-index".len())
+                        .any(|name| name.eq_ignore_ascii_case(b"z-index"))
+                        && element
+                            .inline_style
+                            .get_or_init(|| css_declarations(style))
+                            .as_ref()
+                            .is_ok_and(|declarations| {
+                                declarations.iter().any(|(name, _, _)| name == "z-index")
+                            })
                 })
         });
         let mut text_bytes = 0usize;
@@ -387,7 +395,9 @@ impl Stylesheet {
         style.transform_origin = None;
         style.transform_fill_box = false;
         style.geometry = GeometryStyle::default();
-        let mut declarations = Vec::<(&str, &str, bool, (bool, u8, u32, usize))>::new();
+        let mut declarations = Vec::<(&str, &str, bool, (bool, u8, u32, usize))>::with_capacity(
+            element.attributes.len(),
+        );
         for (order, &(prefix, name, value)) in element.attributes.iter().enumerate() {
             if prefix.is_empty() {
                 declarations.push((name, value, false, (false, 0, 0, order)));
@@ -413,10 +423,15 @@ impl Stylesheet {
         }
         let inline_declarations = element
             .attr("style")
-            .map(css_declarations)
-            .transpose()?
-            .unwrap_or_default();
-        if !inline_declarations.is_empty() {
+            .map(|source| {
+                element
+                    .inline_style
+                    .get_or_init(|| css_declarations(source))
+                    .as_ref()
+                    .map_err(Clone::clone)
+            })
+            .transpose()?;
+        if let Some(inline_declarations) = inline_declarations {
             for (order, (name, value, important)) in inline_declarations.iter().enumerate() {
                 declarations.push((name, value, true, (*important, 2, u32::MAX, order)));
             }

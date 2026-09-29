@@ -1,5 +1,5 @@
 [package]
-name = "image"
+name = "vector"
 version = "0.1.0"
 edition.workspace = true
 license.workspace = true
@@ -9,24 +9,18 @@ repository.workspace = true
 [lints]
 workspace = true
 
-[lib]
-path = "src/mod.rs"
-
 [features]
-default = ["qoi", "jpeg", "png", "gif", "bmp", "ico"]
-qoi = []
-jpeg = []
-png = ["dep:miniz_oxide"]
-gif = []
-bmp = []
-ico = ["bmp", "png"]
+default = ["svg", "tinyvg"]
+svg = ["dep:xmlparser"]
+tinyvg = []
 
 [dependencies]
-miniz_oxide = { version = "0.9.1", optional = true }
+xmlparser = { version = "0.13.6", optional = true }
 
 [dev-dependencies]
 criterion = { path = "../criterion" }
+image = { path = "../image", default-features = false, features = ["png"] }
 
 [[bench]]
-name = "image"
+name = "vector"
 harness = false

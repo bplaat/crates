@@ -114,31 +114,6 @@ fn decode(c: &mut Criterion) {
         });
     }
     raster.finish();
-
-    let mut vector = c.benchmark_group("image_decode_vector");
-    for (name, enabled, bytes) in [
-        (
-            "svg",
-            cfg!(feature = "svg"),
-            &include_bytes!("../tests/images/svg/painting/reftests/paint-order-002.svg")[..],
-        ),
-        (
-            "tinyvg",
-            cfg!(feature = "tinyvg"),
-            &include_bytes!("../tests/images/tinyvg/flowchart.tvg")[..],
-        ),
-    ] {
-        if !enabled {
-            continue;
-        }
-        vector.throughput(Throughput::Bytes(bytes.len() as u64));
-        vector.bench_function(name, |b| {
-            b.iter(|| {
-                black_box(image::decode_vector(black_box(bytes)).expect("valid vector image"))
-            });
-        });
-    }
-    vector.finish();
 }
 
 criterion_group!(benches, decode);

@@ -538,7 +538,6 @@ version = "0.1.0"
 dependencies = [
  "criterion",
  "miniz_oxide",
- "xmlparser",
 ]
 
 [[package]]
@@ -631,6 +630,7 @@ version = "0.1.0"
 dependencies = [
  "image",
  "objc2",
+ "vector",
 ]
 
 [[package]]
@@ -1347,6 +1347,15 @@ dependencies = [
  "quote",
  "syn 3.0.4",
  "trybuild",
+]
+
+[[package]]
+name = "vector"
+version = "0.1.0"
+dependencies = [
+ "criterion",
+ "image",
+ "xmlparser",
 ]
 
 [[package]]
