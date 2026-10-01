@@ -122,7 +122,8 @@ pub(crate) struct FixtureState {
     pub preset_speed: f32,
     /// Index of the moving head gobo, `None` for open
     pub gobo: Option<usize>,
-    pub rotating_gobo: Option<usize>,
+    /// Focus, big to small
+    pub focus: f32,
     /// Index of the running built-in movement macro, `None` to stand still
     pub movement: Option<usize>,
     pub movement_speed: f32,
@@ -145,7 +146,7 @@ impl FixtureState {
         preset: None,
         preset_speed: 0.5,
         gobo: None,
-        rotating_gobo: None,
+        focus: 0.0,
         movement: None,
         movement_speed: 0.5,
     };
@@ -175,7 +176,7 @@ impl FixtureState {
             FixtureProp::Preset(preset) => self.preset = preset,
             FixtureProp::PresetSpeed(preset_speed) => self.preset_speed = preset_speed,
             FixtureProp::Gobo(gobo) => self.gobo = gobo,
-            FixtureProp::RotatingGobo(rotating_gobo) => self.rotating_gobo = rotating_gobo,
+            FixtureProp::Focus(focus) => self.focus = focus,
             FixtureProp::Movement(movement) => self.movement = movement,
             FixtureProp::MovementSpeed(movement_speed) => self.movement_speed = movement_speed,
         }
@@ -201,7 +202,7 @@ pub(crate) enum FixtureProp {
     Preset(Option<usize>),
     PresetSpeed(f32),
     Gobo(Option<usize>),
-    RotatingGobo(Option<usize>),
+    Focus(f32),
     Movement(Option<usize>),
     MovementSpeed(f32),
 }
@@ -322,6 +323,7 @@ impl Clock {
 }
 
 const SHUTTER_OPEN: u8 = 255;
+const LAMP_ON: u8 = 90;
 
 // MARK: DMX Thread
 pub(crate) fn dmx_thread() {
@@ -463,8 +465,6 @@ pub(crate) fn dmx_thread() {
                         color = wheel.color;
                     }
                     let gobo = head.and_then(|head| head.gobos.get(state.gobo?));
-                    let rotating_gobo =
-                        head.and_then(|head| head.rotating_gobos.get(state.rotating_gobo?));
                     let movement = head
                         .and_then(|head| head.movements.get(state.movement?))
                         .map_or(0, |movement| movement.value);
@@ -487,15 +487,14 @@ pub(crate) fn dmx_thread() {
                                 wheel.map_or(0, |wheel| wheel.value)
                             }
                             (Channel::Gobo, Mode::Manual) => gobo.map_or(0, |gobo| gobo.value),
-                            (Channel::RotatingGobo, Mode::Manual) => {
-                                rotating_gobo.map_or(0, |gobo| gobo.value)
-                            }
+                            (Channel::Focus, _) => (state.focus * 255.0) as u8,
                             (Channel::Movement, Mode::Manual) => movement,
                             // The fixture moves fast to slow, the slider slow to fast
                             (Channel::MovementSpeed, _) => {
                                 ((1.0 - state.movement_speed) * 255.0) as u8
                             }
                             (Channel::Shutter, Mode::Manual) if is_open => SHUTTER_OPEN,
+                            (Channel::LampOn, _) => LAMP_ON,
                             // Moving heads cycle colors and gobos and move to the sound
                             (Channel::ColorWheel, Mode::Auto) => {
                                 head.map_or(0, |head| head.auto_color)
@@ -521,9 +520,8 @@ pub(crate) fn dmx_thread() {
                         if head.is_some() {
                             FixtureOutput::MovingHead {
                                 color: output_color,
-                                // A static gobo is in front of the rotating gobo
                                 gobo: match dmx_state.mode {
-                                    Mode::Manual => gobo.or(rotating_gobo).map(|gobo| gobo.shape),
+                                    Mode::Manual => gobo.map(|gobo| gobo.shape),
                                     _ => None,
                                 },
                             }

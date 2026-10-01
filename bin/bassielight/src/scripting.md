@@ -79,7 +79,8 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `toggle_speed`, `strobe_speed` | beats, or `false` for off | rgb, movingHead |
 | `preset` | preset name or number, `false` for the own color | fixtures with presets |
 | `preset_speed` | 0 to 1 | fixtures with presets |
-| `gobo`, `rotating_gobo` | gobo name or number, `false` for open | movingHead |
+| `gobo` | gobo name or number, `false` for open | movingHead |
+| `focus` | 0 (big) to 1 (small) | movingHead |
 | `movement` | movement name or number, `false` to stand still | movingHead |
 | `movement_speed` | 0 to 1 | movingHead |
 | `switches` | list of booleans like `{ true, false, true, false }` | switch |

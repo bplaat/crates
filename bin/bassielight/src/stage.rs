@@ -34,8 +34,8 @@ pub(crate) enum FixtureType {
     ShowtecTitanStrobe,
     #[serde(rename = "jb_systems_tubeled")]
     JbSystemsTubeled,
-    #[serde(rename = "chauvet_intimidator_hybrid_140sr")]
-    ChauvetIntimidatorHybrid140SR,
+    #[serde(rename = "chauvet_intimidator_beam_140sr")]
+    ChauvetIntimidatorBeam140SR,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -66,13 +66,16 @@ pub(crate) enum Channel {
     /// Color wheel slot closest to the color
     ColorWheel,
     Gobo,
-    RotatingGobo,
+    /// Beam focus, big to small
+    Focus,
     /// Built-in movement macro
     Movement,
     /// Pan, tilt and movement macro speed, fast to slow
     MovementSpeed,
     /// Closed for black, open otherwise
     Shutter,
+    /// Turn on the discharge lamp through the fixture function channel
+    LampOn,
     Unused,
 }
 
@@ -98,7 +101,6 @@ pub(crate) struct MovingHead {
     #[serde(skip)]
     pub color_wheel: &'static [WheelColor],
     pub gobos: &'static [Gobo],
-    pub rotating_gobos: &'static [Gobo],
     pub movements: &'static [Movement],
     /// Color wheel, gobo wheel and movement values for auto mode
     #[serde(skip)]
@@ -165,50 +167,43 @@ const fn movement(name: &'static str, value: u8) -> Movement {
     Movement { name, value }
 }
 
-const INTIMIDATOR_HYBRID_140SR: MovingHead = MovingHead {
+const INTIMIDATOR_BEAM_140SR: MovingHead = MovingHead {
     color_wheel: &[
         wheel_color(1, 0xffffff),  // White
         wheel_color(5, 0xff0000),  // Red
         wheel_color(9, 0xffd000),  // Yellow
-        wheel_color(13, 0x00ff00), // Green
-        wheel_color(17, 0x40c0ff), // Sky blue
-        wheel_color(21, 0xb080ff), // Lavender
-        wheel_color(26, 0xffff60), // Canary yellow
-        wheel_color(31, 0x0000ff), // Blue
-        wheel_color(36, 0xff00ff), // Magenta
-        wheel_color(41, 0xa0ff00), // Lime green
-        wheel_color(46, 0xfff0d8), // Natural white
-        wheel_color(51, 0xe8f4ff), // Cool white
-        wheel_color(56, 0x6000ff), // Ultraviolet
+        wheel_color(13, 0x40c0ff), // Sky blue
+        wheel_color(17, 0x00ff00), // Green
+        wheel_color(21, 0xa0ff00), // Lime green
+        wheel_color(25, 0xfff0d8), // Natural white
+        wheel_color(29, 0xb080ff), // Lavender
+        wheel_color(33, 0xffff60), // Canary yellow
+        wheel_color(37, 0xff00ff), // Magenta
+        wheel_color(41, 0x00ffff), // Cyan
+        wheel_color(45, 0xffe5b0), // Warm white
+        wheel_color(49, 0xc080ff), // Lilac
+        wheel_color(53, 0xb0d8ff), // Pale blue
+        wheel_color(59, 0x6000ff), // Ultraviolet
     ],
-    // Shapes from the gobo wheel pictures in the manual
+    // Shapes from the Beam 140SR gobo wheel pictures in the manual
     gobos: &[
-        gobo("Large ring", "ringLarge", 4),
-        gobo("Medium ring", "ringMedium", 7),
-        gobo("Small ring", "ringSmall", 10),
-        gobo("Dot", "dot", 13),
-        gobo("Dot line", "dotLine", 16),
-        gobo("Arrows", "arrows", 19),
-        gobo("Dot cloud", "dotCloud", 22),
-        gobo("Big dots", "dotScatter", 25),
-        gobo("Wave", "wave", 28),
-        gobo("Squares", "squares", 31),
-        gobo("Dot disc", "dotDisc", 34),
-        gobo("Flower", "flower", 37),
-        gobo("Spiral", "spiral", 40),
-        gobo("Dot ring", "dotRing", 43),
-        gobo("Cross", "cross", 46),
-        gobo("Shards", "shards", 49),
-    ],
-    rotating_gobos: &[
-        gobo("Swirl", "swirl", 14),
-        gobo("Petals", "petals", 20),
-        gobo("Four circles", "circles", 26),
-        gobo("Vortex", "vortex", 32),
-        gobo("Starburst", "starburst", 38),
-        gobo("Open ring", "ringGap", 44),
-        gobo("Waves", "waves", 50),
-        gobo("Rings", "rings", 58),
+        gobo("Dot", "dot", 5),
+        gobo("Tiny ring", "ringSmall", 9),
+        gobo("Small ring", "ringSmall", 13),
+        gobo("Medium ring", "ringMedium", 17),
+        gobo("Large ring", "ringLarge", 21),
+        gobo("Shards", "shards", 25),
+        gobo("Cross", "cross", 29),
+        gobo("Dot ring", "dotRing", 33),
+        gobo("Swirl", "vortex", 37),
+        gobo("Flower", "flower", 41),
+        gobo("Dot disc", "dotDisc", 45),
+        gobo("Squares", "squares", 49),
+        gobo("Wave", "wave", 53),
+        gobo("Big dots", "dotScatter", 57),
+        gobo("Dot cloud", "dotCloud", 61),
+        gobo("Arrows", "arrows", 65),
+        gobo("Dot line", "dotLine", 69),
     ],
     movements: &[
         movement("Macro 1", 15),
@@ -229,7 +224,7 @@ const INTIMIDATOR_HYBRID_140SR: MovingHead = MovingHead {
         movement("Sound macro 8", 251),
     ],
     // Rainbow color cycling, gobo cycling and sound active movement
-    auto_color: 200,
+    auto_color: 160,
     auto_gobo: 160,
     auto_movement: 143,
 };
@@ -331,7 +326,7 @@ impl FixtureType {
         FixtureType::ShowtecMultidimMKII,
         FixtureType::ShowtecTitanStrobe,
         FixtureType::JbSystemsTubeled,
-        FixtureType::ChauvetIntimidatorHybrid140SR,
+        FixtureType::ChauvetIntimidatorBeam140SR,
     ];
 
     pub(crate) const fn profile(self) -> &'static FixtureProfile {
@@ -402,12 +397,12 @@ impl FixtureType {
                 presets: Some(&TUBELED_PRESETS),
                 moving_head: None,
             },
-            FixtureType::ChauvetIntimidatorHybrid140SR => &FixtureProfile {
-                r#type: FixtureType::ChauvetIntimidatorHybrid140SR,
-                name: "Chauvet Intimidator Hybrid 140SR",
+            FixtureType::ChauvetIntimidatorBeam140SR => &FixtureProfile {
+                r#type: FixtureType::ChauvetIntimidatorBeam140SR,
+                name: "Chauvet Intimidator Beam 140SR",
                 kind: FixtureKind::MovingHead,
                 size: [322, 220],
-                // 19 channel mode
+                // 14 channel mode
                 channels: &[
                     Pan,
                     Unused,
@@ -416,22 +411,17 @@ impl FixtureType {
                     MovementSpeed,
                     ColorWheel,
                     Gobo,
-                    RotatingGobo,
-                    // Gobo rotation, prisms, focus, auto focus, zoom and frost
+                    // Prism
                     Unused,
-                    Unused,
-                    Unused,
-                    Unused,
-                    Unused,
-                    Unused,
-                    Unused,
+                    Focus,
                     Dimmer,
                     Shutter,
                     Unused,
+                    LampOn,
                     Movement,
                 ],
                 presets: None,
-                moving_head: Some(&INTIMIDATOR_HYBRID_140SR),
+                moving_head: Some(&INTIMIDATOR_BEAM_140SR),
             },
         }
     }
@@ -645,9 +635,8 @@ fn fixture_docs() -> String {
         }
         if let Some(head) = profile.moving_head {
             docs.push_str(&format!(
-                "- `gobo`: {}\n- `rotating_gobo`: {}\n- `movement`: {}\n",
+                "- `gobo`: {}\n- `movement`: {}\n",
                 names(head.gobos.iter().map(|gobo| gobo.name).collect()),
-                names(head.rotating_gobos.iter().map(|gobo| gobo.name).collect()),
                 names(
                     head.movements
                         .iter()
@@ -735,6 +724,10 @@ mod tests {
             r#"{"type":"ayra_compar_20","name":"Ayra Compar 20","kind":"rgb","size":[250,250],"channels":[{"type":"dimmer"},{"type":"unused"},{"type":"red"},{"type":"green"},{"type":"blue"},{"type":"music","value":221}]}"#
         );
         assert_eq!(FixtureType::ShowtecMultidimMKII.channel_count(), 4);
+        assert_eq!(
+            serde_json::to_string(&FixtureType::ChauvetIntimidatorBeam140SR).unwrap(),
+            r#""chauvet_intimidator_beam_140sr""#
+        );
     }
 
     #[test]
@@ -770,18 +763,36 @@ mod tests {
 
     #[test]
     fn picks_closest_color_wheel_slot() {
-        let head = FixtureType::ChauvetIntimidatorHybrid140SR
-            .profile()
-            .moving_head
-            .expect("Should be a moving head");
+        let profile = FixtureType::ChauvetIntimidatorBeam140SR.profile();
+        let head = profile.moving_head.expect("Should be a moving head");
         let slot = |color| head.wheel_color(Color::from_u32(color)).value;
         assert_eq!(slot(0xff0000), 5);
         assert_eq!(slot(0xffffff), 1);
-        // Cyan has no slot, sky blue is closest
-        assert_eq!(slot(0x00ffff), 17);
+        assert_eq!(slot(0x00ffff), 41);
+        assert_eq!(FixtureType::ChauvetIntimidatorBeam140SR.channel_count(), 14);
+        assert_eq!(head.gobos.len(), 17);
+        assert_eq!(head.gobos[0].value, 5);
+        assert_eq!(head.gobos[16].value, 69);
+        assert_eq!(head.auto_gobo, 160);
+        assert_eq!(head.auto_color, 160);
         assert_eq!(
-            FixtureType::ChauvetIntimidatorHybrid140SR.channel_count(),
-            19
+            profile.channels,
+            &[
+                Channel::Pan,
+                Channel::Unused,
+                Channel::Tilt,
+                Channel::Unused,
+                Channel::MovementSpeed,
+                Channel::ColorWheel,
+                Channel::Gobo,
+                Channel::Unused,
+                Channel::Focus,
+                Channel::Dimmer,
+                Channel::Shutter,
+                Channel::Unused,
+                Channel::LampOn,
+                Channel::Movement,
+            ]
         );
     }
 

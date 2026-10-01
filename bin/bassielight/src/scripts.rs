@@ -131,7 +131,7 @@ const PROPS: [&str; 17] = [
     "preset",
     "preset_speed",
     "gobo",
-    "rotating_gobo",
+    "focus",
     "movement",
     "movement_speed",
     "switches",
@@ -256,16 +256,12 @@ fn parse_prop(
             None => return Ok(Vec::new()),
         },
         "preset_speed" if presets.is_some() => P::PresetSpeed(fraction(value)?),
-        "gobo" | "rotating_gobo" | "movement" => {
+        "gobo" | "movement" => {
             let Some(head) = head else {
                 return Ok(Vec::new());
             };
             match key {
                 "gobo" => P::Gobo(index(value, head.gobos.iter().map(|gobo| gobo.name))?),
-                "rotating_gobo" => P::RotatingGobo(index(
-                    value,
-                    head.rotating_gobos.iter().map(|gobo| gobo.name),
-                )?),
                 _ => P::Movement(index(
                     value,
                     head.movements.iter().map(|movement| movement.name),
@@ -273,6 +269,7 @@ fn parse_prop(
             }
         }
         "movement_speed" if head.is_some() => P::MovementSpeed(fraction(value)?),
+        "focus" if head.is_some() => P::Focus(fraction(value)?),
         "switches" if profile.kind == FixtureKind::Switch => {
             let switches = value
                 .as_table()
@@ -326,9 +323,7 @@ fn get_prop(lua: &Lua, state: &FixtureState, key: &str) -> mlua::Result<Value> {
     Ok(match value {
         serde_json::Value::Null => Value::Boolean(false),
         serde_json::Value::Bool(value) => Value::Boolean(*value),
-        serde_json::Value::Number(number)
-            if matches!(key, "preset" | "gobo" | "rotating_gobo" | "movement") =>
-        {
+        serde_json::Value::Number(number) if matches!(key, "preset" | "gobo" | "movement") => {
             Value::Integer(number.as_i64().unwrap_or_default() + 1)
         }
         serde_json::Value::Number(number) => match number.as_i64() {
@@ -353,6 +348,7 @@ enum TweenField {
     FlashSpeed,
     PresetSpeed,
     MovementSpeed,
+    Focus,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -372,6 +368,7 @@ impl TweenField {
             FixtureProp::FlashSpeed(value) => (TweenField::FlashSpeed, Number(value)),
             FixtureProp::PresetSpeed(value) => (TweenField::PresetSpeed, Number(value)),
             FixtureProp::MovementSpeed(value) => (TweenField::MovementSpeed, Number(value)),
+            FixtureProp::Focus(value) => (TweenField::Focus, Number(value)),
             _ => return None,
         })
     }
@@ -385,6 +382,7 @@ impl TweenField {
             TweenField::FlashSpeed => TweenValue::Number(state.flash_speed),
             TweenField::PresetSpeed => TweenValue::Number(state.preset_speed),
             TweenField::MovementSpeed => TweenValue::Number(state.movement_speed),
+            TweenField::Focus => TweenValue::Number(state.focus),
         }
     }
 
@@ -401,6 +399,7 @@ impl TweenField {
             (TweenField::MovementSpeed, TweenValue::Number(value)) => {
                 FixtureProp::MovementSpeed(value)
             }
+            (TweenField::Focus, TweenValue::Number(value)) => FixtureProp::Focus(value),
             _ => unreachable!("Tween value doesn't match its field"),
         }
     }

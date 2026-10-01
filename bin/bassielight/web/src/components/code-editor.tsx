@@ -55,7 +55,7 @@ const PROPS = [
     'preset',
     'preset_speed',
     'gobo',
-    'rotating_gobo',
+    'focus',
     'movement',
     'movement_speed',
     'switches',

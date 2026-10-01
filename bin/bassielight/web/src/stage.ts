@@ -22,10 +22,11 @@ export type Channel =
               | 'tilt'
               | 'colorWheel'
               | 'gobo'
-              | 'rotatingGobo'
+              | 'focus'
               | 'movement'
               | 'movementSpeed'
               | 'shutter'
+              | 'lampOn'
               | 'unused';
       }
     | { type: 'music'; value: number };
@@ -58,7 +59,6 @@ export interface Gobo {
 
 export interface MovingHead {
     gobos: Gobo[];
-    rotatingGobos: Gobo[];
     movements: { name: string }[];
 }
 

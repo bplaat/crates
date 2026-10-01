@@ -42,17 +42,14 @@ tabs, on the stage tab the setup is frozen until you leave it.
 - [Ayra Compar 20](https://www.manualslib.com/manual/1033103/Ayra-Compar-20.html)
     - 6 channel mode
 - [SHOWTEC Multidim MKII](https://www.manualslib.com/manual/2115423/Showtec-Multidim-Mkii.html)
+    - 4 channel mode
 - [SHOWTEC Titan Strobe](https://www.manualslib.com/manual/1569275/Showtec-Titan-Strobe.html)
 - [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
     - Controls its connected array of [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html) tubes as one fixture
     - Own colors or one of the 38 built-in presets
-- [Chauvet INTIMIDATOR HYBRID 140SR](https://www.manualslib.com/manual/1239349/Chauvet-Intimidator-Hybrid-140sr.html)
-    - 19 channel mode, colors use the closest color wheel slot
-    - Static and rotating gobos, built-in movement macros
-- [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
-    - Connected to [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html)
-- [Chauvet INTIMIDATOR HYBRID 140SR](https://www.manualslib.com/manual/1239349/Chauvet-Intimidator-Hybrid-140sr.html)
-    - 19 channel mode
+- [Chauvet Intimidator Beam 140SR](https://www.chauvetdj.com/wp-content/uploads/2016/09/Intimidator_Beam_140SR_UM_Rev5_WO.pdf)
+    - 14 channel mode
+    - Focus adjusts the projected gobo size
 
 ## Installation
 

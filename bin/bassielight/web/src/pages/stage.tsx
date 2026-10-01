@@ -70,7 +70,7 @@ interface FixtureState {
     preset: number | null;
     presetSpeed: number;
     gobo: number | null;
-    rotatingGobo: number | null;
+    focus: number;
     movement: number | null;
     movementSpeed: number;
 }
@@ -97,7 +97,7 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     preset: null,
     presetSpeed: 0.5,
     gobo: null,
-    rotatingGobo: null,
+    focus: 0,
     movement: null,
     movementSpeed: 0.5,
 };
@@ -345,12 +345,8 @@ function MovingHeadControls({
             <h2 class="title">Gobo</h2>
             <GoboButtons gobos={movingHead.gobos} selected={state.gobo} onSelect={(gobo) => setProp({ gobo })} />
 
-            <h2 class="title">Rotating Gobo</h2>
-            <GoboButtons
-                gobos={movingHead.rotatingGobos}
-                selected={state.rotatingGobo}
-                onSelect={(rotatingGobo) => setProp({ rotatingGobo })}
-            />
+            <h2 class="title">Focus (Big to Small)</h2>
+            <Slider value={state.focus} onChange={(focus) => setProp({ focus })} />
 
             <h2 class="title">Movement</h2>
             <select
