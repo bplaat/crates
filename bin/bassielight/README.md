@@ -16,8 +16,8 @@
 
 ## Features
 
-- Create a setup with fixtures with a simple `config.json` file
-- Control different Lights with the GUI
+- Design your room, fixtures and groups in the built-in editor
+- Select fixtures or groups on a live visualization of the room and control their lights
 - Control setup with a remote device through the web interface
 
 ## Compatibility
@@ -31,6 +31,12 @@
 - [Ayra Compar 20](https://www.manualslib.com/manual/1033103/Ayra-Compar-20.html)
     - 6 channel mode
 - [SHOWTEC Multidim MKII](https://www.manualslib.com/manual/2115423/Showtec-Multidim-Mkii.html)
+- [SHOWTEC Titan Strobe](https://www.manualslib.com/manual/1569275/Showtec-Titan-Strobe.html)
+- [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
+    - Controls its connected array of [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html) tubes as one fixture
+    - Own colors or one of the 38 built-in presets
+- [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
+    - Connected to [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html)
 
 ## Installation
 

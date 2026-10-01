@@ -11,7 +11,7 @@ import './qrmodal.css';
 export function QrModal({ contents, onClose }: { contents: string; onClose: () => void }) {
     return (
         <div class="modal" onClick={onClose}>
-            <button class="button modal-close" onClick={onClose}>
+            <button class="icon-button modal-close" title="Close" onClick={onClose}>
                 <CloseIcon />
             </button>
 

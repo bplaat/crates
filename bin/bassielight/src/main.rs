@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2023-2025 Bastiaan van der Plaat
+ * Copyright (c) 2023-2026 Bastiaan van der Plaat
  *
  * SPDX-License-Identifier: MIT
  */
@@ -7,32 +7,123 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use std::sync::{Arc, Mutex};
+use std::path::PathBuf;
+use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
 use bwebview::{WebviewBuilder, WebviewEvent};
-use bwindow::{Event, EventLoopBuilder, LogicalSize, Theme, WindowBuilder};
+use bwindow::{
+    Event, EventLoopBuilder, FileDialog, LogicalSize, MessageButtons, MessageDialog, MessageLevel,
+    Theme, Window, WindowBuilder,
+};
 use log::{info, warn};
 use rust_embed::Embed;
+use serde::Deserialize;
 use small_http::Response;
 use small_websocket::Message;
 
-use crate::config::Config;
+use crate::config::{CONFIG, Config};
 use crate::ipc::{IPC_CONNECTIONS, IpcConnection, ipc_message_handler};
+use crate::stage::{STAGE, Stage};
 
 mod config;
 mod dmx;
 mod ipc;
+mod stage;
 mod usb;
 
 // MARK: Internal HTTP server
 const PORT: u16 = 39027;
-pub(crate) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
 
 #[derive(Embed)]
 #[folder = "$OUT_DIR/web"]
 struct WebAssets;
+
+// MARK: Window messages
+/// Centers the macOS window buttons in the 52px high header bar
+#[cfg(target_os = "macos")]
+const TRAFFIC_LIGHT_POSITION: bwindow::LogicalPoint = bwindow::LogicalPoint::new(19.0, 19.0);
+
+/// IPC messages that need the native window, only accepted from the webview
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "camelCase")]
+enum WindowMessage {
+    NewStage,
+    OpenStage,
+    SaveStageAs,
+    #[cfg(target_os = "macos")]
+    StartWindowDrag,
+    #[cfg(target_os = "macos")]
+    TitlebarDoubleClick,
+}
+
+fn stage_file_dialog<'a>(window: &'a Window, title: &str) -> FileDialog<'a> {
+    FileDialog::new()
+        .parent(window)
+        .title(title)
+        .directory(Config::dir())
+        .add_filter("Stage files", &["json"])
+}
+
+fn show_error(window: &Window, title: &str, error: &str) {
+    MessageDialog::new()
+        .parent(window)
+        .title(title)
+        .description(error)
+        .level(MessageLevel::Error)
+        .buttons(MessageButtons::Ok)
+        .show();
+}
+
+fn save_and_open_stage(window: &Window, path: PathBuf, stage: Stage) {
+    match stage.save(&path) {
+        Ok(()) => ipc::open_stage(path, stage),
+        Err(error) => show_error(window, "Can't save stage", &error.to_string()),
+    }
+}
+
+fn handle_window_message(window: &mut Window, message: WindowMessage) {
+    match message {
+        WindowMessage::NewStage => {
+            if let Some(path) = stage_file_dialog(window, "New Stage")
+                .file_name("stage.json")
+                .save_file()
+            {
+                save_and_open_stage(window, path, Stage::default());
+            }
+        }
+        WindowMessage::OpenStage => {
+            if let Some(path) = stage_file_dialog(window, "Open Stage").pick_file() {
+                match Stage::load(&path, config::dmx_length()) {
+                    Ok(stage) => ipc::open_stage(path, stage),
+                    Err(error) => show_error(window, "Can't open stage", &error),
+                }
+            }
+        }
+        WindowMessage::SaveStageAs => {
+            let (file_name, stage) = {
+                let open_stage = STAGE.lock().expect("Failed to lock stage");
+                let open = open_stage.as_ref().expect("Stage not loaded");
+                let file_name = open
+                    .path
+                    .file_name()
+                    .map(|name| name.to_string_lossy().into_owned());
+                (file_name, open.stage.clone())
+            };
+            if let Some(path) = stage_file_dialog(window, "Save Stage As")
+                .file_name(file_name.as_deref().unwrap_or("stage.json"))
+                .save_file()
+            {
+                save_and_open_stage(window, path, stage);
+            }
+        }
+        #[cfg(target_os = "macos")]
+        WindowMessage::StartWindowDrag => window.macos_start_window_drag(),
+        #[cfg(target_os = "macos")]
+        WindowMessage::TitlebarDoubleClick => window.macos_perform_titlebar_double_click(),
+    }
+}
 
 // MARK: Main
 pub(crate) enum AppEvent {
@@ -55,16 +146,21 @@ fn main() {
         .app_id("nl", "bplaat", "BassieLight")
         .build();
 
-    // Load config
-    let config = Config::load();
+    // Load config and the last stage
+    let mut config = Config::load();
+    let open_stage = config.load_stage();
+    config.last_stage = Some(open_stage.path.clone());
+    if let Err(error) = config.save() {
+        warn!("Can't save config.json: {error}");
+    }
     info!("Config: {config:?}");
-    let cloned_config = config.clone();
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
+    *STAGE.lock().expect("Failed to lock stage") = Some(open_stage);
 
     // Start DMX thread
     thread::Builder::new()
         .name("dmx".to_string())
-        .spawn(move || dmx::dmx_thread(cloned_config))
+        .spawn(dmx::dmx_thread)
         .expect("Failed to spawn DMX thread");
 
     // Try to get local IP address, fallback to localhost if it fails
@@ -158,7 +254,9 @@ fn main() {
         .background_color(0x18181b);
     #[cfg(target_os = "macos")]
     {
-        window_builder = window_builder.macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden);
+        window_builder = window_builder
+            .macos_titlebar_style(bwindow::MacosTitlebarStyle::Hidden)
+            .macos_traffic_light_position(TRAFFIC_LIGHT_POSITION);
     }
     let mut window = window_builder.build();
 
@@ -166,15 +264,6 @@ fn main() {
         .on_event(event_loop.create_proxy(), AppEvent::Webview)
         .load_url(&url)
         .build();
-
-    #[cfg(target_os = "macos")]
-    webview.add_user_script(
-        format!(
-            "document.documentElement.style.setProperty('--macos-titlebar-height', '{}px');",
-            window.macos_titlebar_size().height
-        ),
-        bwebview::InjectionTime::DocumentStart,
-    );
 
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
@@ -199,10 +288,14 @@ fn main() {
                 .push(IpcConnection::WebviewIpc(event_loop_proxy.clone()));
         }
         Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::MessageReceive(message))) => {
-            ipc_message_handler(
-                IpcConnection::WebviewIpc(event_loop_proxy.clone()),
-                &message,
-            );
+            if let Ok(message) = serde_json::from_str::<WindowMessage>(&message) {
+                handle_window_message(&mut window, message);
+            } else {
+                ipc_message_handler(
+                    IpcConnection::WebviewIpc(event_loop_proxy.clone()),
+                    &message,
+                );
+            }
         }
         Event::UserEvent(AppEvent::UserEvent(data)) => webview.send_ipc_message(&data),
 

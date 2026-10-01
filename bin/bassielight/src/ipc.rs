@@ -4,18 +4,23 @@
  * SPDX-License-Identifier: MIT
  */
 
+use std::collections::BTreeMap;
 use std::io;
 use std::sync::{Arc, LazyLock, Mutex, mpsc};
-use std::time::Duration;
+use std::time::Instant;
 
 use bwindow::EventLoopProxy;
 use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
 
-use crate::CONFIG;
-use crate::config::FixtureType;
-use crate::dmx::{Color, DMX_STATE, Mode, ToggleTween};
+use std::path::PathBuf;
+
+use crate::config::{self, CONFIG};
+use crate::dmx::{
+    DMX_STATE, FIXTURE_OUTPUTS, FixtureOutput, FixtureProp, FixtureState, Mode, Tempo,
+};
+use crate::stage::{FixtureProfile, FixtureType, OpenStage, STAGE, Stage};
 use crate::usb::ErrorCategory;
 
 // MARK: UsbStatus
@@ -29,10 +34,21 @@ pub(crate) enum UsbStatus {
 
 pub(crate) static USB_STATUS: Mutex<UsbStatus> = Mutex::new(UsbStatus::Disconnected);
 
-static USB_STATUS_SENDER: LazyLock<Option<mpsc::Sender<String>>> = LazyLock::new(|| {
+pub(crate) fn set_usb_status(status: UsbStatus) {
+    let mut current = USB_STATUS.lock().expect("Failed to lock USB status");
+    if *current == status {
+        return;
+    }
+    *current = status;
+    drop(current);
+    broadcast(&IpcMessage::UsbStatusChanged { status });
+}
+
+// MARK: Broadcast
+static BROADCAST_SENDER: LazyLock<Option<mpsc::Sender<String>>> = LazyLock::new(|| {
     let (sender, receiver) = mpsc::channel::<String>();
     std::thread::Builder::new()
-        .name("usb-status-ipc".to_string())
+        .name("ipc-broadcast".to_string())
         .spawn(move || {
             for message in receiver {
                 send_to_connections(None, &message);
@@ -42,22 +58,39 @@ static USB_STATUS_SENDER: LazyLock<Option<mpsc::Sender<String>>> = LazyLock::new
         .map(|_| sender)
 });
 
-pub(crate) fn set_usb_status(status: UsbStatus) {
-    let mut current = USB_STATUS.lock().expect("Failed to lock USB status");
-    if *current == status {
-        return;
-    }
-    *current = status;
-    drop(current);
-
-    let message = serde_json::to_string(&IpcMessage::UsbStatusChanged { status })
-        .expect("Failed to serialize USB status");
-    if USB_STATUS_SENDER
+/// Broadcast a message to all connections without blocking the caller on slow clients
+pub(crate) fn broadcast(message: &IpcMessage) {
+    if BROADCAST_SENDER
         .as_ref()
-        .is_none_or(|sender| sender.send(message).is_err())
+        .is_none_or(|sender| sender.send(message.to_json()).is_err())
     {
-        warn!("USB status IPC thread stopped");
+        warn!("IPC broadcast thread stopped");
     }
+}
+
+const MIN_BPM: f32 = 20.0;
+const MAX_BPM: f32 = 300.0;
+
+// MARK: Stage files
+/// Switch to another stage file, remember it for the next launch and notify all connections
+pub(crate) fn open_stage(path: PathBuf, stage: Stage) {
+    DMX_STATE
+        .lock()
+        .expect("Failed to lock DMX state")
+        .fixtures
+        .clear();
+    *STAGE.lock().expect("Failed to lock stage") = Some(OpenStage {
+        path: path.clone(),
+        stage: stage.clone(),
+    });
+
+    let mut config = CONFIG.lock().expect("Failed to lock config");
+    let config = config.as_mut().expect("Config not loaded");
+    config.last_stage = Some(path.clone());
+    if let Err(error) = config.save() {
+        warn!("Can't save config.json: {error}");
+    }
+    broadcast(&IpcMessage::StageOpened { path, stage });
 }
 
 // MARK: IpcMessage
@@ -71,6 +104,24 @@ pub(crate) enum IpcMessage {
     GetStateResponse {
         state: State,
     },
+    GetStage,
+    #[serde(skip_deserializing)]
+    GetStageResponse {
+        path: PathBuf,
+        stage: Stage,
+        #[serde(rename = "fixtureTypes")]
+        fixture_types: Vec<&'static FixtureProfile>,
+        #[serde(rename = "dmxLength")]
+        dmx_length: usize,
+    },
+    SetStage {
+        stage: Stage,
+    },
+    #[serde(skip_deserializing)]
+    StageOpened {
+        path: PathBuf,
+        stage: Stage,
+    },
     GetUsbStatus,
     GetUsbStatusResponse {
         status: UsbStatus,
@@ -78,54 +129,47 @@ pub(crate) enum IpcMessage {
     UsbStatusChanged {
         status: UsbStatus,
     },
-    SetColor {
-        color: Color,
+    SetFixtureProp {
+        fixtures: Vec<u32>,
+        prop: FixtureProp,
     },
-    SetToggleColor {
-        #[serde(rename = "toggleColor")]
-        toggle_color: Color,
-    },
-    SetIntensity {
-        intensity: f32,
-    },
-    SetToggleTween {
-        #[serde(rename = "toggleTween")]
-        toggle_tween: ToggleTween,
-    },
-    SetToggleSpeed {
-        #[serde(rename = "toggleSpeed")]
-        toggle_speed: Option<u64>,
-    },
-    SetStrobeSpeed {
-        #[serde(rename = "strobeSpeed")]
-        strobe_speed: Option<u64>,
-    },
-    SetSwitchesToggle {
-        #[serde(rename = "switchesToggle")]
-        switches_toggle: [bool; 4],
-    },
-    SetSwitchesPress {
-        #[serde(rename = "switchesPress")]
-        switches_press: [bool; 4],
+    FixtureOutputs {
+        outputs: BTreeMap<u32, FixtureOutput>,
     },
     SetMode {
         mode: Mode,
     },
+    /// Tap tempo, also sets the downbeat to now
+    SetBpm {
+        bpm: f32,
+    },
+}
+
+impl IpcMessage {
+    pub(crate) fn to_json(&self) -> String {
+        serde_json::to_string(self).expect("Failed to serialize IPC message")
+    }
+
+    const fn is_response(&self) -> bool {
+        matches!(
+            self,
+            IpcMessage::GetStateResponse { .. }
+                | IpcMessage::GetStageResponse { .. }
+                | IpcMessage::StageOpened { .. }
+                | IpcMessage::GetUsbStatusResponse { .. }
+                | IpcMessage::UsbStatusChanged { .. }
+                | IpcMessage::FixtureOutputs { .. }
+        )
+    }
 }
 
 #[derive(Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct State {
-    pub color: Color,
-    pub toggle_color: Color,
-    pub intensity: f32,
-    pub toggle_tween: ToggleTween,
-    pub toggle_speed: Option<u64>,
-    pub strobe_speed: Option<u64>,
     pub mode: Mode,
-    pub switches_labels: Option<Vec<String>>,
-    pub switches_toggle: Vec<bool>,
-    pub switches_press: Vec<bool>,
+    pub bpm: f32,
+    pub fixtures: BTreeMap<u32, FixtureState>,
+    pub fixture_outputs: BTreeMap<u32, FixtureOutput>,
 }
 
 // MARK: IpcConnection
@@ -158,8 +202,9 @@ impl IpcConnection {
         }
     }
 
-    pub(crate) fn broadcast(&mut self, message: String) {
-        send_to_connections(Some(self), &message);
+    /// Send a message to all other connections
+    pub(crate) fn broadcast(&mut self, message: &IpcMessage) {
+        send_to_connections(Some(self), &message.to_json());
     }
 }
 
@@ -195,137 +240,116 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
         // State
         IpcMessage::Start => {
             dmx_state.is_running = true;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::Start).expect("Failed to serialize IPC message"),
-            );
+            connection.broadcast(&message);
         }
         IpcMessage::Stop => {
             dmx_state.is_running = false;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::Stop).expect("Failed to serialize IPC message"),
-            );
+            connection.broadcast(&message);
         }
         IpcMessage::GetState => {
-            let config = CONFIG.lock().expect("Failed to lock config");
+            let open_stage = STAGE.lock().expect("Failed to lock stage");
             let state = State {
-                color: dmx_state.color,
-                toggle_color: dmx_state.toggle_color,
-                intensity: dmx_state.intensity,
-                toggle_tween: dmx_state.toggle_tween,
-                toggle_speed: dmx_state.toggle_speed.map(|d| d.as_millis() as u64),
-                strobe_speed: dmx_state.strobe_speed.map(|d| d.as_millis() as u64),
                 mode: dmx_state.mode,
-                switches_labels: config.as_ref().and_then(|c| {
-                    c.fixtures
-                        .iter()
-                        .find(|f| f.r#type == FixtureType::ShowtecMultidimMKII)
-                        .and_then(|f| f.switches.clone())
-                }),
-                switches_toggle: dmx_state.switches_toggle.to_vec(),
-                switches_press: dmx_state.switches_press.to_vec(),
+                bpm: dmx_state.tempo.bpm,
+                fixtures: open_stage
+                    .iter()
+                    .flat_map(|open| &open.stage.fixtures)
+                    .map(|f| (f.id, dmx_state.fixture(f.id)))
+                    .collect(),
+                fixture_outputs: FIXTURE_OUTPUTS
+                    .lock()
+                    .expect("Failed to lock fixture outputs")
+                    .clone(),
             };
             if connection
-                .send(
-                    serde_json::to_string(&IpcMessage::GetStateResponse { state })
-                        .expect("Failed to serialize IPC response"),
-                )
+                .send(IpcMessage::GetStateResponse { state }.to_json())
                 .is_err()
             {
                 return false;
             }
+        }
+        IpcMessage::GetStage => {
+            let (path, stage) = {
+                let open_stage = STAGE.lock().expect("Failed to lock stage");
+                let open = open_stage.as_ref().expect("Stage not loaded");
+                (open.path.clone(), open.stage.clone())
+            };
+            let response = IpcMessage::GetStageResponse {
+                path,
+                stage,
+                fixture_types: FixtureType::ALL.map(FixtureType::profile).to_vec(),
+                dmx_length: config::dmx_length(),
+            };
+            if connection.send(response.to_json()).is_err() {
+                return false;
+            }
+        }
+        IpcMessage::SetStage { ref stage } => {
+            let mut open_stage = STAGE.lock().expect("Failed to lock stage");
+            let open = open_stage.as_mut().expect("Stage not loaded");
+            if let Err(error) = stage.validate(config::dmx_length()) {
+                // Resync the sender with the current stage
+                warn!("Rejecting invalid stage: {error}");
+                let stage = open.stage.clone();
+                return connection
+                    .send(IpcMessage::SetStage { stage }.to_json())
+                    .is_ok();
+            }
+            if let Err(error) = stage.save(&open.path) {
+                warn!("Can't save {}: {error}", open.path.display());
+            }
+            dmx_state
+                .fixtures
+                .retain(|id, _| stage.fixtures.iter().any(|f| f.id == *id));
+            open.stage = stage.clone();
+            connection.broadcast(&message);
         }
         IpcMessage::GetUsbStatus => {
             let status = *USB_STATUS.lock().expect("Failed to lock USB status");
             if connection
-                .send(
-                    serde_json::to_string(&IpcMessage::GetUsbStatusResponse { status })
-                        .expect("Failed to serialize USB status response"),
-                )
+                .send(IpcMessage::GetUsbStatusResponse { status }.to_json())
                 .is_err()
             {
                 return false;
             }
         }
 
-        IpcMessage::SetColor { color } => {
-            dmx_state.color = color;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetColor { color })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetToggleColor { toggle_color } => {
-            dmx_state.toggle_color = toggle_color;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetToggleColor { toggle_color })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetIntensity { intensity } => {
-            dmx_state.intensity = intensity;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetIntensity { intensity })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetToggleTween { toggle_tween } => {
-            dmx_state.toggle_tween = toggle_tween;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetToggleTween { toggle_tween })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetToggleSpeed { toggle_speed } => {
-            dmx_state.toggle_speed = toggle_speed.map(Duration::from_millis);
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetToggleSpeed { toggle_speed })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetStrobeSpeed { strobe_speed } => {
-            dmx_state.strobe_speed = strobe_speed.map(Duration::from_millis);
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetStrobeSpeed { strobe_speed })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetSwitchesToggle { switches_toggle } => {
-            dmx_state.switches_toggle = switches_toggle;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetSwitchesToggle { switches_toggle })
-                    .expect("Failed to serialize IPC message"),
-            );
-        }
-        IpcMessage::SetSwitchesPress { switches_press } => {
-            dmx_state.switches_press = switches_press;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetSwitchesPress { switches_press })
-                    .expect("Failed to serialize IPC message"),
-            );
+        IpcMessage::SetFixtureProp { ref fixtures, prop } => {
+            for id in fixtures {
+                dmx_state
+                    .fixtures
+                    .entry(*id)
+                    .or_insert(FixtureState::DEFAULT)
+                    .apply(prop);
+            }
+            connection.broadcast(&message);
         }
         IpcMessage::SetMode { mode } => {
             dmx_state.mode = mode;
-            connection.broadcast(
-                serde_json::to_string(&IpcMessage::SetMode { mode })
-                    .expect("Failed to serialize IPC message"),
-            );
+            connection.broadcast(&message);
+        }
+        IpcMessage::SetBpm { bpm } => {
+            dmx_state.tempo = Tempo {
+                bpm: bpm.clamp(MIN_BPM, MAX_BPM),
+                downbeat: Some(Instant::now()),
+            };
+            connection.broadcast(&message);
         }
 
         IpcMessage::GetStateResponse { .. }
+        | IpcMessage::GetStageResponse { .. }
+        | IpcMessage::StageOpened { .. }
         | IpcMessage::GetUsbStatusResponse { .. }
-        | IpcMessage::UsbStatusChanged { .. } => unreachable!(),
+        | IpcMessage::UsbStatusChanged { .. }
+        | IpcMessage::FixtureOutputs { .. } => unreachable!(),
     }
     true
 }
 
 fn parse_client_message(message: &str) -> Result<IpcMessage, &'static str> {
-    let message = serde_json::from_str(message).map_err(|_| "invalid JSON or message shape")?;
-    if matches!(
-        message,
-        IpcMessage::GetStateResponse { .. }
-            | IpcMessage::GetUsbStatusResponse { .. }
-            | IpcMessage::UsbStatusChanged { .. }
-    ) {
+    let message: IpcMessage =
+        serde_json::from_str(message).map_err(|_| "invalid JSON or message shape")?;
+    if message.is_response() {
         Err("response-only message received from client")
     } else {
         Ok(message)
@@ -367,5 +391,33 @@ mod tests {
             .is_err()
         );
         assert!(parse_client_message(r#"{"type":"getUsbStatus"}"#).is_ok());
+    }
+
+    #[test]
+    fn parses_fixture_prop_messages() {
+        let message = parse_client_message(
+            r#"{"type":"setFixtureProp","fixtures":[1,2],"prop":{"toggleSpeed":null}}"#,
+        )
+        .expect("Failed to parse fixture prop message");
+        assert!(matches!(
+            message,
+            IpcMessage::SetFixtureProp {
+                ref fixtures,
+                prop: FixtureProp::ToggleSpeed(None),
+            } if fixtures == &[1, 2]
+        ));
+        assert!(matches!(
+            parse_client_message(
+                r#"{"type":"setFixtureProp","fixtures":[3],"prop":{"switchToggle":{"index":2,"on":true}}}"#,
+            ),
+            Ok(IpcMessage::SetFixtureProp {
+                prop: FixtureProp::SwitchToggle { index: 2, on: true },
+                ..
+            })
+        ));
+        assert!(
+            parse_client_message(r#"{"type":"fixtureOutputs","outputs":{"1":{"rgb":255}}}"#)
+                .is_err()
+        );
     }
 }

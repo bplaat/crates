@@ -6,92 +6,104 @@
  */
 
 use std::fs::File;
+use std::io;
 use std::path::PathBuf;
+use std::sync::Mutex;
 
+use log::warn;
 use serde::{Deserialize, Serialize};
+
+use crate::stage::{OpenStage, Stage};
 
 // Constants
 pub(crate) const DMX_LENGTH: usize = 512;
 pub(crate) const DMX_FPS: u64 = 44;
-pub(crate) const DMX_SWITCHES_LENGTH: usize = 4;
+const STAGE_FILE_NAME: &str = "stage.json";
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
-pub(crate) enum FixtureType {
-    #[serde(rename = "american_dj_p56led")]
-    AmericanDJP56Led,
-    #[serde(rename = "american_dj_mega_tripar")]
-    AmericanDJMegaTripar,
-    #[serde(rename = "ayra_compar_10")]
-    AyraCompar10,
-    #[serde(rename = "ayra_compar_20")]
-    AyraCompar20,
-    #[serde(rename = "showtec_multidim_mkii")]
-    ShowtecMultidimMKII,
-}
-
-impl FixtureType {
-    pub(crate) const fn channel_count(&self) -> usize {
-        match self {
-            FixtureType::AmericanDJP56Led => 6,
-            FixtureType::AmericanDJMegaTripar => 7,
-            FixtureType::AyraCompar10 => 8,
-            FixtureType::AyraCompar20 => 6,
-            FixtureType::ShowtecMultidimMKII => DMX_SWITCHES_LENGTH,
-        }
-    }
-}
-
+/// App settings, the stage itself lives in a separate stage file
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub(crate) struct Fixture {
-    pub name: String,
-    #[serde(rename = "type")]
-    pub r#type: FixtureType,
-    pub addr: usize,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub switches: Option<Vec<String>>,
-}
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(default)]
 pub(crate) struct Config {
-    pub fixtures: Vec<Fixture>,
     pub dmx_length: usize,
     pub dmx_fps: u64,
+    pub last_stage: Option<PathBuf>,
 }
 
 impl Default for Config {
     fn default() -> Self {
         Config {
-            fixtures: Vec::new(),
             dmx_length: DMX_LENGTH,
             dmx_fps: DMX_FPS,
+            last_stage: None,
         }
     }
 }
 
+pub(crate) static CONFIG: Mutex<Option<Config>> = Mutex::new(None);
+
 impl Config {
-    fn default_path() -> PathBuf {
-        // FIXME: Don't use debug_assertions to determine the config path
-        if !cfg!(debug_assertions) {
-            let project_dirs = directories::ProjectDirs::from("nl", "bplaat", "BassieLight")
-                .expect("Can't get dirs");
-            let config_dir = project_dirs.config_dir();
-            std::fs::create_dir_all(&config_dir).expect("Can't create directories");
-            config_dir.join("config.json")
-        } else {
-            PathBuf::from("config.json")
-        }
+    /// App data directory with the settings and the default stage file
+    pub(crate) fn dir() -> PathBuf {
+        let project_dirs =
+            directories::ProjectDirs::from("nl", "bplaat", "BassieLight").expect("Can't get dirs");
+        let config_dir = project_dirs.config_dir();
+        std::fs::create_dir_all(&config_dir).expect("Can't create directories");
+        config_dir
     }
 
     pub(crate) fn load() -> Config {
-        let path = Config::default_path();
-        if let Ok(file) = File::open(&path) {
-            serde_json::from_reader(file).expect("Can't read and/or parse config.json")
-        } else {
-            let default_conf = Config::default();
-            let mut file = File::create(&path).expect("Can't open config.json");
-            serde_json::to_writer_pretty(&mut file, &default_conf)
-                .expect("Can't write config.json");
-            default_conf
+        let config: Config = match File::open(Config::dir().join("config.json")) {
+            Ok(file) => serde_json::from_reader(io::BufReader::new(file))
+                .expect("Can't read and/or parse config.json"),
+            Err(_) => Config::default(),
+        };
+        if config.dmx_length == 0 || config.dmx_length > DMX_LENGTH {
+            panic!("Invalid config.json: DMX length must be between 1 and {DMX_LENGTH}");
         }
+        config
     }
+
+    pub(crate) fn save(&self) -> io::Result<()> {
+        let file = File::create(Config::dir().join("config.json"))?;
+        serde_json::to_writer_pretty(file, self).map_err(io::Error::other)
+    }
+
+    /// Open the last stage file, falling back to a fresh stage file in the config directory
+    pub(crate) fn load_stage(&self) -> OpenStage {
+        if let Some(path) = &self.last_stage {
+            match Stage::load(path, self.dmx_length) {
+                Ok(stage) => {
+                    return OpenStage {
+                        path: path.clone(),
+                        stage,
+                    };
+                }
+                Err(error) => warn!("Can't open last stage {}: {error}", path.display()),
+            }
+        }
+
+        let path = Config::dir().join(STAGE_FILE_NAME);
+        let stage = if path.exists() {
+            Stage::load(&path, self.dmx_length)
+                .unwrap_or_else(|error| panic!("Can't open {}: {error}", path.display()))
+        } else {
+            // Move the stage out of the config.json of older versions, otherwise start fresh
+            let stage: Stage = File::open(Config::dir().join("config.json"))
+                .ok()
+                .and_then(|file| serde_json::from_reader(io::BufReader::new(file)).ok())
+                .unwrap_or_default();
+            stage.save(&path).expect("Can't write stage.json");
+            stage
+        };
+        OpenStage { path, stage }
+    }
+}
+
+pub(crate) fn dmx_length() -> usize {
+    CONFIG
+        .lock()
+        .expect("Failed to lock config")
+        .as_ref()
+        .expect("Config not loaded")
+        .dmx_length
 }

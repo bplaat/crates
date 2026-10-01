@@ -41,7 +41,9 @@ button {
 
 /* Base */
 html {
+    -webkit-user-select: none;
     user-select: none;
+    -webkit-touch-callout: none;
     overflow: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
@@ -71,6 +73,7 @@ body {
 
 #app {
     display: flex;
+    flex-direction: column;
     height: 100vh;
 }
 
@@ -85,10 +88,6 @@ a:focus {
     text-decoration: underline;
 }
 
-body.is-bwebview-macos:not(.is-fullscreen) #menubar {
-    padding-top: var(--macos-titlebar-height) !important;
-}
-
 .icon {
     display: block;
     width: 24px;
@@ -97,6 +96,12 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
 }
 
 /* Layout */
+.content {
+    flex: 1;
+    display: flex;
+    min-height: 0;
+}
+
 .main {
     flex: 1;
     display: flex;
@@ -166,6 +171,50 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
     max-width: 12rem;
 }
 
+/* Icon button, borderless for toolbars and close buttons */
+.icon-button {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    width: 2rem;
+    height: 2rem;
+    border-radius: 0.5rem;
+    color: var(--color-text);
+    opacity: 0.75;
+    outline: none;
+    transition: all 0.15s;
+}
+.icon-button:hover,
+.icon-button:focus-visible {
+    opacity: 1;
+    background-color: var(--color-surface-btn);
+}
+.icon-button:active {
+    background-color: var(--color-surface-hover);
+    transform: scale(0.95);
+}
+.icon-button .icon {
+    width: 20px;
+    height: 20px;
+}
+
+/* Sidebar header with a title and close button */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--color-border);
+}
+.sidebar-header > .title {
+    flex: 1;
+    margin: 0;
+    padding: 0;
+    border: none;
+}
+
 /* Buttons group */
 .buttons {
     display: flex;
@@ -189,4 +238,107 @@ body.is-bwebview-macos:not(.is-fullscreen) #menubar {
 }
 .title:first-child {
     margin-top: 0;
+}
+
+.button.is-danger:hover,
+.button.is-danger:focus-visible {
+    border-color: var(--color-danger);
+}
+
+/* Form */
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    margin-bottom: 0.75rem;
+}
+.field-label {
+    font-size: 0.875rem;
+    font-weight: 500;
+    opacity: 0.75;
+}
+.fields {
+    display: flex;
+    gap: 0.5rem;
+}
+.fields > .field {
+    flex: 1;
+    min-width: 0;
+}
+
+.input {
+    -webkit-user-select: text;
+    width: 100%;
+    height: 2.5rem;
+    padding: 0 0.5rem;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    background-color: var(--color-surface-btn);
+    outline: none;
+    user-select: text;
+    transition: border-color 0.15s;
+}
+.input:hover,
+.input:focus {
+    border-color: var(--color-accent);
+}
+
+.checkbox {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+    cursor: pointer;
+}
+.checkbox input {
+    width: 1rem;
+    height: 1rem;
+    accent-color: var(--color-accent);
+}
+
+/* List */
+.list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    margin-bottom: 1rem;
+}
+.list .button {
+    justify-content: flex-start;
+}
+.list-meta {
+    margin-left: auto;
+    font-size: 0.875rem;
+    opacity: 0.6;
+}
+.field-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+.field-row > .input {
+    width: 4.5rem;
+    flex-shrink: 0;
+}
+
+/* Fixture kinds */
+.kind-icon {
+    display: flex;
+}
+.kind-icon.is-rgb {
+    color: #c084fc;
+}
+.kind-icon.is-switch {
+    color: #4ade80;
+}
+.kind-icon.is-strobe {
+    color: #facc15;
+}
+.kind-icon.is-preset {
+    color: #38bdf8;
+}
+.title.has-icon {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
 }

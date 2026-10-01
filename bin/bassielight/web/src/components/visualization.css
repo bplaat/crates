@@ -1,0 +1,158 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.visualization {
+    flex: 1;
+    min-height: 0;
+    width: 100%;
+    padding: 1rem;
+    touch-action: none;
+    -webkit-user-select: none;
+    user-select: none;
+}
+.visualization * {
+    vector-effect: non-scaling-stroke;
+}
+.visualization text {
+    fill: var(--color-text);
+    pointer-events: none;
+}
+
+.visualization-room {
+    fill: var(--color-surface);
+    stroke: var(--color-border);
+    stroke-width: 2px;
+    cursor: pointer;
+    transition: stroke 0.15s;
+}
+.visualization-room.is-selected {
+    stroke: var(--color-accent);
+}
+
+.visualization-guide {
+    stroke: #ec4899;
+    stroke-width: 1px;
+    pointer-events: none;
+}
+
+.visualization-group {
+    cursor: pointer;
+}
+.visualization-group rect {
+    fill: rgba(255, 255, 255, 0.03);
+    stroke: var(--color-surface-active);
+    stroke-width: 2px;
+    stroke-dasharray: 6 4;
+    transition: all 0.15s;
+}
+.visualization-group:hover rect {
+    fill: rgba(255, 255, 255, 0.06);
+}
+.visualization-group.is-selected rect {
+    stroke: var(--color-accent);
+    stroke-dasharray: none;
+}
+
+.visualization-button {
+    cursor: pointer;
+}
+.visualization-button rect {
+    fill: var(--color-surface-btn);
+    stroke: transparent;
+    stroke-width: 2px;
+    transition: all 0.15s;
+}
+.visualization-button:hover rect {
+    fill: var(--color-surface-hover);
+}
+.visualization-button.is-selected rect {
+    stroke: var(--color-accent);
+}
+.visualization-button text {
+    font-weight: 600;
+}
+
+.visualization-fixture {
+    cursor: pointer;
+    transition: opacity 0.15s;
+}
+.visualization-fixture.is-dimmed {
+    opacity: 0.3;
+}
+.visualization-body {
+    fill: var(--color-surface-btn);
+    stroke: var(--color-surface-active);
+    stroke-width: 2px;
+    transition: stroke 0.15s;
+}
+.visualization-fixture:hover .visualization-body {
+    stroke: var(--color-text);
+}
+.visualization-fixture.is-selected .visualization-body {
+    stroke: var(--color-accent);
+    stroke-width: 3px;
+    stroke-dasharray: none;
+}
+.visualization-glow {
+    opacity: 0.25;
+    pointer-events: none;
+}
+
+.visualization-switch {
+    fill: var(--color-background);
+    pointer-events: none;
+    transition: fill 0.1s;
+}
+.visualization-switch.is-on {
+    fill: var(--color-success);
+}
+
+.visualization-block-icon {
+    fill: #fff;
+    pointer-events: none;
+    /* Stays readable on a white or yellow fixture */
+    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+}
+.visualization-flash {
+    fill: #fefce8;
+    pointer-events: none;
+    animation: visualization-flash linear infinite;
+}
+@keyframes visualization-flash {
+    0%,
+    35% {
+        opacity: var(--flash-opacity);
+    }
+    36%,
+    100% {
+        opacity: 0;
+    }
+}
+
+/* Blackout: everything is off, so fixtures are dimmed instead of drawn black */
+.visualization.is-mode-black .visualization-body {
+    fill: var(--color-surface-btn) !important;
+    opacity: 0.4;
+}
+.visualization.is-mode-black .visualization-glow,
+.visualization.is-mode-black .visualization-flash {
+    display: none;
+}
+
+/* Music: RGB fixtures run their own sound active program, like fixtures running a preset */
+.visualization-body.is-program,
+.visualization.is-mode-auto .visualization-body.is-rgb {
+    fill: url(#visualization-music) !important;
+    animation: visualization-music 4s linear infinite;
+}
+.visualization.is-mode-auto .visualization-glow {
+    display: none;
+}
+@keyframes visualization-music {
+    to {
+        filter: hue-rotate(360deg);
+    }
+}
