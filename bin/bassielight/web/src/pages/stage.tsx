@@ -7,7 +7,7 @@
 
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { IpcContext } from '../app.tsx';
-import { $dmxLive } from '../components/header.tsx';
+import { GoboButtons } from '../components/gobo.tsx';
 import {
     AccountIcon,
     ChartBellCurveCumulativeIcon,
@@ -26,8 +26,10 @@ import {
     findProfile,
     selectedFixtureIds,
     selectionName,
+    toggleScript,
+    useDmxOutput,
     type ControlKind,
-    type FixtureOutput,
+    type MovingHead,
     type Presets,
     type Selection,
 } from '../stage.ts';
@@ -67,6 +69,10 @@ interface FixtureState {
     flashSpeed: number;
     preset: number | null;
     presetSpeed: number;
+    gobo: number | null;
+    rotatingGobo: number | null;
+    movement: number | null;
+    movementSpeed: number;
 }
 
 type SwitchChange = { index: number; on: boolean };
@@ -90,6 +96,10 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     flashSpeed: 0.5,
     preset: null,
     presetSpeed: 0.5,
+    gobo: null,
+    rotatingGobo: null,
+    movement: null,
+    movementSpeed: 0.5,
 };
 
 function applyFixtureProp(state: FixtureState, prop: FixtureProp): FixtureState {
@@ -103,6 +113,7 @@ function applyFixtureProp(state: FixtureState, prop: FixtureProp): FixtureState 
 const KIND_LABELS: Record<ControlKind, string> = {
     rgb: 'RGB',
     preset: 'Presets',
+    movingHead: 'Moving heads',
     switch: 'Switches',
     strobe: 'Strobes',
 };
@@ -320,6 +331,49 @@ function PresetControls({
     );
 }
 
+function MovingHeadControls({
+    movingHead,
+    state,
+    setProp,
+}: {
+    movingHead: MovingHead;
+    state: FixtureState;
+    setProp: (prop: FixtureProp) => void;
+}) {
+    return (
+        <>
+            <h2 class="title">Gobo</h2>
+            <GoboButtons gobos={movingHead.gobos} selected={state.gobo} onSelect={(gobo) => setProp({ gobo })} />
+
+            <h2 class="title">Rotating Gobo</h2>
+            <GoboButtons
+                gobos={movingHead.rotatingGobos}
+                selected={state.rotatingGobo}
+                onSelect={(rotatingGobo) => setProp({ rotatingGobo })}
+            />
+
+            <h2 class="title">Movement</h2>
+            <select
+                class="input"
+                value={state.movement ?? ''}
+                onChange={(e) =>
+                    setProp({ movement: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })
+                }
+            >
+                <option value="">Stand still</option>
+                {movingHead.movements.map((movement, index) => (
+                    <option key={index} value={index}>
+                        {movement.name}
+                    </option>
+                ))}
+            </select>
+
+            <h2 class="title">Movement Speed</h2>
+            <Slider value={state.movementSpeed} onChange={(movementSpeed) => setProp({ movementSpeed })} />
+        </>
+    );
+}
+
 function Slider({ value, onChange }: { value: number; onChange: (value: number) => void }) {
     return (
         <input
@@ -358,7 +412,6 @@ export function StagePage() {
 
     const [selection, setSelection] = useState<Selection>(null);
     const [fixtureStates, setFixtureStates] = useState<Record<number, FixtureState>>({});
-    const [fixtureOutputs, setFixtureOutputs] = useState<Record<number, FixtureOutput>>({});
     const [selectedMode, setSelectedMode] = useIpcState('mode');
     const [bpm, setBpm] = useIpcState('bpm');
 
@@ -372,20 +425,11 @@ export function StagePage() {
     useEffect(() => {
         document.title = 'BassieLight - Stage';
 
-        const listeners = [
-            ipc.on('setFixtureProp', ({ fixtures, prop }: any) => applyProp(fixtures, prop)),
-            ipc.on('fixtureOutputs', ({ outputs }: any) => setFixtureOutputs(outputs)),
-        ];
-
-        // Start DMX on mount, stop on unmount
-        ipc.send('start');
-        $dmxLive.value = true;
-        return () => {
-            listeners.forEach((listener) => listener.remove());
-            ipc.send('stop');
-            $dmxLive.value = false;
-        };
+        const listener = ipc.on('setFixtureProp', ({ fixtures, prop }: any) => applyProp(fixtures, prop));
+        return () => listener.remove();
     }, []);
+    // Freeze the setup while performing, changes to the stage folder are picked up afterwards
+    const fixtureOutputs = useDmxOutput(ipc, true);
 
     // (Re)load the DMX state when a stage file is opened, the app resets fixture state then
     const path = $document.value?.path;
@@ -397,11 +441,9 @@ export function StagePage() {
                     mode: string;
                     bpm: number;
                     fixtures: Record<number, FixtureState>;
-                    fixtureOutputs: Record<number, FixtureOutput>;
                 };
             };
             setFixtureStates(state.fixtures);
-            setFixtureOutputs(state.fixtureOutputs);
             setSelectedMode(state.mode, false);
             setBpm(Math.round(state.bpm), false);
         })();
@@ -430,8 +472,8 @@ export function StagePage() {
                 applyProp(ids, prop);
                 ipc.send('setFixtureProp', { fixtures: ids, prop });
             };
-            const { presets } = findProfile(fixtureTypes, fixtures[0].type);
-            return { kind, count: fixtures.length, labels: fixtures[0].switches, presets, state, setProp };
+            const { presets, movingHead } = findProfile(fixtureTypes, fixtures[0].type);
+            return { kind, count: fixtures.length, labels: fixtures[0].switches, presets, movingHead, state, setProp };
         });
 
     return (
@@ -442,6 +484,7 @@ export function StagePage() {
                     fixtureTypes={fixtureTypes}
                     outputs={fixtureOutputs}
                     mode={selectedMode}
+                    onScriptToggle={(name) => toggleScript(ipc, name)}
                     selection={activeSelection}
                     onSelect={setSelection}
                 />
@@ -475,7 +518,7 @@ export function StagePage() {
                 </div>
 
                 {sections.length === 0 && <p class="block">No fixtures to control</p>}
-                {sections.map(({ kind, count, labels, presets, state, setProp }) => (
+                {sections.map(({ kind, count, labels, presets, movingHead, state, setProp }) => (
                     <section key={kind}>
                         {sections.length > 1 && (
                             <div class="kind-bar">
@@ -485,6 +528,9 @@ export function StagePage() {
                             </div>
                         )}
                         {kind === 'rgb' && <RgbControls state={state} setProp={setProp} />}
+                        {kind === 'movingHead' && movingHead && (
+                            <MovingHeadControls movingHead={movingHead} state={state} setProp={setProp} />
+                        )}
                         {kind === 'preset' && presets && (
                             <PresetControls presets={presets} state={state} setProp={setProp} />
                         )}

@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::env;
 use std::fmt::{self, Display};
 use std::io::{self, IsTerminal};
@@ -18,7 +18,7 @@ use serde::{Deserialize, Serialize};
 use crate::config::{CONFIG, DMX_LENGTH};
 use crate::ipc::{self, IpcMessage, UsbStatus};
 use crate::stage::{Channel, DMX_SWITCHES_LENGTH, FixtureKind, STAGE};
-use crate::usb;
+use crate::{scripts, usb};
 
 // MARK: Color
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
@@ -120,6 +120,12 @@ pub(crate) struct FixtureState {
     /// Index of the running built-in preset, `None` for the own color
     pub preset: Option<usize>,
     pub preset_speed: f32,
+    /// Index of the moving head gobo, `None` for open
+    pub gobo: Option<usize>,
+    pub rotating_gobo: Option<usize>,
+    /// Index of the running built-in movement macro, `None` to stand still
+    pub movement: Option<usize>,
+    pub movement_speed: f32,
 }
 
 impl FixtureState {
@@ -138,6 +144,10 @@ impl FixtureState {
         flash_speed: 0.5,
         preset: None,
         preset_speed: 0.5,
+        gobo: None,
+        rotating_gobo: None,
+        movement: None,
+        movement_speed: 0.5,
     };
 
     pub(crate) const fn apply(&mut self, prop: FixtureProp) {
@@ -164,6 +174,10 @@ impl FixtureState {
             FixtureProp::FlashSpeed(flash_speed) => self.flash_speed = flash_speed,
             FixtureProp::Preset(preset) => self.preset = preset,
             FixtureProp::PresetSpeed(preset_speed) => self.preset_speed = preset_speed,
+            FixtureProp::Gobo(gobo) => self.gobo = gobo,
+            FixtureProp::RotatingGobo(rotating_gobo) => self.rotating_gobo = rotating_gobo,
+            FixtureProp::Movement(movement) => self.movement = movement,
+            FixtureProp::MovementSpeed(movement_speed) => self.movement_speed = movement_speed,
         }
     }
 }
@@ -186,15 +200,22 @@ pub(crate) enum FixtureProp {
     FlashSpeed(f32),
     Preset(Option<usize>),
     PresetSpeed(f32),
+    Gobo(Option<usize>),
+    RotatingGobo(Option<usize>),
+    Movement(Option<usize>),
+    MovementSpeed(f32),
 }
 
 // MARK: DmxState
 #[derive(Clone)]
 pub(crate) struct DmxState {
     pub is_running: bool,
+    /// Performing on the stage page, changes to the stage folder are picked up afterwards
+    pub freeze: bool,
     pub mode: Mode,
     pub tempo: Tempo,
     pub fixtures: BTreeMap<u32, FixtureState>,
+    pub running_scripts: BTreeSet<String>,
 }
 
 impl DmxState {
@@ -208,20 +229,27 @@ impl DmxState {
 
 pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     is_running: false,
+    freeze: false,
     mode: Mode::Manual,
     tempo: Tempo {
         bpm: DEFAULT_BPM,
         downbeat: None,
     },
     fixtures: BTreeMap::new(),
+    running_scripts: BTreeSet::new(),
 });
 
 // MARK: FixtureOutput
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum FixtureOutput {
     /// Output color, `None` when the fixture runs its music program
     Rgb(Option<Color>),
+    /// Output color and shape of the gobo in the beam
+    MovingHead {
+        color: Option<Color>,
+        gobo: Option<&'static str>,
+    },
     Switch(Vec<bool>),
     Strobe {
         intensity: f32,
@@ -238,7 +266,7 @@ pub(crate) const DEFAULT_BPM: f32 = 120.0;
 
 /// Shared beat clock, all toggles and strobes derive their phase from it so fixtures stay in
 /// sync with each other and with the music
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub(crate) struct Tempo {
     pub bpm: f32,
     /// Moment of the last tap tempo, `None` until the first tap
@@ -293,6 +321,8 @@ impl Clock {
     }
 }
 
+const SHUTTER_OPEN: u8 = 255;
+
 // MARK: DMX Thread
 pub(crate) fn dmx_thread() {
     let (dmx_length, dmx_fps) = {
@@ -305,23 +335,26 @@ pub(crate) fn dmx_thread() {
     let clock_start = Instant::now();
     let mut next_frame = Instant::now();
     let mut dmx = Vec::new();
+    let mut engine = scripts::Engine::new().expect("Failed to start the script engine");
     let use_colors = io::stdout().is_terminal()
         && env::var_os("NO_COLOR").is_none()
         && env::var_os("CI").is_none();
 
     loop {
         log_connection_event(connection.poll(Instant::now()));
-        let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
-        if !dmx_state.is_running {
+        let tempo = {
+            let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            dmx_state.is_running.then_some(dmx_state.tempo)
+        };
+        let Some(tempo) = tempo else {
             // FIXME: Create async framework don't do micro sleeps
             sleep(Duration::from_millis(100));
             next_frame = Instant::now();
             continue;
-        }
+        };
 
         // Frames are timed by fixed deadlines so send jitter doesn't shift the beat clock
         let frame_time = next_frame;
-        let tempo = dmx_state.tempo;
         let elapsed = frame_time.saturating_duration_since(tempo.downbeat.unwrap_or(clock_start));
         let clock = Clock {
             tempo,
@@ -329,14 +362,18 @@ pub(crate) fn dmx_thread() {
             frame: (elapsed.as_secs_f64() * dmx_fps as f64) as u64,
             fps: dmx_fps as f64,
         };
-        let fixtures = STAGE
+        let stage = STAGE
             .lock()
             .expect("Failed to lock stage")
             .as_ref()
             .expect("Stage not loaded")
             .stage
-            .fixtures
             .clone();
+        let fixtures = &stage.fixtures;
+
+        // Scripts change the fixture states before they are sent
+        engine.update(clock.beat, tempo, &stage);
+        let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
 
         // Only send channels up to the last one used by a fixture to keep transfers short
         let send_length = fixtures
@@ -351,7 +388,7 @@ pub(crate) fn dmx_thread() {
         dmx.clear();
         dmx.resize(dmx_length, 0);
         let mut outputs = BTreeMap::new();
-        for fixture in &fixtures {
+        for fixture in fixtures {
             let profile = fixture.r#type.profile();
             let channels = &mut dmx[fixture.addr - 1..][..profile.channels.len()];
             match profile.kind {
@@ -388,7 +425,7 @@ pub(crate) fn dmx_thread() {
                     }
                     outputs.insert(fixture.id, FixtureOutput::Strobe { intensity, speed });
                 }
-                FixtureKind::Rgb => {
+                FixtureKind::Rgb | FixtureKind::MovingHead => {
                     let state = dmx_state.fixture(fixture.id);
 
                     // A running built-in preset replaces the color channels, auto mode always runs one
@@ -412,7 +449,25 @@ pub(crate) fn dmx_thread() {
                         continue;
                     }
 
-                    let color = clock.color(&state);
+                    let mut color = clock.color(&state);
+                    let is_open = color != Color::BLACK;
+
+                    // Moving heads use the closest color wheel slot and close the shutter for black,
+                    // the wheel keeps the main color then so it doesn't spin while strobing
+                    let head = profile.moving_head;
+                    let wheel = head
+                        .map(|head| head.wheel_color(if is_open { color } else { state.color }));
+                    if let Some(wheel) = wheel
+                        && is_open
+                    {
+                        color = wheel.color;
+                    }
+                    let gobo = head.and_then(|head| head.gobos.get(state.gobo?));
+                    let rotating_gobo =
+                        head.and_then(|head| head.rotating_gobos.get(state.rotating_gobo?));
+                    let movement = head
+                        .and_then(|head| head.movements.get(state.movement?))
+                        .map_or(0, |movement| movement.value);
                     let color_with_intensity = color.apply_intensity(state.intensity);
 
                     // Fixtures without a dimmer channel get the intensity applied to their color
@@ -428,16 +483,53 @@ pub(crate) fn dmx_thread() {
                             (Channel::Blue, Mode::Manual) => rgb.b,
                             (Channel::Dimmer, Mode::Manual) => (state.intensity * 255.0) as u8,
                             (Channel::Music(music), Mode::Auto) => music,
+                            (Channel::ColorWheel, Mode::Manual) => {
+                                wheel.map_or(0, |wheel| wheel.value)
+                            }
+                            (Channel::Gobo, Mode::Manual) => gobo.map_or(0, |gobo| gobo.value),
+                            (Channel::RotatingGobo, Mode::Manual) => {
+                                rotating_gobo.map_or(0, |gobo| gobo.value)
+                            }
+                            (Channel::Movement, Mode::Manual) => movement,
+                            // The fixture moves fast to slow, the slider slow to fast
+                            (Channel::MovementSpeed, _) => {
+                                ((1.0 - state.movement_speed) * 255.0) as u8
+                            }
+                            (Channel::Shutter, Mode::Manual) if is_open => SHUTTER_OPEN,
+                            // Moving heads cycle colors and gobos and move to the sound
+                            (Channel::ColorWheel, Mode::Auto) => {
+                                head.map_or(0, |head| head.auto_color)
+                            }
+                            (Channel::Gobo, Mode::Auto) => head.map_or(0, |head| head.auto_gobo),
+                            (Channel::Movement, Mode::Auto) => {
+                                head.map_or(0, |head| head.auto_movement)
+                            }
+                            (Channel::Shutter, Mode::Auto) => SHUTTER_OPEN,
+                            (Channel::Dimmer, Mode::Auto) if head.is_some() => 255,
+                            // Without a movement macro moving heads point to the center
+                            (Channel::Pan | Channel::Tilt, _) => 128,
                             _ => 0,
                         };
                     }
+                    let output_color = match dmx_state.mode {
+                        Mode::Black => Some(Color::BLACK),
+                        Mode::Manual => Some(color_with_intensity),
+                        Mode::Auto => None,
+                    };
                     outputs.insert(
                         fixture.id,
-                        FixtureOutput::Rgb(match dmx_state.mode {
-                            Mode::Black => Some(Color::BLACK),
-                            Mode::Manual => Some(color_with_intensity),
-                            Mode::Auto => None,
-                        }),
+                        if head.is_some() {
+                            FixtureOutput::MovingHead {
+                                color: output_color,
+                                // A static gobo is in front of the rotating gobo
+                                gobo: match dmx_state.mode {
+                                    Mode::Manual => gobo.or(rotating_gobo).map(|gobo| gobo.shape),
+                                    _ => None,
+                                },
+                            }
+                        } else {
+                            FixtureOutput::Rgb(output_color)
+                        },
                     );
                 }
             }

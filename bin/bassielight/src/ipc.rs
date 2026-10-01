@@ -20,6 +20,7 @@ use crate::config::{self, CONFIG};
 use crate::dmx::{
     DMX_STATE, FIXTURE_OUTPUTS, FixtureOutput, FixtureProp, FixtureState, Mode, Tempo,
 };
+use crate::scripts;
 use crate::stage::{FixtureProfile, FixtureType, OpenStage, STAGE, Stage};
 use crate::usb::ErrorCategory;
 
@@ -72,17 +73,21 @@ const MIN_BPM: f32 = 20.0;
 const MAX_BPM: f32 = 300.0;
 
 // MARK: Stage files
-/// Switch to another stage file, remember it for the next launch and notify all connections
-pub(crate) fn open_stage(path: PathBuf, stage: Stage) {
-    DMX_STATE
+/// Switch to another stage folder, remember it for the next launch and notify all connections
+pub(crate) fn open_stage(open: OpenStage) {
+    {
+        let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+        dmx_state.fixtures.clear();
+        dmx_state.running_scripts.clear();
+    }
+    let (path, stage) = (open.path.clone(), open.stage.clone());
+    scripts::SCRIPTS
         .lock()
-        .expect("Failed to lock DMX state")
-        .fixtures
+        .expect("Failed to lock scripts")
+        .errors
         .clear();
-    *STAGE.lock().expect("Failed to lock stage") = Some(OpenStage {
-        path: path.clone(),
-        stage: stage.clone(),
-    });
+    scripts::set_sources(scripts::read_scripts(&path));
+    *STAGE.lock().expect("Failed to lock stage") = Some(open);
 
     let mut config = CONFIG.lock().expect("Failed to lock config");
     let config = config.as_mut().expect("Config not loaded");
@@ -91,6 +96,7 @@ pub(crate) fn open_stage(path: PathBuf, stage: Stage) {
         warn!("Can't save config.json: {error}");
     }
     broadcast(&IpcMessage::StageOpened { path, stage });
+    scripts::broadcast_status();
 }
 
 // MARK: IpcMessage
@@ -98,9 +104,14 @@ pub(crate) fn open_stage(path: PathBuf, stage: Stage) {
 #[serde(tag = "type", rename_all = "camelCase")]
 pub(crate) enum IpcMessage {
     // State
-    Start,
+    Start {
+        /// Performing on the stage page, external changes are picked up afterwards
+        #[serde(default)]
+        freeze: bool,
+    },
     Stop,
     GetState,
+    #[serde(skip_deserializing)]
     GetStateResponse {
         state: State,
     },
@@ -122,6 +133,36 @@ pub(crate) enum IpcMessage {
         path: PathBuf,
         stage: Stage,
     },
+    // Scripts
+    GetScripts,
+    #[serde(skip_deserializing)]
+    GetScriptsResponse {
+        scripts: BTreeMap<String, String>,
+        running: Vec<String>,
+        errors: BTreeMap<String, String>,
+    },
+    SaveScript {
+        name: String,
+        source: String,
+    },
+    DeleteScript {
+        name: String,
+    },
+    StartScript {
+        name: String,
+    },
+    StopScript {
+        name: String,
+    },
+    #[serde(skip_deserializing)]
+    ScriptsChanged {
+        scripts: BTreeMap<String, String>,
+    },
+    #[serde(skip_deserializing)]
+    ScriptsRunning {
+        running: Vec<String>,
+        errors: BTreeMap<String, String>,
+    },
     GetUsbStatus,
     GetUsbStatusResponse {
         status: UsbStatus,
@@ -133,6 +174,7 @@ pub(crate) enum IpcMessage {
         fixtures: Vec<u32>,
         prop: FixtureProp,
     },
+    #[serde(skip_deserializing)]
     FixtureOutputs {
         outputs: BTreeMap<u32, FixtureOutput>,
     },
@@ -156,6 +198,9 @@ impl IpcMessage {
             IpcMessage::GetStateResponse { .. }
                 | IpcMessage::GetStageResponse { .. }
                 | IpcMessage::StageOpened { .. }
+                | IpcMessage::GetScriptsResponse { .. }
+                | IpcMessage::ScriptsChanged { .. }
+                | IpcMessage::ScriptsRunning { .. }
                 | IpcMessage::GetUsbStatusResponse { .. }
                 | IpcMessage::UsbStatusChanged { .. }
                 | IpcMessage::FixtureOutputs { .. }
@@ -163,7 +208,7 @@ impl IpcMessage {
     }
 }
 
-#[derive(Debug, Deserialize, Serialize)]
+#[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) struct State {
     pub mode: Mode,
@@ -225,6 +270,16 @@ fn send_to_connections(sender: Option<&IpcConnection>, message: &str) {
         });
 }
 
+fn stage_folder() -> PathBuf {
+    STAGE
+        .lock()
+        .expect("Failed to lock stage")
+        .as_ref()
+        .expect("Stage not loaded")
+        .path
+        .clone()
+}
+
 // MARK: IPC Message Handler
 pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) -> bool {
     let message = match parse_client_message(message) {
@@ -238,12 +293,14 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
     debug!("Received IPC message: {message:?}");
     match message {
         // State
-        IpcMessage::Start => {
+        IpcMessage::Start { freeze } => {
             dmx_state.is_running = true;
+            dmx_state.freeze = freeze;
             connection.broadcast(&message);
         }
         IpcMessage::Stop => {
             dmx_state.is_running = false;
+            dmx_state.freeze = false;
             connection.broadcast(&message);
         }
         IpcMessage::GetState => {
@@ -295,14 +352,72 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                     .send(IpcMessage::SetStage { stage }.to_json())
                     .is_ok();
             }
-            if let Err(error) = stage.save(&open.path) {
-                warn!("Can't save {}: {error}", open.path.display());
-            }
             dmx_state
                 .fixtures
                 .retain(|id, _| stage.fixtures.iter().any(|f| f.id == *id));
             open.stage = stage.clone();
+            if let Err(error) = open.save() {
+                warn!("Can't save {}: {error}", open.path.display());
+            }
             connection.broadcast(&message);
+        }
+
+        // Scripts
+        IpcMessage::GetScripts => {
+            let response = {
+                let scripts = scripts::SCRIPTS.lock().expect("Failed to lock scripts");
+                IpcMessage::GetScriptsResponse {
+                    scripts: scripts.sources.clone(),
+                    running: dmx_state.running_scripts.iter().cloned().collect(),
+                    errors: scripts.errors.clone(),
+                }
+            };
+            if connection.send(response.to_json()).is_err() {
+                return false;
+            }
+        }
+        IpcMessage::SaveScript {
+            ref name,
+            ref source,
+        } => {
+            if !scripts::is_valid_name(name) {
+                warn!("Rejecting invalid script name: {name}");
+                return true;
+            }
+            scripts::SCRIPTS
+                .lock()
+                .expect("Failed to lock scripts")
+                .errors
+                .remove(name);
+            let folder = stage_folder();
+            if let Err(error) = scripts::save_script(&folder, name, source) {
+                warn!("Can't save script {name}: {error}");
+            }
+            broadcast(&scripts::status(&dmx_state));
+        }
+        IpcMessage::DeleteScript { ref name } => {
+            if !scripts::is_valid_name(name) {
+                warn!("Rejecting invalid script name: {name}");
+                return true;
+            }
+            dmx_state.running_scripts.remove(name);
+            if let Err(error) = scripts::delete_script(&stage_folder(), name) {
+                warn!("Can't delete script {name}: {error}");
+            }
+            broadcast(&scripts::status(&dmx_state));
+        }
+        IpcMessage::StartScript { ref name } => {
+            scripts::SCRIPTS
+                .lock()
+                .expect("Failed to lock scripts")
+                .errors
+                .remove(name);
+            dmx_state.running_scripts.insert(name.clone());
+            broadcast(&scripts::status(&dmx_state));
+        }
+        IpcMessage::StopScript { ref name } => {
+            dmx_state.running_scripts.remove(name);
+            broadcast(&scripts::status(&dmx_state));
         }
         IpcMessage::GetUsbStatus => {
             let status = *USB_STATUS.lock().expect("Failed to lock USB status");
@@ -339,6 +454,9 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
         IpcMessage::GetStateResponse { .. }
         | IpcMessage::GetStageResponse { .. }
         | IpcMessage::StageOpened { .. }
+        | IpcMessage::GetScriptsResponse { .. }
+        | IpcMessage::ScriptsChanged { .. }
+        | IpcMessage::ScriptsRunning { .. }
         | IpcMessage::GetUsbStatusResponse { .. }
         | IpcMessage::UsbStatusChanged { .. }
         | IpcMessage::FixtureOutputs { .. } => unreachable!(),

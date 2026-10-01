@@ -4,22 +4,25 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mdiFlash, mdiLightbulbFluorescentTube } from '@mdi/js';
+import { mdiFlash, mdiLightbulbFluorescentTube, mdiPowerSocketDe, mdiSpotlightBeam } from '@mdi/js';
+import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { boundsBox, pointBox, snapDrag, type Box, type Guide } from '../snap.ts';
 import {
+    $scripts,
     buttonLabel,
     findProfile,
     highlightedFixtureIds,
     switchCount,
     type Button,
+    type ButtonTarget,
     type FixtureOutput,
     type FixtureProfile,
     type Selection,
     type Stage,
-    type Target,
 } from '../stage.ts';
 import { colorToHex } from '../utils.ts';
+import { GoboPattern } from './gobo.tsx';
 import './visualization.css';
 
 /// Snap distance in screen pixels
@@ -43,8 +46,11 @@ function buttonBox(button: Button): Box {
     };
 }
 
-const isTarget = (selection: Selection, target: Target | null) =>
-    selection !== null && target !== null && selection.type === target.type && selection.id === target.id;
+/// Whether a button target is selected, or for scripts running
+const isActive = (selection: Selection, target: ButtonTarget | null) =>
+    target?.type === 'script'
+        ? $scripts.value.running.includes(target.name)
+        : selection !== null && target !== null && selection.type === target.type && selection.id === target.id;
 
 /// Room and fixtures are drawn at real size in centimeters, the room scales to fit, while labels,
 /// padding and strokes keep a constant on screen size. In the editor fixtures, groups and buttons
@@ -58,6 +64,7 @@ export function Visualization({
     onSelect,
     onFixturesMove,
     onButtonMove,
+    onScriptToggle,
 }: {
     stage: Stage;
     fixtureTypes: FixtureProfile[];
@@ -67,6 +74,7 @@ export function Visualization({
     onSelect: (selection: Selection) => void;
     onFixturesMove?: (moves: { id: number; x: number; y: number }[]) => void;
     onButtonMove?: (id: number, x: number, y: number) => void;
+    onScriptToggle?: (name: string) => void;
 }) {
     const svgRef = useRef<SVGSVGElement>(null);
     const [pixelsPerCm, setPixelsPerCm] = useState(1);
@@ -223,7 +231,7 @@ export function Visualization({
             {buttons.map((button) => {
                 const isSelected = isEditor
                     ? selection?.type === 'button' && selection.id === button.id
-                    : isTarget(selection, button.target);
+                    : isActive(selection, button.target);
                 const box = buttonBox(button);
                 return (
                     <g
@@ -234,6 +242,8 @@ export function Visualization({
                             if (isEditor) {
                                 onSelect({ type: 'button', id: button.id });
                                 startDrag(event, [], button.id);
+                            } else if (button.target?.type === 'script') {
+                                onScriptToggle?.(button.target.name);
                             } else if (button.target) {
                                 onSelect(button.target);
                             }
@@ -270,7 +280,17 @@ export function Visualization({
                             startDrag(event, [fixture.id]);
                         }}
                     >
-                        {profile.kind === 'rgb' && <RgbShape output={output} size={size} />}
+                        {profile.kind === 'rgb' && (
+                            <RgbShape color={output && 'rgb' in output ? output.rgb : undefined} size={size}>
+                                <BlockIcon path={mdiLightbulbFluorescentTube} size={size} />
+                            </RgbShape>
+                        )}
+                        {profile.kind === 'movingHead' && (
+                            <MovingHeadShape
+                                output={output && 'movingHead' in output ? output.movingHead : undefined}
+                                size={size}
+                            />
+                        )}
                         {profile.kind === 'switch' && (
                             <SwitchShape
                                 count={switchCount(profile)}
@@ -306,10 +326,17 @@ export function Visualization({
 
 type Size = { width: number; height: number };
 
-/// Round pars are circles, other fixtures like tubes a block with an icon. A fixture running its
-/// own program has no known color.
-function RgbShape({ output, size }: { output?: FixtureOutput; size: Size }) {
-    const color = output && 'rgb' in output ? output.rgb : undefined;
+/// Round pars are circles, other fixtures like tubes and moving heads a block with their icon. A
+/// fixture running its own program has no known color.
+function RgbShape({
+    color,
+    size,
+    children,
+}: {
+    color: number | null | undefined;
+    size: Size;
+    children: ComponentChildren;
+}) {
     const fill = color != null ? { fill: colorToHex(color) } : undefined;
     const bodyClass = `visualization-body is-rgb ${color === null ? 'is-program' : ''}`;
     const hasGlow = color != null && color !== 0;
@@ -332,8 +359,25 @@ function RgbShape({ output, size }: { output?: FixtureOutput; size: Size }) {
                 />
             )}
             <rect class={bodyClass} {...blockRect(size)} style={fill} />
-            <BlockIcon path={mdiLightbulbFluorescentTube} size={size} />
+            {children}
         </>
+    );
+}
+
+/// Moving heads show the gobo in their beam, or a spotlight for the open beam
+function MovingHeadShape({ output, size }: { output?: { color: number | null; gobo: string | null }; size: Size }) {
+    const goboSize = Math.min(size.width, size.height) * 0.8;
+    return (
+        <RgbShape color={output?.color} size={size}>
+            {output?.gobo ? (
+                <g transform={`scale(${goboSize / 24})`}>
+                    <circle class="gobo-disc" r={11} />
+                    <GoboPattern shape={output.gobo} />
+                </g>
+            ) : (
+                <BlockIcon path={mdiSpotlightBeam} size={size} />
+            )}
+        </RgbShape>
     );
 }
 
@@ -359,19 +403,27 @@ function BlockIcon({ path, size }: { path: string; size: Size }) {
     );
 }
 
+/// Schuko socket icon on top with a dot for each switch below, green when the switch is on
 function SwitchShape({ count, states, size }: { count: number; states?: boolean[]; size: Size }) {
     const columns = Math.min(count, SWITCHES_PER_ROW);
     const rows = Math.ceil(count / SWITCHES_PER_ROW);
-    const cell = Math.min(size.width / (columns + 0.5), size.height / (rows + 0.5));
+    const iconSize = size.height * 0.45;
+    const cell = Math.min(size.width / (columns + 1), (size.height * 0.4) / rows);
+    const top = -size.height / 2 + size.height * 0.08;
     return (
         <>
             <rect class="visualization-body" {...blockRect(size)} />
+            <path
+                class="visualization-block-icon"
+                d={mdiPowerSocketDe}
+                transform={`translate(${-iconSize / 2} ${top}) scale(${iconSize / 24})`}
+            />
             {Array.from({ length: count }, (_, index) => (
                 <circle
                     key={index}
                     class={`visualization-switch ${states?.[index] ? 'is-on' : ''}`}
                     cx={((index % SWITCHES_PER_ROW) - (columns - 1) / 2) * cell}
-                    cy={(Math.floor(index / SWITCHES_PER_ROW) - (rows - 1) / 2) * cell}
+                    cy={top + iconSize + (Math.floor(index / SWITCHES_PER_ROW) + 0.6) * cell}
                     r={cell * 0.3}
                 />
             ))}

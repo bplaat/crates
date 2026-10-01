@@ -1,0 +1,52 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.gobos {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    gap: 0.375rem;
+    margin-bottom: 1rem;
+}
+
+.gobo {
+    aspect-ratio: 1;
+    padding: 0;
+    border: 2px solid transparent;
+    border-radius: 9999px;
+    outline: none;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+.gobo svg {
+    display: block;
+    width: 100%;
+    height: 100%;
+}
+.gobo:hover,
+.gobo:focus-visible {
+    border-color: var(--color-surface-active);
+}
+.gobo:active {
+    transform: scale(0.95);
+}
+.gobo.is-selected {
+    border-color: var(--color-accent);
+}
+
+.gobo-disc {
+    fill: #09090b;
+}
+
+.gobo-pattern {
+    fill: #fff;
+    stroke: #fff;
+    stroke-width: 0;
+    stroke-linecap: round;
+}
+/* Strokes are part of the pattern, so they scale with it */
+svg .gobo-pattern * {
+    vector-effect: none;
+}

@@ -19,6 +19,17 @@
 - Design your room, fixtures and groups in the built-in editor
 - Select fixtures or groups on a live visualization of the room and control their lights
 - Control setup with a remote device through the web interface
+- Animate your lights with [Lua](https://www.lua.org/) scripts that stay in sync with the beat
+
+## Stages and scripts
+
+A stage is a `.stage` folder with a `stage.json` with the setup and a `scripts` folder with Lua scripts, open it by
+its `stage.json`. Scripts are started from the scripts tab or with buttons on the stage, all their timing is in beats
+of the BPM button.
+
+Every stage folder gets an `AGENTS.md` with the file formats and the script API, so AI agents like Claude Code and
+Codex can edit the setup and write scripts. BassieLight picks up their changes right away in the editor and scripts
+tabs, on the stage tab the setup is frozen until you leave it.
 
 ## Compatibility
 
@@ -35,8 +46,13 @@
 - [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
     - Controls its connected array of [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html) tubes as one fixture
     - Own colors or one of the 38 built-in presets
+- [Chauvet INTIMIDATOR HYBRID 140SR](https://www.manualslib.com/manual/1239349/Chauvet-Intimidator-Hybrid-140sr.html)
+    - 19 channel mode, colors use the closest color wheel slot
+    - Static and rotating gobos, built-in movement macros
 - [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
     - Connected to [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html)
+- [Chauvet INTIMIDATOR HYBRID 140SR](https://www.manualslib.com/manual/1239349/Chauvet-Intimidator-Hybrid-140sr.html)
+    - 19 channel mode
 
 ## Installation
 

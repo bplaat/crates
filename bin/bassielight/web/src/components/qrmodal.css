@@ -22,7 +22,7 @@
 }
 
 .qr-code {
-    width: min(16rem, 60vw, 60vh);
+    width: min(22rem, 70vw, 70vh);
     padding: 0.75rem;
     border-radius: 0.75rem;
     background-color: #fff;

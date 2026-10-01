@@ -1,0 +1,123 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.sidebar:where(:not(.monaco-editor *)).is-left {
+    border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+/* Code editor on top, the visualization below to watch the script */
+.script-editor {
+    flex: 1.4;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    background-color: var(--color-surface);
+}
+.script-preview {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.script-toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.5rem 0.75rem;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.script-name {
+    flex: 1;
+    font-family: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+    font-size: 0.875rem;
+}
+.icon-button:disabled {
+    opacity: 0.3;
+    cursor: default;
+}
+.icon-button.is-running {
+    color: var(--color-success);
+}
+
+.script-error {
+    margin: 0;
+    padding: 0.5rem 0.75rem;
+    background-color: rgba(239, 68, 68, 0.15);
+    color: #fca5a5;
+    font-size: 0.8125rem;
+    white-space: pre-wrap;
+}
+
+.script-dirty {
+    flex-shrink: 0;
+    display: inline-block;
+    width: 0.5rem;
+    height: 0.5rem;
+    margin-left: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--color-text);
+    vertical-align: middle;
+}
+
+.script-empty {
+    flex: 1.4;
+    padding: 0 1rem;
+    opacity: 0.6;
+}
+
+/* Sidebar */
+.script-item {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding-right: 0.25rem;
+    border: 2px solid transparent;
+    border-radius: 0.5rem;
+    background-color: var(--color-surface-btn);
+}
+.script-item.is-selected {
+    border-color: var(--color-accent);
+}
+.script-item-name {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    min-width: 0;
+    height: 2.5rem;
+    padding: 0 0.75rem;
+    text-align: left;
+    font-weight: 500;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+.script-dot {
+    flex-shrink: 0;
+    width: 0.5rem;
+    height: 0.5rem;
+    border-radius: 9999px;
+    background-color: var(--color-surface-active);
+}
+.script-dot.is-running {
+    background-color: var(--color-success);
+    box-shadow: 0 0 6px var(--color-success);
+}
+.script-dot.is-error {
+    background-color: var(--color-danger);
+}
+
+.script-new {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.script-hint {
+    font-size: 0.8125rem;
+    opacity: 0.6;
+}

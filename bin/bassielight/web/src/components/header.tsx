@@ -4,23 +4,21 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { signal } from '@preact/signals';
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { Link, useRoute } from 'wouter-preact';
 import { IpcContext } from '../app.tsx';
-import { $document, fileName } from '../stage.ts';
+import { $dmxLive, $document, fileName } from '../stage.ts';
 import {
     ContentSaveOutlineIcon,
     FilePlusOutlineIcon,
     FolderOpenOutlineIcon,
     MotionPlayOutlineIcon,
     QrcodeIcon,
+    ScriptTextOutlineIcon,
     SquareEditOutlineIcon,
 } from './icons.tsx';
 import { QrModal } from './qrmodal.tsx';
 import './header.css';
-
-export const $dmxLive = signal(false);
 
 type UsbStatus =
     | { state: 'connected' }
@@ -130,6 +128,10 @@ export function Header() {
                     <NavLink href="/editor">
                         <SquareEditOutlineIcon />
                         <span class="header-label">Editor</span>
+                    </NavLink>
+                    <NavLink href="/scripts">
+                        <ScriptTextOutlineIcon />
+                        <span class="header-label">Scripts</span>
                     </NavLink>
                 </nav>
 

@@ -21,10 +21,15 @@ import {
     mdiMetronome,
     mdiMotionPlayOutline,
     mdiMusic,
+    mdiPlay,
     mdiPlaylistPlay,
-    mdiPowerSocketEu,
+    mdiPlus,
+    mdiPowerSocketDe,
     mdiQrcode,
+    mdiScriptTextOutline,
+    mdiSpotlightBeam,
     mdiSquareEditOutline,
+    mdiStop,
 } from '@mdi/js';
 import type { ControlKind } from '../stage.ts';
 
@@ -54,15 +59,21 @@ export const MetronomeIcon = () => <Icon path={mdiMetronome} />;
 export const MusicIcon = () => <Icon path={mdiMusic} />;
 export const MotionPlayOutlineIcon = () => <Icon path={mdiMotionPlayOutline} />;
 export const PlaylistPlayIcon = () => <Icon path={mdiPlaylistPlay} />;
-export const PowerSocketEuIcon = () => <Icon path={mdiPowerSocketEu} />;
+export const PlayIcon = () => <Icon path={mdiPlay} />;
+export const PlusIcon = () => <Icon path={mdiPlus} />;
+export const PowerSocketDeIcon = () => <Icon path={mdiPowerSocketDe} />;
 export const QrcodeIcon = () => <Icon path={mdiQrcode} />;
+export const ScriptTextOutlineIcon = () => <Icon path={mdiScriptTextOutline} />;
+export const SpotlightBeamIcon = () => <Icon path={mdiSpotlightBeam} />;
+export const StopIcon = () => <Icon path={mdiStop} />;
 export const SquareEditOutlineIcon = () => <Icon path={mdiSquareEditOutline} />;
 
 const KIND_ICONS: Record<ControlKind, () => preact.JSX.Element> = {
     rgb: LightbulbIcon,
-    switch: PowerSocketEuIcon,
+    switch: PowerSocketDeIcon,
     strobe: FlashIcon,
     preset: PlaylistPlayIcon,
+    movingHead: SpotlightBeamIcon,
 };
 
 export function KindIcon({ kind }: { kind: ControlKind }) {

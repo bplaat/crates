@@ -5,13 +5,32 @@
  */
 
 import { signal } from '@preact/signals';
+import { useEffect, useState } from 'preact/hooks';
 import type { Ipc } from './ipc.ts';
 
 export type Channel =
-    | { type: 'red' | 'green' | 'blue' | 'dimmer' | 'switch' | 'speed' | 'preset' | 'unused' }
+    | {
+          type:
+              | 'red'
+              | 'green'
+              | 'blue'
+              | 'dimmer'
+              | 'switch'
+              | 'speed'
+              | 'preset'
+              | 'pan'
+              | 'tilt'
+              | 'colorWheel'
+              | 'gobo'
+              | 'rotatingGobo'
+              | 'movement'
+              | 'movementSpeed'
+              | 'shutter'
+              | 'unused';
+      }
     | { type: 'music'; value: number };
 
-export type FixtureKind = 'rgb' | 'switch' | 'strobe';
+export type FixtureKind = 'rgb' | 'switch' | 'strobe' | 'movingHead';
 
 /// Groups of controls in the stage sidebar, a fixture can have more than one
 export type ControlKind = FixtureKind | 'preset';
@@ -29,10 +48,25 @@ export interface FixtureProfile {
     size: [number, number];
     channels: Channel[];
     presets?: Presets;
+    movingHead?: MovingHead;
+}
+
+export interface Gobo {
+    name: string;
+    shape: string;
+}
+
+export interface MovingHead {
+    gobos: Gobo[];
+    rotatingGobos: Gobo[];
+    movements: { name: string }[];
 }
 
 export type FixtureOutput =
-    { rgb: number | null } | { switch: boolean[] } | { strobe: { intensity: number; speed: number } };
+    | { rgb: number | null }
+    | { movingHead: { color: number | null; gobo: string | null } }
+    | { switch: boolean[] }
+    | { strobe: { intensity: number; speed: number } };
 
 export interface Fixture {
     id: number;
@@ -59,7 +93,7 @@ export interface Button {
     y: number;
     width: number;
     height: number;
-    target: Target | null;
+    target: ButtonTarget | null;
 }
 
 export interface Stage {
@@ -77,6 +111,8 @@ export interface StageDocument {
 }
 
 export type Target = { type: 'fixture' | 'group'; id: number };
+/// Buttons select a fixture or group, or start and stop a script
+export type ButtonTarget = Target | { type: 'script'; name: string };
 export type Selection = Target | { type: 'button'; id: number } | null;
 
 /// Offset for pasted fixtures, in centimeters
@@ -99,7 +135,7 @@ export function selectedFixtureIds(stage: Stage, selection: Selection): number[]
 export function highlightedFixtureIds(stage: Stage, selection: Selection): number[] | null {
     const target =
         selection?.type === 'button' ? (stage.buttons.find((b) => b.id === selection.id)?.target ?? null) : selection;
-    return target ? selectedFixtureIds(stage, target) : null;
+    return target && target.type !== 'script' ? selectedFixtureIds(stage, target) : null;
 }
 
 export function selectionName(stage: Stage, selection: Selection): string | undefined {
@@ -112,14 +148,18 @@ export function selectionName(stage: Stage, selection: Selection): string | unde
 }
 
 export function buttonLabel(stage: Stage, button: Button): string {
-    return button.label || selectionName(stage, button.target) || 'Button';
+    const target = button.target;
+    const name = target?.type === 'script' ? target.name : selectionName(stage, target);
+    return button.label || name || 'Button';
 }
 
 export function findProfile(fixtureTypes: FixtureProfile[], type: string): FixtureProfile {
     return fixtureTypes.find((profile) => profile.type === type)!;
 }
 
+/// Moving heads also have the RGB controls, which pick their closest color wheel slot
 export function controlKinds(profile: FixtureProfile): ControlKind[] {
+    if (profile.kind === 'movingHead') return ['rgb', 'movingHead'];
     return profile.presets ? [profile.kind, 'preset'] : [profile.kind];
 }
 
@@ -140,6 +180,45 @@ export function initStageStore(ipc: Ipc) {
     ipc.on('stageOpened', ({ path, stage }: any) => {
         if ($document.value) $document.value = { ...$document.value, path, stage };
     });
+
+    ipc.request('getScripts').then((scripts) => ($scripts.value = scripts as ScriptsState));
+    ipc.on('scriptsChanged', ({ scripts }: any) => ($scripts.value = { ...$scripts.value, scripts }));
+    ipc.on('scriptsRunning', ({ running, errors }: any) => ($scripts.value = { ...$scripts.value, running, errors }));
+}
+
+// MARK: DMX output
+export const $dmxLive = signal(false);
+
+/// Run the DMX output while a page is shown, returns the fixture outputs for the visualization
+export function useDmxOutput(ipc: Ipc, freeze: boolean): Record<number, FixtureOutput> {
+    const [outputs, setOutputs] = useState<Record<number, FixtureOutput>>({});
+    useEffect(() => {
+        const listener = ipc.on('fixtureOutputs', ({ outputs }: any) => setOutputs(outputs));
+        ipc.request('getState').then(({ state }: any) => setOutputs(state.fixtureOutputs));
+        ipc.send('start', { freeze });
+        $dmxLive.value = true;
+        return () => {
+            listener.remove();
+            ipc.send('stop');
+            $dmxLive.value = false;
+        };
+    }, []);
+    return outputs;
+}
+
+// MARK: Scripts
+export interface ScriptsState {
+    /// Source of each script by name
+    scripts: Record<string, string>;
+    running: string[];
+    /// Error of each script that stopped by an error
+    errors: Record<string, string>;
+}
+
+export const $scripts = signal<ScriptsState>({ scripts: {}, running: [], errors: {} });
+
+export function toggleScript(ipc: Ipc, name: string) {
+    ipc.send($scripts.value.running.includes(name) ? 'stopScript' : 'startScript', { name });
 }
 
 export function updateStage(ipc: Ipc, stage: Stage) {

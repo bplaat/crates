@@ -13,12 +13,12 @@ use std::sync::Mutex;
 use log::warn;
 use serde::{Deserialize, Serialize};
 
-use crate::stage::{OpenStage, Stage};
+use crate::stage::{self, OpenStage, STAGE_EXTENSION, Stage};
 
 // Constants
 pub(crate) const DMX_LENGTH: usize = 512;
 pub(crate) const DMX_FPS: u64 = 44;
-const STAGE_FILE_NAME: &str = "stage.json";
+const DEFAULT_STAGE: &str = "Default";
 
 /// App settings, the stage itself lives in a separate stage file
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -68,34 +68,22 @@ impl Config {
         serde_json::to_writer_pretty(file, self).map_err(io::Error::other)
     }
 
-    /// Open the last stage file, falling back to a fresh stage file in the config directory
+    /// Open the last stage folder, falling back to the default stage folder next to the settings
     pub(crate) fn load_stage(&self) -> OpenStage {
         if let Some(path) = &self.last_stage {
-            match Stage::load(path, self.dmx_length) {
-                Ok(stage) => {
-                    return OpenStage {
-                        path: path.clone(),
-                        stage,
-                    };
-                }
+            match stage::open_path(path, self.dmx_length) {
+                Ok(open) => return open,
                 Err(error) => warn!("Can't open last stage {}: {error}", path.display()),
             }
         }
 
-        let path = Config::dir().join(STAGE_FILE_NAME);
-        let stage = if path.exists() {
-            Stage::load(&path, self.dmx_length)
-                .unwrap_or_else(|error| panic!("Can't open {}: {error}", path.display()))
-        } else {
-            // Move the stage out of the config.json of older versions, otherwise start fresh
-            let stage: Stage = File::open(Config::dir().join("config.json"))
-                .ok()
-                .and_then(|file| serde_json::from_reader(io::BufReader::new(file)).ok())
-                .unwrap_or_default();
-            stage.save(&path).expect("Can't write stage.json");
-            stage
-        };
-        OpenStage { path, stage }
+        let folder = Config::dir().join(format!("{DEFAULT_STAGE}.{STAGE_EXTENSION}"));
+        if !folder.exists() {
+            stage::create_folder(&folder, &Stage::default(), None)
+                .expect("Can't create the default stage");
+        }
+        OpenStage::open(&folder, self.dmx_length)
+            .unwrap_or_else(|error| panic!("Can't open {}: {error}", folder.display()))
     }
 }
 

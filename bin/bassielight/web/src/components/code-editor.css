@@ -1,0 +1,13 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+.code-editor {
+    flex: 1;
+    min-height: 0;
+    /* Monaco needs text selection, the app disables it everywhere else */
+    -webkit-user-select: text;
+    user-select: text;
+}

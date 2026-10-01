@@ -25,6 +25,9 @@
     --color-danger: #ef4444;
 }
 
+/* Monaco uses class names like .main, .icon and .button too, so the app's rules for those classes
+   skip it with :where(:not(.monaco-editor *)) */
+
 /* Form controls inherit typography (minireset leaves these to the framework) */
 button,
 input,
@@ -88,7 +91,7 @@ a:focus {
     text-decoration: underline;
 }
 
-.icon {
+.icon:where(:not(.monaco-editor *)) {
     display: block;
     width: 24px;
     height: 24px;
@@ -102,7 +105,7 @@ a:focus {
     min-height: 0;
 }
 
-.main {
+.main:where(:not(.monaco-editor *)) {
     flex: 1;
     display: flex;
     flex-direction: column;
@@ -118,7 +121,7 @@ a:focus {
     overflow-y: auto;
 }
 
-.sidebar {
+.sidebar:where(:not(.monaco-editor *)) {
     width: 20rem;
     background-color: var(--color-surface);
     padding: 1rem;
@@ -130,7 +133,7 @@ a:focus {
 }
 
 /* Button */
-.button {
+.button:where(:not(.monaco-editor *)) {
     display: flex;
     align-items: center;
     justify-content: center;
@@ -145,28 +148,28 @@ a:focus {
     transition: all 0.15s;
     outline: none;
 }
-.button:hover,
-.button:focus-visible {
+.button:where(:not(.monaco-editor *)):hover,
+.button:where(:not(.monaco-editor *)):focus-visible {
     background-color: var(--color-surface-hover);
     border-color: var(--color-accent);
 }
-.button:active {
+.button:where(:not(.monaco-editor *)):active {
     background-color: var(--color-surface-active);
     transform: scale(0.95);
 }
-.button.is-selected {
+.button:where(:not(.monaco-editor *)).is-selected {
     border-color: var(--color-accent);
 }
 
-.button.is-pill,
-.button.is-expanded {
+.button:where(:not(.monaco-editor *)).is-pill,
+.button:where(:not(.monaco-editor *)).is-expanded {
     height: 3rem;
     padding: 0 0.5rem;
 }
-.button.is-pill {
+.button:where(:not(.monaco-editor *)).is-pill {
     min-width: 5rem;
 }
-.button.is-expanded {
+.button:where(:not(.monaco-editor *)).is-expanded {
     flex: 1;
     max-width: 12rem;
 }
@@ -194,7 +197,7 @@ a:focus {
     background-color: var(--color-surface-hover);
     transform: scale(0.95);
 }
-.icon-button .icon {
+.icon-button .icon:where(:not(.monaco-editor *)) {
     width: 20px;
     height: 20px;
 }
@@ -208,7 +211,7 @@ a:focus {
     padding-bottom: 0.5rem;
     border-bottom: 1px solid var(--color-border);
 }
-.sidebar-header > .title {
+.sidebar-header > .title:where(:not(.monaco-editor *)) {
     flex: 1;
     margin: 0;
     padding: 0;
@@ -216,32 +219,32 @@ a:focus {
 }
 
 /* Buttons group */
-.buttons {
+.buttons:where(:not(.monaco-editor *)) {
     display: flex;
     flex-wrap: wrap;
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
-.buttons.is-centered {
+.buttons:where(:not(.monaco-editor *)).is-centered {
     align-items: center;
     justify-content: center;
     margin: 1rem 0;
 }
 
 /* Title */
-.title {
+.title:where(:not(.monaco-editor *)) {
     font-weight: 700;
     font-size: 1.35rem;
     border-bottom: 1px solid var(--color-border);
     padding-bottom: 0.5rem;
     margin: 1rem 0;
 }
-.title:first-child {
+.title:where(:not(.monaco-editor *)):first-child {
     margin-top: 0;
 }
 
-.button.is-danger:hover,
-.button.is-danger:focus-visible {
+.button:where(:not(.monaco-editor *)).is-danger:hover,
+.button:where(:not(.monaco-editor *)).is-danger:focus-visible {
     border-color: var(--color-danger);
 }
 
@@ -266,7 +269,7 @@ a:focus {
     min-width: 0;
 }
 
-.input {
+.input:where(:not(.monaco-editor *)) {
     -webkit-user-select: text;
     width: 100%;
     height: 2.5rem;
@@ -278,8 +281,8 @@ a:focus {
     user-select: text;
     transition: border-color 0.15s;
 }
-.input:hover,
-.input:focus {
+.input:where(:not(.monaco-editor *)):hover,
+.input:where(:not(.monaco-editor *)):focus {
     border-color: var(--color-accent);
 }
 
@@ -303,7 +306,7 @@ a:focus {
     gap: 0.5rem;
     margin-bottom: 1rem;
 }
-.list .button {
+.list .button:where(:not(.monaco-editor *)) {
     justify-content: flex-start;
 }
 .list-meta {
@@ -316,7 +319,7 @@ a:focus {
     align-items: center;
     gap: 0.5rem;
 }
-.field-row > .input {
+.field-row > .input:where(:not(.monaco-editor *)) {
     width: 4.5rem;
     flex-shrink: 0;
 }
@@ -337,7 +340,10 @@ a:focus {
 .kind-icon.is-preset {
     color: #38bdf8;
 }
-.title.has-icon {
+.kind-icon.is-movingHead {
+    color: #fb923c;
+}
+.title:where(:not(.monaco-editor *)).has-icon {
     display: flex;
     align-items: center;
     gap: 0.5rem;

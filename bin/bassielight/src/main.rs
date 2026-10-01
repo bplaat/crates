@@ -7,7 +7,7 @@
 #![doc = include_str!("../README.md")]
 #![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
@@ -25,13 +25,15 @@ use small_websocket::Message;
 
 use crate::config::{CONFIG, Config};
 use crate::ipc::{IPC_CONNECTIONS, IpcConnection, ipc_message_handler};
-use crate::stage::{STAGE, Stage};
+use crate::stage::{OpenStage, STAGE, Stage};
 
 mod config;
 mod dmx;
 mod ipc;
+mod scripts;
 mod stage;
 mod usb;
+mod watch;
 
 // MARK: Internal HTTP server
 const PORT: u16 = 39027;
@@ -58,12 +60,12 @@ enum WindowMessage {
     TitlebarDoubleClick,
 }
 
-fn stage_file_dialog<'a>(window: &'a Window, title: &str) -> FileDialog<'a> {
+/// Stage folders are opened by their stage.json, new ones are created as a folder
+fn stage_dialog<'a>(window: &'a Window, title: &str) -> FileDialog<'a> {
     FileDialog::new()
         .parent(window)
         .title(title)
         .directory(Config::dir())
-        .add_filter("Stage files", &["json"])
 }
 
 fn show_error(window: &Window, title: &str, error: &str) {
@@ -76,46 +78,57 @@ fn show_error(window: &Window, title: &str, error: &str) {
         .show();
 }
 
-fn save_and_open_stage(window: &Window, path: PathBuf, stage: Stage) {
-    match stage.save(&path) {
-        Ok(()) => ipc::open_stage(path, stage),
-        Err(error) => show_error(window, "Can't save stage", &error.to_string()),
+fn create_and_open_stage(
+    window: &Window,
+    path: PathBuf,
+    stage: &Stage,
+    scripts_from: Option<&Path>,
+) {
+    let folder = stage::with_extension(path);
+    let result = stage::create_folder(&folder, stage, scripts_from)
+        .map_err(|error| error.to_string())
+        .and_then(|()| OpenStage::open(&folder, config::dmx_length()));
+    match result {
+        Ok(open) => ipc::open_stage(open),
+        Err(error) => show_error(window, "Can't save stage", &error),
     }
 }
 
 fn handle_window_message(window: &mut Window, message: WindowMessage) {
     match message {
         WindowMessage::NewStage => {
-            if let Some(path) = stage_file_dialog(window, "New Stage")
-                .file_name("stage.json")
+            if let Some(path) = stage_dialog(window, "New Stage")
+                .file_name(format!("New Stage.{}", stage::STAGE_EXTENSION))
                 .save_file()
             {
-                save_and_open_stage(window, path, Stage::default());
+                create_and_open_stage(window, path, &Stage::default(), None);
             }
         }
         WindowMessage::OpenStage => {
-            if let Some(path) = stage_file_dialog(window, "Open Stage").pick_file() {
-                match Stage::load(&path, config::dmx_length()) {
-                    Ok(stage) => ipc::open_stage(path, stage),
+            if let Some(path) = stage_dialog(window, "Open the stage.json of a stage")
+                .add_filter("Stage", &["json"])
+                .pick_file()
+            {
+                match stage::open_path(&path, config::dmx_length()) {
+                    Ok(open) => ipc::open_stage(open),
                     Err(error) => show_error(window, "Can't open stage", &error),
                 }
             }
         }
         WindowMessage::SaveStageAs => {
-            let (file_name, stage) = {
+            let (folder, stage) = {
                 let open_stage = STAGE.lock().expect("Failed to lock stage");
                 let open = open_stage.as_ref().expect("Stage not loaded");
-                let file_name = open
-                    .path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned());
-                (file_name, open.stage.clone())
+                (open.path.clone(), open.stage.clone())
             };
-            if let Some(path) = stage_file_dialog(window, "Save Stage As")
-                .file_name(file_name.as_deref().unwrap_or("stage.json"))
+            let name = folder
+                .file_name()
+                .map(|name| name.to_string_lossy().into_owned());
+            if let Some(path) = stage_dialog(window, "Save Stage As")
+                .file_name(name.as_deref().unwrap_or_default())
                 .save_file()
             {
-                save_and_open_stage(window, path, stage);
+                create_and_open_stage(window, path, &stage, Some(&folder));
             }
         }
         #[cfg(target_os = "macos")]
@@ -155,6 +168,7 @@ fn main() {
     }
     info!("Config: {config:?}");
     *CONFIG.lock().expect("Failed to lock config") = Some(config);
+    scripts::set_sources(scripts::read_scripts(&open_stage.path));
     *STAGE.lock().expect("Failed to lock stage") = Some(open_stage);
 
     // Start DMX thread
@@ -162,6 +176,12 @@ fn main() {
         .name("dmx".to_string())
         .spawn(dmx::dmx_thread)
         .expect("Failed to spawn DMX thread");
+
+    // Pick up changes to the stage folder by others, like AI agents
+    thread::Builder::new()
+        .name("watch".to_string())
+        .spawn(watch::watch_thread)
+        .expect("Failed to spawn watch thread");
 
     // Try to get local IP address, fallback to localhost if it fails
     let listener = std::net::TcpListener::bind((std::net::Ipv4Addr::UNSPECIFIED, PORT))

@@ -19,6 +19,7 @@ import {
 import { Visualization } from '../components/visualization.tsx';
 import {
     $document,
+    $scripts,
     buttonLabel,
     findProfile,
     nextId,
@@ -26,6 +27,7 @@ import {
     switchCount,
     updateStage,
     type Button,
+    type ButtonTarget,
     type Fixture,
     type Group,
     type Selection,
@@ -125,6 +127,19 @@ function SidebarHeader({ onClose, children }: { onClose: () => void; children: C
     );
 }
 
+/// Button targets in a select are `type:id`, or `script:name`
+const targetValue = (target: ButtonTarget) =>
+    target.type === 'script' ? `script:${target.name}` : `${target.type}:${target.id}`;
+
+function parseTarget(value: string): ButtonTarget | null {
+    const separator = value.indexOf(':');
+    const type = value.slice(0, separator);
+    const rest = value.slice(separator + 1);
+    if (type === 'script') return { type, name: rest };
+    if (type === 'fixture' || type === 'group') return { type, id: Number(rest) };
+    return null;
+}
+
 /// Copied fixtures, with the group they were copied as, kept while switching pages
 let clipboard: { fixtures: Fixture[]; group?: Group } | null = null;
 
@@ -201,7 +216,9 @@ export function EditorPage() {
     // Buttons of a deleted fixture or group stay, without a target
     const untargetButtons = (target: Target) =>
         stage.buttons.map((b) =>
-            b.target?.type === target.type && b.target.id === target.id ? { ...b, target: null } : b,
+            b.target && b.target.type !== 'script' && b.target.type === target.type && b.target.id === target.id
+                ? { ...b, target: null }
+                : b,
         );
     const deleteFixture = (id: number) => {
         update({
@@ -475,15 +492,19 @@ export function EditorPage() {
                             <span class="field-label">Selects</span>
                             <select
                                 class="input"
-                                value={button.target ? `${button.target.type}:${button.target.id}` : ''}
-                                onChange={(e) => {
-                                    const [type, id] = e.currentTarget.value.split(':');
-                                    updateButton(button.id, {
-                                        target: type ? { type: type as Target['type'], id: Number(id) } : null,
-                                    });
-                                }}
+                                value={button.target ? targetValue(button.target) : ''}
+                                onChange={(e) =>
+                                    updateButton(button.id, { target: parseTarget(e.currentTarget.value) })
+                                }
                             >
                                 <option value="">Nothing</option>
+                                <optgroup label="Scripts">
+                                    {Object.keys($scripts.value.scripts).map((name) => (
+                                        <option key={name} value={`script:${name}`}>
+                                            {name}
+                                        </option>
+                                    ))}
+                                </optgroup>
                                 <optgroup label="Groups">
                                     {stage.groups.map((group) => (
                                         <option key={group.id} value={`group:${group.id}`}>

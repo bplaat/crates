@@ -6,11 +6,11 @@
  */
 
 use std::collections::HashSet;
-use std::fs::File;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
+use log::warn;
 use serde::{Deserialize, Serialize};
 
 use crate::dmx::Color;
@@ -34,6 +34,8 @@ pub(crate) enum FixtureType {
     ShowtecTitanStrobe,
     #[serde(rename = "jb_systems_tubeled")]
     JbSystemsTubeled,
+    #[serde(rename = "chauvet_intimidator_hybrid_140sr")]
+    ChauvetIntimidatorHybrid140SR,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -42,6 +44,7 @@ pub(crate) enum FixtureKind {
     Rgb,
     Switch,
     Strobe,
+    MovingHead,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -58,6 +61,18 @@ pub(crate) enum Channel {
     Speed,
     /// Built-in preset selection
     Preset,
+    Pan,
+    Tilt,
+    /// Color wheel slot closest to the color
+    ColorWheel,
+    Gobo,
+    RotatingGobo,
+    /// Built-in movement macro
+    Movement,
+    /// Pan, tilt and movement macro speed, fast to slow
+    MovementSpeed,
+    /// Closed for black, open otherwise
+    Shutter,
     Unused,
 }
 
@@ -73,7 +88,151 @@ pub(crate) struct FixtureProfile {
     /// Built-in presets the fixture can run instead of its channels
     #[serde(skip_serializing_if = "Option::is_none")]
     pub presets: Option<&'static Presets>,
+    #[serde(rename = "movingHead", skip_serializing_if = "Option::is_none")]
+    pub moving_head: Option<&'static MovingHead>,
 }
+
+#[derive(Debug, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub(crate) struct MovingHead {
+    #[serde(skip)]
+    pub color_wheel: &'static [WheelColor],
+    pub gobos: &'static [Gobo],
+    pub rotating_gobos: &'static [Gobo],
+    pub movements: &'static [Movement],
+    /// Color wheel, gobo wheel and movement values for auto mode
+    #[serde(skip)]
+    pub auto_color: u8,
+    #[serde(skip)]
+    pub auto_gobo: u8,
+    #[serde(skip)]
+    pub auto_movement: u8,
+}
+
+#[derive(Debug)]
+pub(crate) struct WheelColor {
+    pub value: u8,
+    /// Approximate color of the light through the filter
+    pub color: Color,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct Gobo {
+    pub name: &'static str,
+    /// Pattern the visualization draws
+    pub shape: &'static str,
+    #[serde(skip)]
+    pub value: u8,
+}
+
+#[derive(Debug, Serialize)]
+pub(crate) struct Movement {
+    pub name: &'static str,
+    #[serde(skip)]
+    pub value: u8,
+}
+
+impl MovingHead {
+    /// Color wheel slot that looks most like the color
+    pub(crate) fn wheel_color(&self, color: Color) -> &WheelColor {
+        let distance = |slot: &&WheelColor| {
+            let [r, g, b] = [
+                slot.color.r as i32 - color.r as i32,
+                slot.color.g as i32 - color.g as i32,
+                slot.color.b as i32 - color.b as i32,
+            ];
+            r * r + g * g + b * b
+        };
+        self.color_wheel
+            .iter()
+            .min_by_key(distance)
+            .expect("Color wheel is empty")
+    }
+}
+
+const fn wheel_color(value: u8, color: u32) -> WheelColor {
+    WheelColor {
+        value,
+        color: Color::from_u32(color),
+    }
+}
+
+const fn gobo(name: &'static str, shape: &'static str, value: u8) -> Gobo {
+    Gobo { name, shape, value }
+}
+
+const fn movement(name: &'static str, value: u8) -> Movement {
+    Movement { name, value }
+}
+
+const INTIMIDATOR_HYBRID_140SR: MovingHead = MovingHead {
+    color_wheel: &[
+        wheel_color(1, 0xffffff),  // White
+        wheel_color(5, 0xff0000),  // Red
+        wheel_color(9, 0xffd000),  // Yellow
+        wheel_color(13, 0x00ff00), // Green
+        wheel_color(17, 0x40c0ff), // Sky blue
+        wheel_color(21, 0xb080ff), // Lavender
+        wheel_color(26, 0xffff60), // Canary yellow
+        wheel_color(31, 0x0000ff), // Blue
+        wheel_color(36, 0xff00ff), // Magenta
+        wheel_color(41, 0xa0ff00), // Lime green
+        wheel_color(46, 0xfff0d8), // Natural white
+        wheel_color(51, 0xe8f4ff), // Cool white
+        wheel_color(56, 0x6000ff), // Ultraviolet
+    ],
+    // Shapes from the gobo wheel pictures in the manual
+    gobos: &[
+        gobo("Large ring", "ringLarge", 4),
+        gobo("Medium ring", "ringMedium", 7),
+        gobo("Small ring", "ringSmall", 10),
+        gobo("Dot", "dot", 13),
+        gobo("Dot line", "dotLine", 16),
+        gobo("Arrows", "arrows", 19),
+        gobo("Dot cloud", "dotCloud", 22),
+        gobo("Big dots", "dotScatter", 25),
+        gobo("Wave", "wave", 28),
+        gobo("Squares", "squares", 31),
+        gobo("Dot disc", "dotDisc", 34),
+        gobo("Flower", "flower", 37),
+        gobo("Spiral", "spiral", 40),
+        gobo("Dot ring", "dotRing", 43),
+        gobo("Cross", "cross", 46),
+        gobo("Shards", "shards", 49),
+    ],
+    rotating_gobos: &[
+        gobo("Swirl", "swirl", 14),
+        gobo("Petals", "petals", 20),
+        gobo("Four circles", "circles", 26),
+        gobo("Vortex", "vortex", 32),
+        gobo("Starburst", "starburst", 38),
+        gobo("Open ring", "ringGap", 44),
+        gobo("Waves", "waves", 50),
+        gobo("Rings", "rings", 58),
+    ],
+    movements: &[
+        movement("Macro 1", 15),
+        movement("Macro 2", 31),
+        movement("Macro 3", 47),
+        movement("Macro 4", 63),
+        movement("Macro 5", 79),
+        movement("Macro 6", 95),
+        movement("Macro 7", 111),
+        movement("Macro 8", 127),
+        movement("Sound macro 1", 143),
+        movement("Sound macro 2", 159),
+        movement("Sound macro 3", 175),
+        movement("Sound macro 4", 191),
+        movement("Sound macro 5", 207),
+        movement("Sound macro 6", 223),
+        movement("Sound macro 7", 239),
+        movement("Sound macro 8", 251),
+    ],
+    // Rainbow color cycling, gobo cycling and sound active movement
+    auto_color: 200,
+    auto_gobo: 160,
+    auto_movement: 143,
+};
 
 #[derive(Debug, Serialize)]
 pub(crate) struct Presets {
@@ -164,7 +323,7 @@ const TUBELED_PRESETS: Presets = Presets {
 };
 
 impl FixtureType {
-    pub(crate) const ALL: [FixtureType; 7] = [
+    pub(crate) const ALL: [FixtureType; 8] = [
         FixtureType::AmericanDJP56Led,
         FixtureType::AmericanDJMegaTripar,
         FixtureType::AyraCompar10,
@@ -172,6 +331,7 @@ impl FixtureType {
         FixtureType::ShowtecMultidimMKII,
         FixtureType::ShowtecTitanStrobe,
         FixtureType::JbSystemsTubeled,
+        FixtureType::ChauvetIntimidatorHybrid140SR,
     ];
 
     pub(crate) const fn profile(self) -> &'static FixtureProfile {
@@ -184,6 +344,7 @@ impl FixtureType {
                 size: [227, 227],
                 channels: &[Red, Green, Blue, Unused, Unused, Music(224)],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::AmericanDJMegaTripar => &FixtureProfile {
                 r#type: FixtureType::AmericanDJMegaTripar,
@@ -192,6 +353,7 @@ impl FixtureType {
                 size: [225, 220],
                 channels: &[Red, Green, Blue, Unused, Unused, Music(240), Dimmer],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::AyraCompar10 => &FixtureProfile {
                 r#type: FixtureType::AyraCompar10,
@@ -200,6 +362,7 @@ impl FixtureType {
                 size: [170, 170],
                 channels: &[Dimmer, Unused, Red, Green, Blue, Unused, Unused, Music(221)],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::AyraCompar20 => &FixtureProfile {
                 r#type: FixtureType::AyraCompar20,
@@ -209,6 +372,7 @@ impl FixtureType {
                 size: [250, 250],
                 channels: &[Dimmer, Unused, Red, Green, Blue, Music(221)],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::ShowtecMultidimMKII => &FixtureProfile {
                 r#type: FixtureType::ShowtecMultidimMKII,
@@ -217,6 +381,7 @@ impl FixtureType {
                 size: [212, 188],
                 channels: &[Switch; DMX_SWITCHES_LENGTH],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::ShowtecTitanStrobe => &FixtureProfile {
                 r#type: FixtureType::ShowtecTitanStrobe,
@@ -225,6 +390,7 @@ impl FixtureType {
                 size: [495, 265],
                 channels: &[Speed, Dimmer],
                 presets: None,
+                moving_head: None,
             },
             FixtureType::JbSystemsTubeled => &FixtureProfile {
                 r#type: FixtureType::JbSystemsTubeled,
@@ -234,6 +400,38 @@ impl FixtureType {
                 size: [1000, 40],
                 channels: &[Unused, Red, Green, Blue],
                 presets: Some(&TUBELED_PRESETS),
+                moving_head: None,
+            },
+            FixtureType::ChauvetIntimidatorHybrid140SR => &FixtureProfile {
+                r#type: FixtureType::ChauvetIntimidatorHybrid140SR,
+                name: "Chauvet Intimidator Hybrid 140SR",
+                kind: FixtureKind::MovingHead,
+                size: [322, 220],
+                // 19 channel mode
+                channels: &[
+                    Pan,
+                    Unused,
+                    Tilt,
+                    Unused,
+                    MovementSpeed,
+                    ColorWheel,
+                    Gobo,
+                    RotatingGobo,
+                    // Gobo rotation, prisms, focus, auto focus, zoom and frost
+                    Unused,
+                    Unused,
+                    Unused,
+                    Unused,
+                    Unused,
+                    Unused,
+                    Unused,
+                    Dimmer,
+                    Shutter,
+                    Unused,
+                    Movement,
+                ],
+                presets: None,
+                moving_head: Some(&INTIMIDATOR_HYBRID_140SR),
             },
         }
     }
@@ -287,7 +485,7 @@ pub(crate) struct Group {
     pub hide_outline: bool,
 }
 
-/// Rect in the room that selects a group or fixture when pressed
+/// Rect in the room that selects a group or fixture or toggles a script when pressed
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Button {
     pub id: u32,
@@ -301,11 +499,12 @@ pub(crate) struct Button {
     pub target: Option<ButtonTarget>,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
 pub(crate) enum ButtonTarget {
     Fixture { id: u32 },
     Group { id: u32 },
+    Script { name: String },
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -317,27 +516,161 @@ pub(crate) struct Stage {
     pub buttons: Vec<Button>,
 }
 
-/// The opened stage file, edits are saved to it right away
+/// The opened stage folder, edits are saved to it right away
 pub(crate) struct OpenStage {
     pub path: PathBuf,
     pub stage: Stage,
+    /// Last read or written stage.json, to notice changes by others
+    pub json: String,
 }
 
 pub(crate) static STAGE: Mutex<Option<OpenStage>> = Mutex::new(None);
 
+// MARK: Stage folder
+/// A stage is a folder with this extension, holding the stage.json, the scripts folder and docs
+/// for AI agents that edit it
+pub(crate) const STAGE_EXTENSION: &str = "stage";
+const STAGE_FILE: &str = "stage.json";
+pub(crate) const SCRIPTS_DIR: &str = "scripts";
+const AGENTS_DOCS: &str = include_str!("scripting.md");
+
+impl OpenStage {
+    pub(crate) fn open(folder: &Path, dmx_length: usize) -> Result<OpenStage, String> {
+        let json = std::fs::read_to_string(folder.join(STAGE_FILE))
+            .map_err(|error| format!("Can't read {STAGE_FILE}: {error}"))?;
+        let stage = Stage::parse(&json, dmx_length)?;
+        if let Err(error) = write_docs(folder) {
+            warn!("Can't write stage docs: {error}");
+        }
+        Ok(OpenStage {
+            path: folder.to_path_buf(),
+            stage,
+            json,
+        })
+    }
+
+    pub(crate) fn save(&mut self) -> io::Result<()> {
+        self.json = self.stage.to_json();
+        std::fs::write(self.path.join(STAGE_FILE), &self.json)
+    }
+}
+
+/// Open a picked path: a stage folder, the stage.json in one, or a single json stage file of
+/// older versions which is copied into a new stage folder next to it
+pub(crate) fn open_path(path: &Path, dmx_length: usize) -> Result<OpenStage, String> {
+    let parent = path.parent().filter(|parent| {
+        path.file_name() == Some(STAGE_FILE.as_ref())
+            && parent.extension() == Some(STAGE_EXTENSION.as_ref())
+    });
+    let folder = if path.is_dir() {
+        path.to_path_buf()
+    } else if let Some(parent) = parent {
+        parent.to_path_buf()
+    } else {
+        let json = std::fs::read_to_string(path).map_err(|error| error.to_string())?;
+        let stage = Stage::parse(&json, dmx_length)?;
+        // The stage.json of older versions becomes the default stage
+        let name = path
+            .file_stem()
+            .map(|stem| stem.to_string_lossy())
+            .filter(|stem| stem != "stage")
+            .unwrap_or("Default".into());
+        let folder = path.with_file_name(format!("{name}.{STAGE_EXTENSION}"));
+        if !folder.exists() {
+            create_folder(&folder, &stage, None).map_err(|error| error.to_string())?;
+        }
+        folder
+    };
+    OpenStage::open(&folder, dmx_length)
+}
+
+/// Add the stage extension to a picked path when it's missing
+pub(crate) fn with_extension(path: PathBuf) -> PathBuf {
+    if path.extension() == Some(STAGE_EXTENSION.as_ref()) {
+        path
+    } else {
+        path.with_extension(STAGE_EXTENSION)
+    }
+}
+
+/// Create a stage folder with the stage and the scripts of another stage folder
+pub(crate) fn create_folder(
+    folder: &Path,
+    stage: &Stage,
+    scripts_from: Option<&Path>,
+) -> io::Result<()> {
+    let scripts = folder.join(SCRIPTS_DIR);
+    std::fs::create_dir_all(&scripts)?;
+    std::fs::write(folder.join(STAGE_FILE), stage.to_json())?;
+    if let Some(from) = scripts_from {
+        for entry in std::fs::read_dir(from.join(SCRIPTS_DIR))?.flatten() {
+            std::fs::copy(entry.path(), scripts.join(entry.file_name()))?;
+        }
+    }
+    write_docs(folder)
+}
+
+/// Docs for AI agents like Claude Code and Codex, so they can edit the stage and its scripts
+fn write_docs(folder: &Path) -> io::Result<()> {
+    std::fs::write(
+        folder.join("AGENTS.md"),
+        format!("{AGENTS_DOCS}\n{}", fixture_docs()),
+    )?;
+    let claude = folder.join("CLAUDE.md");
+    if !claude.exists() {
+        std::fs::write(claude, "@AGENTS.md\n")?;
+    }
+    Ok(())
+}
+
+/// Reference of all supported fixture types
+fn fixture_docs() -> String {
+    let mut docs = String::from("## Fixture types\n");
+    for profile in FixtureType::ALL.map(FixtureType::profile) {
+        let kind = serde_json::to_value(profile.kind).expect("Failed to serialize kind");
+        let r#type = serde_json::to_value(profile.r#type).expect("Failed to serialize type");
+        docs.push_str(&format!(
+            "\n### {}\n\n- `type`: `{}`\n- `kind`: `{}`\n- DMX channels: {}\n",
+            profile.name,
+            r#type.as_str().unwrap_or_default(),
+            kind.as_str().unwrap_or_default(),
+            profile.channels.len()
+        ));
+        let names = |names: Vec<&str>| names.join(", ");
+        if let Some(presets) = profile.presets {
+            docs.push_str(&format!(
+                "- `preset`: {}\n",
+                names(presets.list.iter().map(|preset| preset.name).collect())
+            ));
+        }
+        if let Some(head) = profile.moving_head {
+            docs.push_str(&format!(
+                "- `gobo`: {}\n- `rotating_gobo`: {}\n- `movement`: {}\n",
+                names(head.gobos.iter().map(|gobo| gobo.name).collect()),
+                names(head.rotating_gobos.iter().map(|gobo| gobo.name).collect()),
+                names(
+                    head.movements
+                        .iter()
+                        .map(|movement| movement.name)
+                        .collect()
+                )
+            ));
+        }
+    }
+    docs
+}
+
 impl Stage {
-    pub(crate) fn load(path: &Path, dmx_length: usize) -> Result<Stage, String> {
-        let file = File::open(path).map_err(|error| error.to_string())?;
-        let mut stage: Stage = serde_json::from_reader(io::BufReader::new(file))
-            .map_err(|error| format!("Invalid stage file: {error}"))?;
+    pub(crate) fn parse(json: &str, dmx_length: usize) -> Result<Stage, String> {
+        let mut stage: Stage =
+            serde_json::from_str(json).map_err(|error| format!("Invalid stage file: {error}"))?;
         stage.assign_fixture_ids();
         stage.validate(dmx_length)?;
         Ok(stage)
     }
 
-    pub(crate) fn save(&self, path: &Path) -> io::Result<()> {
-        let file = File::create(path)?;
-        serde_json::to_writer_pretty(file, self).map_err(io::Error::other)
+    pub(crate) fn to_json(&self) -> String {
+        serde_json::to_string_pretty(self).expect("Failed to serialize stage")
     }
 
     /// Give fixtures from stages without (unique) ids sequential ids
@@ -433,6 +766,23 @@ mod tests {
             stage.buttons[0].target,
             Some(ButtonTarget::Group { id: 1 })
         ));
+    }
+
+    #[test]
+    fn picks_closest_color_wheel_slot() {
+        let head = FixtureType::ChauvetIntimidatorHybrid140SR
+            .profile()
+            .moving_head
+            .expect("Should be a moving head");
+        let slot = |color| head.wheel_color(Color::from_u32(color)).value;
+        assert_eq!(slot(0xff0000), 5);
+        assert_eq!(slot(0xffffff), 1);
+        // Cyan has no slot, sky blue is closest
+        assert_eq!(slot(0x00ffff), 17);
+        assert_eq!(
+            FixtureType::ChauvetIntimidatorHybrid140SR.channel_count(),
+            19
+        );
     }
 
     #[test]
