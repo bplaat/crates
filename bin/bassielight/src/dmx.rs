@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 
 use crate::config::{CONFIG, DMX_LENGTH};
 use crate::ipc::{self, IpcMessage, UsbStatus};
-use crate::stage::{Channel, DMX_SWITCHES_LENGTH, FixtureKind, STAGE};
+use crate::stage::{Channel, DMX_SWITCHES_LENGTH, Fixture, FixtureKind, STAGE};
 use crate::{scripts, usb};
 
 // MARK: Color
@@ -303,6 +303,10 @@ impl Clock {
             }
         }
 
+        self.toggle_color(state)
+    }
+
+    fn toggle_color(&self, state: &FixtureState) -> Color {
         let Some(beats) = state.toggle_speed else {
             return state.color;
         };
@@ -389,149 +393,7 @@ pub(crate) fn dmx_thread() {
         // Update DMX data
         dmx.clear();
         dmx.resize(dmx_length, 0);
-        let mut outputs = BTreeMap::new();
-        for fixture in fixtures {
-            let profile = fixture.r#type.profile();
-            let channels = &mut dmx[fixture.addr - 1..][..profile.channels.len()];
-            match profile.kind {
-                FixtureKind::Switch => {
-                    let state = dmx_state.fixture(fixture.id);
-                    let mut switches = Vec::new();
-                    for (value, channel) in channels.iter_mut().zip(profile.channels) {
-                        if *channel == Channel::Switch {
-                            let index = switches.len();
-                            let is_on = dmx_state.mode == Mode::Manual
-                                && (state.switches_toggle.get(index) == Some(&true)
-                                    || state.switches_press.get(index) == Some(&true));
-                            *value = if is_on { 255 } else { 0 };
-                            switches.push(is_on);
-                        }
-                    }
-                    outputs.insert(fixture.id, FixtureOutput::Switch(switches));
-                }
-                FixtureKind::Strobe => {
-                    let state = dmx_state.fixture(fixture.id);
-                    // A strobe has no music program, so it keeps flashing in auto mode
-                    let is_on = state.flash_on || state.flash_press;
-                    let (intensity, speed) = if dmx_state.mode == Mode::Black || !is_on {
-                        (0.0, 0.0)
-                    } else {
-                        (state.flash_intensity, state.flash_speed)
-                    };
-                    for (value, channel) in channels.iter_mut().zip(profile.channels) {
-                        *value = match channel {
-                            Channel::Dimmer => (intensity * 255.0) as u8,
-                            Channel::Speed => (speed * 255.0) as u8,
-                            _ => 0,
-                        };
-                    }
-                    outputs.insert(fixture.id, FixtureOutput::Strobe { intensity, speed });
-                }
-                FixtureKind::Rgb | FixtureKind::MovingHead => {
-                    let state = dmx_state.fixture(fixture.id);
-
-                    // A running built-in preset replaces the color channels, auto mode always runs one
-                    let preset = profile.presets.and_then(|presets| {
-                        let index = match dmx_state.mode {
-                            Mode::Black => None,
-                            Mode::Manual => state.preset,
-                            Mode::Auto => Some(presets.auto),
-                        }?;
-                        Some((presets.channels, presets.list.get(index)?))
-                    });
-                    if let Some((preset_channels, preset)) = preset {
-                        for (value, channel) in channels.iter_mut().zip(preset_channels) {
-                            *value = match channel {
-                                Channel::Preset => preset.value,
-                                Channel::Speed => (state.preset_speed * 255.0) as u8,
-                                _ => 0,
-                            };
-                        }
-                        outputs.insert(fixture.id, FixtureOutput::Rgb(preset.color));
-                        continue;
-                    }
-
-                    let mut color = clock.color(&state);
-                    let is_open = color != Color::BLACK;
-
-                    // Moving heads use the closest color wheel slot and close the shutter for black,
-                    // the wheel keeps the main color then so it doesn't spin while strobing
-                    let head = profile.moving_head;
-                    let wheel = head
-                        .map(|head| head.wheel_color(if is_open { color } else { state.color }));
-                    if let Some(wheel) = wheel
-                        && is_open
-                    {
-                        color = wheel.color;
-                    }
-                    let gobo = head.and_then(|head| head.gobos.get(state.gobo?));
-                    let movement = head
-                        .and_then(|head| head.movements.get(state.movement?))
-                        .map_or(0, |movement| movement.value);
-                    let color_with_intensity = color.apply_intensity(state.intensity);
-
-                    // Fixtures without a dimmer channel get the intensity applied to their color
-                    let rgb = if profile.channels.contains(&Channel::Dimmer) {
-                        color
-                    } else {
-                        color_with_intensity
-                    };
-                    for (value, channel) in channels.iter_mut().zip(profile.channels) {
-                        *value = match (*channel, dmx_state.mode) {
-                            (Channel::Red, Mode::Manual) => rgb.r,
-                            (Channel::Green, Mode::Manual) => rgb.g,
-                            (Channel::Blue, Mode::Manual) => rgb.b,
-                            (Channel::Dimmer, Mode::Manual) => (state.intensity * 255.0) as u8,
-                            (Channel::Music(music), Mode::Auto) => music,
-                            (Channel::ColorWheel, Mode::Manual) => {
-                                wheel.map_or(0, |wheel| wheel.value)
-                            }
-                            (Channel::Gobo, Mode::Manual) => gobo.map_or(0, |gobo| gobo.value),
-                            (Channel::Focus, _) => (state.focus * 255.0) as u8,
-                            (Channel::Movement, Mode::Manual) => movement,
-                            // The fixture moves fast to slow, the slider slow to fast
-                            (Channel::MovementSpeed, _) => {
-                                ((1.0 - state.movement_speed) * 255.0) as u8
-                            }
-                            (Channel::Shutter, Mode::Manual) if is_open => SHUTTER_OPEN,
-                            (Channel::LampOn, _) => LAMP_ON,
-                            // Moving heads cycle colors and gobos and move to the sound
-                            (Channel::ColorWheel, Mode::Auto) => {
-                                head.map_or(0, |head| head.auto_color)
-                            }
-                            (Channel::Gobo, Mode::Auto) => head.map_or(0, |head| head.auto_gobo),
-                            (Channel::Movement, Mode::Auto) => {
-                                head.map_or(0, |head| head.auto_movement)
-                            }
-                            (Channel::Shutter, Mode::Auto) => SHUTTER_OPEN,
-                            (Channel::Dimmer, Mode::Auto) if head.is_some() => 255,
-                            // Without a movement macro moving heads point to the center
-                            (Channel::Pan | Channel::Tilt, _) => 128,
-                            _ => 0,
-                        };
-                    }
-                    let output_color = match dmx_state.mode {
-                        Mode::Black => Some(Color::BLACK),
-                        Mode::Manual => Some(color_with_intensity),
-                        Mode::Auto => None,
-                    };
-                    outputs.insert(
-                        fixture.id,
-                        if head.is_some() {
-                            FixtureOutput::MovingHead {
-                                color: output_color,
-                                gobo: match dmx_state.mode {
-                                    Mode::Manual => gobo.map(|gobo| gobo.shape),
-                                    _ => None,
-                                },
-                            }
-                        } else {
-                            FixtureOutput::Rgb(output_color)
-                        },
-                    );
-                }
-            }
-        }
+        let outputs = render_fixtures(fixtures, &dmx_state, &clock, &mut dmx);
 
         if let Some(FixtureOutput::Rgb(Some(color))) = outputs.values().next() {
             if use_colors {
@@ -563,6 +425,167 @@ pub(crate) fn dmx_thread() {
         }
         sleep(next_frame - now);
     }
+}
+
+/// Render a frame without hardware or IPC so mode transitions can be checked independently.
+fn render_fixtures(
+    fixtures: &[Fixture],
+    dmx_state: &DmxState,
+    clock: &Clock,
+    dmx: &mut [u8],
+) -> BTreeMap<u32, FixtureOutput> {
+    let mut outputs = BTreeMap::new();
+    for fixture in fixtures {
+        let profile = fixture.r#type.profile();
+        let channels = &mut dmx[fixture.addr - 1..][..profile.channels.len()];
+        match profile.kind {
+            FixtureKind::Switch => {
+                let state = dmx_state.fixture(fixture.id);
+                let mut switches = Vec::new();
+                for (value, channel) in channels.iter_mut().zip(profile.channels) {
+                    if *channel == Channel::Switch {
+                        let index = switches.len();
+                        let is_on = dmx_state.mode == Mode::Manual
+                            && (state.switches_toggle.get(index) == Some(&true)
+                                || state.switches_press.get(index) == Some(&true));
+                        *value = if is_on { 255 } else { 0 };
+                        switches.push(is_on);
+                    }
+                }
+                outputs.insert(fixture.id, FixtureOutput::Switch(switches));
+            }
+            FixtureKind::Strobe => {
+                let state = dmx_state.fixture(fixture.id);
+                // A strobe has no music program, so it keeps flashing in auto mode
+                let is_on = state.flash_on || state.flash_press;
+                let (intensity, speed) = if dmx_state.mode == Mode::Black || !is_on {
+                    (0.0, 0.0)
+                } else {
+                    (state.flash_intensity, state.flash_speed)
+                };
+                for (value, channel) in channels.iter_mut().zip(profile.channels) {
+                    *value = match channel {
+                        Channel::Dimmer => (intensity * 255.0) as u8,
+                        Channel::Speed => (speed * 255.0) as u8,
+                        _ => 0,
+                    };
+                }
+                outputs.insert(fixture.id, FixtureOutput::Strobe { intensity, speed });
+            }
+            FixtureKind::Rgb | FixtureKind::MovingHead => {
+                let state = dmx_state.fixture(fixture.id);
+
+                // Built-in presets replace the color channels only in manual mode
+                let preset = profile.presets.and_then(|presets| {
+                    let index = match dmx_state.mode {
+                        Mode::Manual => state.preset,
+                        Mode::Black | Mode::Auto => None,
+                    }?;
+                    Some((presets.channels, presets.list.get(index)?))
+                });
+                if let Some((preset_channels, preset)) = preset {
+                    for (value, channel) in channels.iter_mut().zip(preset_channels) {
+                        *value = match channel {
+                            Channel::Preset => preset.value,
+                            Channel::Speed => (state.preset_speed * 255.0) as u8,
+                            _ => 0,
+                        };
+                    }
+                    outputs.insert(fixture.id, FixtureOutput::Rgb(preset.color));
+                    continue;
+                }
+
+                let mut color = clock.color(&state);
+                let is_open = color != Color::BLACK;
+
+                // Moving heads use the closest color wheel slot and close the shutter for black,
+                // the wheel keeps the current toggle color while the strobe closes the shutter
+                let head = profile.moving_head;
+                let wheel = head.map(|head| {
+                    let color = clock.toggle_color(&state);
+                    head.wheel_color(if color == Color::BLACK {
+                        state.color
+                    } else {
+                        color
+                    })
+                });
+                if let Some(wheel) = wheel
+                    && is_open
+                {
+                    color = wheel.color;
+                }
+                let gobo = head.and_then(|head| head.gobos.get(state.gobo?));
+                let movement = head
+                    .and_then(|head| head.movements.get(state.movement?))
+                    .map_or(0, |movement| movement.value);
+                let color_with_intensity = color.apply_intensity(state.intensity);
+
+                // Fixtures without a dimmer channel get the intensity applied to their color
+                let rgb = if profile.channels.contains(&Channel::Dimmer) {
+                    color
+                } else {
+                    color_with_intensity
+                };
+                for (value, channel) in channels.iter_mut().zip(profile.channels) {
+                    *value = match (*channel, dmx_state.mode) {
+                        (Channel::Red, Mode::Manual) => rgb.r,
+                        (Channel::Green, Mode::Manual) => rgb.g,
+                        (Channel::Blue, Mode::Manual) => rgb.b,
+                        (Channel::Dimmer, Mode::Manual) => (state.intensity * 255.0) as u8,
+                        (Channel::Music(music), Mode::Auto) => music,
+                        (Channel::ColorWheel, Mode::Manual) => wheel.map_or(0, |wheel| wheel.value),
+                        (Channel::Gobo, Mode::Manual) => gobo.map_or(0, |gobo| gobo.value),
+                        (Channel::Focus, _) => (state.focus * 255.0) as u8,
+                        (Channel::Movement, Mode::Manual) => movement,
+                        // The fixture moves fast to slow, the slider slow to fast
+                        (Channel::MovementSpeed, _) => ((1.0 - state.movement_speed) * 255.0) as u8,
+                        (Channel::Shutter, Mode::Manual) if is_open => SHUTTER_OPEN,
+                        (Channel::LampOn, _) => LAMP_ON,
+                        // Moving heads cycle colors and gobos and move to the sound
+                        (Channel::ColorWheel, Mode::Auto) => head.map_or(0, |head| head.auto_color),
+                        (Channel::Gobo, Mode::Auto) => head.map_or(0, |head| head.auto_gobo),
+                        (Channel::Movement, Mode::Auto) => {
+                            head.map_or(0, |head| head.auto_movement)
+                        }
+                        (Channel::Shutter, Mode::Auto) => SHUTTER_OPEN,
+                        (Channel::Dimmer, Mode::Auto) => 255,
+                        // Without a movement macro moving heads point to the center
+                        (Channel::Pan | Channel::Tilt, _) => 128,
+                        _ => 0,
+                    };
+                }
+                let output_color = match dmx_state.mode {
+                    Mode::Black => Some(Color::BLACK),
+                    Mode::Manual => Some(color_with_intensity),
+                    Mode::Auto
+                        if head.is_some()
+                            || profile
+                                .channels
+                                .iter()
+                                .any(|channel| matches!(channel, Channel::Music(_))) =>
+                    {
+                        None
+                    }
+                    Mode::Auto => Some(Color::BLACK),
+                };
+                outputs.insert(
+                    fixture.id,
+                    if head.is_some() {
+                        FixtureOutput::MovingHead {
+                            color: output_color,
+                            gobo: match dmx_state.mode {
+                                Mode::Manual => gobo.map(|gobo| gobo.shape),
+                                _ => None,
+                            },
+                        }
+                    } else {
+                        FixtureOutput::Rgb(output_color)
+                    },
+                );
+            }
+        }
+    }
+    outputs
 }
 
 fn log_connection_event(event: Option<usb::ConnectionEvent>) {
@@ -598,6 +621,7 @@ const fn status_for_error(category: usb::ErrorCategory) -> UsbStatus {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::stage::FixtureType;
 
     const RED: Color = Color { r: 255, g: 0, b: 0 };
     const BLUE: Color = Color { r: 0, g: 0, b: 255 };
@@ -612,6 +636,247 @@ mod tests {
             frame,
             fps: 44.0,
         }
+    }
+
+    fn render_fixture(
+        fixture_type: FixtureType,
+        mode: Mode,
+        fixture_state: FixtureState,
+        clock: Clock,
+    ) -> (Vec<u8>, FixtureOutput) {
+        let fixture = Fixture {
+            id: 1,
+            name: String::new(),
+            r#type: fixture_type,
+            addr: 3,
+            x: 0,
+            y: 0,
+            switches: None,
+        };
+        let state = DmxState {
+            is_running: true,
+            freeze: false,
+            mode,
+            tempo: clock.tempo,
+            fixtures: BTreeMap::from([(1, fixture_state)]),
+            running_scripts: BTreeSet::new(),
+        };
+        let count = fixture_type.channel_count();
+        let mut channels = vec![42; count + 4];
+        let outputs = render_fixtures(&[fixture], &state, &clock, &mut channels);
+        assert_eq!(&channels[..2], &[42; 2]);
+        assert_eq!(&channels[count + 2..], &[42; 2]);
+        (channels[2..count + 2].to_vec(), outputs[&1].clone())
+    }
+
+    #[test]
+    fn rgb_profiles_render_colors_dimming_toggles_and_strobes() {
+        use FixtureType::*;
+        // RGB indices and master dimmer indices from each fixture's DMX chart.
+        for (fixture_type, rgb, dimmer) in [
+            (AmericanDJP56Led, [0, 1, 2], None),
+            (AmericanDJMegaTripar, [0, 1, 2], Some(6)),
+            (AyraCompar10, [2, 3, 4], Some(0)),
+            (AyraCompar20, [2, 3, 4], Some(0)),
+            (JbSystemsTubeled, [1, 2, 3], None),
+        ] {
+            for color in [
+                0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff,
+                0x123456,
+            ] {
+                let color = Color::from_u32(color);
+                for intensity in [0.0, 0.5, 1.0] {
+                    let state = FixtureState {
+                        color,
+                        intensity,
+                        ..FixtureState::DEFAULT
+                    };
+                    let (channels, output) =
+                        render_fixture(fixture_type, Mode::Manual, state, clock(0.0, 0));
+                    let mut expected = vec![0; fixture_type.channel_count()];
+                    let rendered = color.apply_intensity(intensity);
+                    let channel_color = if dimmer.is_some() { color } else { rendered };
+                    for (index, value) in
+                        rgb.into_iter()
+                            .zip([channel_color.r, channel_color.g, channel_color.b])
+                    {
+                        expected[index] = value;
+                    }
+                    if let Some(index) = dimmer {
+                        expected[index] = (intensity * 255.0) as u8;
+                    }
+                    assert_eq!(channels, expected, "{fixture_type:?}, {color}, {intensity}");
+                    assert_eq!(output, FixtureOutput::Rgb(Some(rendered)));
+                }
+            }
+            let state = FixtureState {
+                color: RED,
+                toggle_color: BLUE,
+                toggle_speed: Some(1.0),
+                strobe_speed: Some(0.25),
+                ..FixtureState::DEFAULT
+            };
+            for (beat, frame, color) in [(0.5, 0, RED), (1.5, 0, BLUE), (1.5, 3, Color::BLACK)] {
+                let (channels, output) =
+                    render_fixture(fixture_type, Mode::Manual, state, clock(beat, frame));
+                assert_eq!(
+                    rgb.map(|index| channels[index]),
+                    [color.r, color.g, color.b]
+                );
+                assert_eq!(output, FixtureOutput::Rgb(Some(color)));
+            }
+        }
+    }
+
+    #[test]
+    fn rgb_auto_and_blackout_match_fixture_dmx_charts() {
+        use FixtureType::*;
+        for (fixture_type, expected) in [
+            (AmericanDJP56Led, vec![0, 0, 0, 0, 0, 224]),
+            (AmericanDJMegaTripar, vec![0, 0, 0, 0, 255, 240, 255]),
+            (AyraCompar10, vec![255, 0, 0, 0, 0, 0, 0, 255]),
+            (AyraCompar20, vec![255, 0, 0, 0, 0, 255]),
+            (JbSystemsTubeled, vec![0; 4]),
+        ] {
+            let state = FixtureState {
+                color: RED,
+                intensity: 0.0,
+                preset: Some(33),
+                ..FixtureState::DEFAULT
+            };
+            let (channels, _) = render_fixture(fixture_type, Mode::Auto, state, clock(0.0, 0));
+            assert_eq!(channels, expected, "{fixture_type:?}");
+            let (channels, output) =
+                render_fixture(fixture_type, Mode::Black, state, clock(0.0, 0));
+            assert_eq!(
+                channels,
+                vec![0; fixture_type.channel_count()],
+                "{fixture_type:?}"
+            );
+            assert_eq!(output, FixtureOutput::Rgb(Some(Color::BLACK)));
+        }
+    }
+
+    #[test]
+    fn moving_head_holds_toggle_color_during_strobe_blackout() {
+        let state = FixtureState {
+            color: RED,
+            toggle_color: Color::from_u32(0x00ff00),
+            toggle_speed: Some(1.0),
+            strobe_speed: Some(0.25),
+            intensity: 0.5,
+            ..FixtureState::DEFAULT
+        };
+        let (on, _) = render_fixture(
+            FixtureType::ChauvetIntimidatorBeam140SR,
+            Mode::Manual,
+            state,
+            clock(1.5, 0),
+        );
+        let (off, output) = render_fixture(
+            FixtureType::ChauvetIntimidatorBeam140SR,
+            Mode::Manual,
+            state,
+            clock(1.5, 3),
+        );
+        assert_eq!(on, [128, 0, 128, 0, 127, 17, 0, 0, 0, 127, 255, 0, 90, 0]);
+        assert_eq!(off[5], on[5]);
+        assert_eq!(off[10], 0);
+        assert_eq!(
+            output,
+            FixtureOutput::MovingHead {
+                color: Some(Color::BLACK),
+                gobo: None
+            }
+        );
+        let (auto, _) = render_fixture(
+            FixtureType::ChauvetIntimidatorBeam140SR,
+            Mode::Auto,
+            state,
+            clock(1.5, 3),
+        );
+        assert_eq!(
+            auto,
+            [128, 0, 128, 0, 127, 160, 160, 0, 0, 255, 255, 0, 90, 143]
+        );
+        let (black, _) = render_fixture(
+            FixtureType::ChauvetIntimidatorBeam140SR,
+            Mode::Black,
+            state,
+            clock(1.5, 0),
+        );
+        assert_eq!(black[9], 0);
+        assert_eq!(black[10], 0);
+    }
+
+    #[test]
+    fn auto_mode_lights_music_fixtures_and_blacks_out_tubes() {
+        let clock = clock(0.0, 0);
+        let fixtures = [FixtureType::AyraCompar10, FixtureType::JbSystemsTubeled]
+            .into_iter()
+            .enumerate()
+            .map(|(index, r#type)| Fixture {
+                id: index as u32 + 1,
+                name: String::new(),
+                r#type,
+                addr: index * 8 + 1,
+                x: 0,
+                y: 0,
+                switches: None,
+            })
+            .collect::<Vec<_>>();
+        let mut state = DmxState {
+            is_running: true,
+            freeze: false,
+            mode: Mode::Auto,
+            tempo: clock.tempo,
+            fixtures: BTreeMap::from([
+                (
+                    1,
+                    FixtureState {
+                        intensity: 0.0,
+                        ..FixtureState::DEFAULT
+                    },
+                ),
+                (
+                    2,
+                    FixtureState {
+                        color: RED,
+                        preset: Some(33),
+                        ..FixtureState::DEFAULT
+                    },
+                ),
+            ]),
+            running_scripts: BTreeSet::new(),
+        };
+        let mut channels = [0; 12];
+        let outputs = render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(&channels[..8], &[255, 0, 0, 0, 0, 0, 0, 255]);
+        assert_eq!(&channels[8..], &[0; 4]);
+        assert_eq!(outputs[&1], FixtureOutput::Rgb(None));
+        assert_eq!(outputs[&2], FixtureOutput::Rgb(Some(Color::BLACK)));
+
+        // The selected tube chase is preserved for returning to manual mode.
+        state.mode = Mode::Manual;
+        render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(&channels[8..], &[198, 127, 0, 0]);
+
+        // Direct RGB must clear the program selector and replace the speed channel with red.
+        state.fixtures.get_mut(&2).expect("Tube state missing").preset = None;
+        render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(&channels[8..], &[0, 255, 0, 0]);
+        state.fixtures.get_mut(&2).expect("Tube state missing").preset = Some(33);
+        render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(&channels[8..], &[198, 127, 0, 0]);
+
+        // Returning from a running chase to auto must clear every tube channel.
+        state.mode = Mode::Auto;
+        render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(&channels[8..], &[0; 4]);
+
+        state.mode = Mode::Black;
+        render_fixtures(&fixtures, &state, &clock, &mut channels);
+        assert_eq!(channels, [0; 12]);
     }
 
     #[test]

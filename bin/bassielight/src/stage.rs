@@ -54,7 +54,7 @@ pub(crate) enum Channel {
     Green,
     Blue,
     Dimmer,
-    /// Value that starts the built-in music program
+    /// Value used by the built-in music program
     Music(u8),
     Switch,
     /// Strobe flash or preset speed, slow to fast
@@ -234,9 +234,6 @@ pub(crate) struct Presets {
     /// Channel layout while a preset runs
     pub channels: &'static [Channel],
     pub list: &'static [Preset],
-    /// Preset that runs in auto mode
-    #[serde(skip)]
-    pub auto: usize,
 }
 
 #[derive(Debug, Serialize)]
@@ -313,8 +310,6 @@ const TUBELED_PRESETS: Presets = Presets {
         preset("Rainbow chase 4", 216),
         preset("Rainbow chase 8", 222),
     ],
-    // The controller has no sound mode, run a rainbow chase instead
-    auto: 33,
 };
 
 impl FixtureType {
@@ -346,7 +341,8 @@ impl FixtureType {
                 name: "American DJ Mega Tripar",
                 kind: FixtureKind::Rgb,
                 size: [225, 220],
-                channels: &[Red, Green, Blue, Unused, Unused, Music(240), Dimmer],
+                // In sound mode channel 5 controls microphone sensitivity, not strobing
+                channels: &[Red, Green, Blue, Unused, Music(255), Music(240), Dimmer],
                 presets: None,
                 moving_head: None,
             },
@@ -355,7 +351,8 @@ impl FixtureType {
                 name: "Ayra Compar 10",
                 kind: FixtureKind::Rgb,
                 size: [170, 170],
-                channels: &[Dimmer, Unused, Red, Green, Blue, Unused, Unused, Music(221)],
+                // 8-channel mode, with full microphone sensitivity in sound mode
+                channels: &[Dimmer, Unused, Red, Green, Blue, Unused, Unused, Music(255)],
                 presets: None,
                 moving_head: None,
             },
@@ -365,7 +362,7 @@ impl FixtureType {
                 kind: FixtureKind::Rgb,
                 // Not in the specs, estimated
                 size: [250, 250],
-                channels: &[Dimmer, Unused, Red, Green, Blue, Music(221)],
+                channels: &[Dimmer, Unused, Red, Green, Blue, Music(255)],
                 presets: None,
                 moving_head: None,
             },
@@ -721,7 +718,7 @@ mod tests {
             .expect("Failed to serialize fixture profile");
         assert_eq!(
             json,
-            r#"{"type":"ayra_compar_20","name":"Ayra Compar 20","kind":"rgb","size":[250,250],"channels":[{"type":"dimmer"},{"type":"unused"},{"type":"red"},{"type":"green"},{"type":"blue"},{"type":"music","value":221}]}"#
+            r#"{"type":"ayra_compar_20","name":"Ayra Compar 20","kind":"rgb","size":[250,250],"channels":[{"type":"dimmer"},{"type":"unused"},{"type":"red"},{"type":"green"},{"type":"blue"},{"type":"music","value":255}]}"#
         );
         assert_eq!(FixtureType::ShowtecMultidimMKII.channel_count(), 4);
         assert_eq!(

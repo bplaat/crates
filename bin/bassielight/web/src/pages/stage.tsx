@@ -7,6 +7,7 @@
 
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { IpcContext } from '../app.tsx';
+import { ButtonList } from '../components/button-list.tsx';
 import { GoboButtons } from '../components/gobo.tsx';
 import {
     AccountIcon,
@@ -112,7 +113,7 @@ function applyFixtureProp(state: FixtureState, prop: FixtureProp): FixtureState 
 
 const KIND_LABELS: Record<ControlKind, string> = {
     rgb: 'RGB',
-    preset: 'Presets',
+    preset: 'Chases',
     movingHead: 'Moving heads',
     switch: 'Switches',
     strobe: 'Strobes',
@@ -175,9 +176,9 @@ function RgbControls({ state, setProp }: { state: FixtureState; setProp: (prop: 
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        class={`swatch ${color === state.color ? 'is-selected' : ''}`}
+                        class={`swatch ${state.preset === null && color === state.color ? 'is-selected' : ''}`}
                         style={{ backgroundColor: colorToHex(color) }}
-                        onClick={() => setProp({ color })}
+                        onClick={() => setProp({ preset: null, color })}
                     />
                 ))}
             </div>
@@ -187,9 +188,9 @@ function RgbControls({ state, setProp }: { state: FixtureState; setProp: (prop: 
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        class={`swatch ${color === state.toggleColor ? 'is-selected' : ''}`}
+                        class={`swatch ${state.preset === null && state.toggleSpeed !== null && color === state.toggleColor ? 'is-selected' : ''}`}
                         style={{ backgroundColor: colorToHex(color) }}
-                        onClick={() => setProp({ toggleColor: color })}
+                        onClick={() => setProp({ preset: null, toggleColor: color, toggleSpeed: 1 })}
                     />
                 ))}
             </div>
@@ -309,23 +310,17 @@ function PresetControls({
 }) {
     return (
         <>
-            <h2 class="title">Preset</h2>
-            <select
-                class="input"
-                value={state.preset ?? ''}
-                onChange={(e) =>
-                    setProp({ preset: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })
-                }
-            >
-                <option value="">Own color</option>
-                {presets.list.map((preset, index) => (
-                    <option key={index} value={index}>
-                        {preset.name}
-                    </option>
-                ))}
-            </select>
+            <h2 class="title">Chase</h2>
+            <ButtonList
+                label="Chase"
+                value={state.preset}
+                options={presets.list.flatMap((preset, index) =>
+                    preset.color === null ? [{ value: index, label: preset.name }] : [],
+                )}
+                onChange={(preset) => setProp({ preset })}
+            />
 
-            <h2 class="title">Preset Speed</h2>
+            <h2 class="title">Chase Speed</h2>
             <Slider value={state.presetSpeed} onChange={(presetSpeed) => setProp({ presetSpeed })} />
         </>
     );
@@ -349,20 +344,15 @@ function MovingHeadControls({
             <Slider value={state.focus} onChange={(focus) => setProp({ focus })} />
 
             <h2 class="title">Movement</h2>
-            <select
-                class="input"
-                value={state.movement ?? ''}
-                onChange={(e) =>
-                    setProp({ movement: e.currentTarget.value === '' ? null : Number(e.currentTarget.value) })
-                }
-            >
-                <option value="">Stand still</option>
-                {movingHead.movements.map((movement, index) => (
-                    <option key={index} value={index}>
-                        {movement.name}
-                    </option>
-                ))}
-            </select>
+            <ButtonList<number | null>
+                label="Movement"
+                value={state.movement}
+                options={[
+                    { value: null, label: 'Stand still' },
+                    ...movingHead.movements.map((movement, index) => ({ value: index, label: movement.name })),
+                ]}
+                onChange={(movement) => setProp({ movement })}
+            />
 
             <h2 class="title">Movement Speed</h2>
             <Slider value={state.movementSpeed} onChange={(movementSpeed) => setProp({ movementSpeed })} />
@@ -466,7 +456,10 @@ export function StagePage() {
             const state = fixtureStates[ids[0]] ?? DEFAULT_FIXTURE_STATE;
             const setProp = (prop: FixtureProp) => {
                 applyProp(ids, prop);
-                ipc.send('setFixtureProp', { fixtures: ids, prop });
+                // The IPC protocol accepts one property per message.
+                for (const [key, value] of Object.entries(prop)) {
+                    ipc.send('setFixtureProp', { fixtures: ids, prop: { [key]: value } });
+                }
             };
             const { presets, movingHead } = findProfile(fixtureTypes, fixtures[0].type);
             return { kind, count: fixtures.length, labels: fixtures[0].switches, presets, movingHead, state, setProp };

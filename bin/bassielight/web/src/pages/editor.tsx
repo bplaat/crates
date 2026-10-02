@@ -97,8 +97,13 @@ function NumberField({
                     onChange(newValue);
                 }
             }}
-            onChange={() => onCommit?.()}
-            onBlur={(e) => (e.currentTarget.value = String(value))}
+            onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur();
+            }}
+            onBlur={(e) => {
+                e.currentTarget.value = String(value);
+                onCommit?.();
+            }}
         />
     );
     return (
@@ -127,7 +132,7 @@ function SidebarHeader({ onClose, children }: { onClose: () => void; children: C
     );
 }
 
-/// Button targets in a select are `type:id`, or `script:name`
+/// Button target values are `type:id`, or `script:name`
 const targetValue = (target: ButtonTarget) =>
     target.type === 'script' ? `script:${target.name}` : `${target.type}:${target.id}`;
 

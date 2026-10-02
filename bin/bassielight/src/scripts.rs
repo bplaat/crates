@@ -914,10 +914,9 @@ mod tests {
         let intensity = || DMX_STATE.lock().unwrap().fixture(1).intensity;
 
         let mut engine = Engine::new().expect("Failed to start engine");
-        set_sources(BTreeMap::from([
-            (
-                "blink".to_string(),
-                r##"
+        set_sources(BTreeMap::from([(
+            "blink".to_string(),
+            r##"
                 local par = fixture("Par")
                 par:set({ color = "red", intensity = 1 })
                 wait(1)
@@ -926,10 +925,13 @@ mod tests {
                 wait(4)
                 par:set({ glow = true })
                 "##
-                .to_string(),
-            ),
-        ]));
-        DMX_STATE.lock().unwrap().running_scripts.insert("blink".to_string());
+            .to_string(),
+        )]));
+        DMX_STATE
+            .lock()
+            .unwrap()
+            .running_scripts
+            .insert("blink".to_string());
 
         engine.update(0.0, tempo, &stage);
         assert_eq!(color(), Color::from_u32(0xff0000));
