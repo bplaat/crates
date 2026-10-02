@@ -14,14 +14,16 @@ const UDMX_PRODUCT_ID: u16 = 0x05dc;
 const UDMX_CONFIGURATION: u8 = 1;
 const UDMX_INTERFACE: u8 = 0;
 const UDMX_REQUEST: u8 = 0x02;
-const UDMX_START_CHANNEL: u16 = 0;
 const UDMX_MAX_CHANNELS: usize = 512;
-const TRANSFER_TIMEOUT: Duration = Duration::from_millis(500);
+const TRANSFER_TIMEOUT: Duration = Duration::from_millis(200);
+const KEEPALIVE_INTERVAL: Duration = Duration::from_millis(500);
+// Single-packet writes repeatedly fail on the attached V-USB adapter.
+const MIN_UPDATE_CHANNELS: usize = 16;
 const TRANSFER_ATTEMPTS: usize = 3;
 const RECONNECT_INTERVAL: Duration = Duration::from_millis(500);
 const TRANSIENT_FAILURE_LIMIT: u8 = 3;
 
-trait ControlTransfer {
+pub(crate) trait ControlTransfer {
     fn write_control(
         &self,
         request_type: u8,
@@ -47,8 +49,12 @@ impl ControlTransfer for DeviceHandle<Context> {
     }
 }
 
-fn write_udmx_frame(handle: &impl ControlTransfer, data: &[u8]) -> Result<usize, Error> {
-    if data.is_empty() || data.len() > UDMX_MAX_CHANNELS {
+pub(crate) fn write_udmx_range(
+    handle: &impl ControlTransfer,
+    start: u16,
+    data: &[u8],
+) -> Result<usize, Error> {
+    if data.is_empty() || usize::from(start) + data.len() > UDMX_MAX_CHANNELS {
         return Err(Error::InvalidParam);
     }
     let request_type = rusb::request_type(
@@ -56,15 +62,22 @@ fn write_udmx_frame(handle: &impl ControlTransfer, data: &[u8]) -> Result<usize,
         rusb::RequestType::Vendor,
         rusb::Recipient::Device,
     );
+    let started = Instant::now();
     let mut last_error = Error::Other;
     for _ in 0..TRANSFER_ATTEMPTS {
+        let Some(timeout) = TRANSFER_TIMEOUT.checked_sub(started.elapsed()) else {
+            break;
+        };
+        if timeout.is_zero() {
+            break;
+        }
         match handle.write_control(
             request_type,
             UDMX_REQUEST,
             data.len() as u16,
-            UDMX_START_CHANNEL,
+            start,
             data,
-            TRANSFER_TIMEOUT,
+            timeout,
         ) {
             Ok(transferred) if transferred == data.len() => return Ok(transferred),
             Ok(_) => last_error = Error::Io,
@@ -76,14 +89,14 @@ fn write_udmx_frame(handle: &impl ControlTransfer, data: &[u8]) -> Result<usize,
 }
 
 trait UsbHandle {
-    fn write_frame(&self, data: &[u8]) -> Result<usize, Error>;
+    fn write_range(&self, start: u16, data: &[u8]) -> Result<usize, Error>;
 }
 
 struct NativeHandle(DeviceHandle<Context>);
 
 impl UsbHandle for NativeHandle {
-    fn write_frame(&self, data: &[u8]) -> Result<usize, Error> {
-        write_udmx_frame(&self.0, data)
+    fn write_range(&self, start: u16, data: &[u8]) -> Result<usize, Error> {
+        write_udmx_range(&self.0, start, data)
     }
 }
 
@@ -169,6 +182,8 @@ pub(crate) struct UdmxConnection {
     next_attempt: Instant,
     consecutive_failures: u8,
     last_error: Option<ErrorCategory>,
+    last_frame: Option<[u8; UDMX_MAX_CHANNELS]>,
+    last_send: Instant,
 }
 
 impl UdmxConnection {
@@ -183,6 +198,8 @@ impl UdmxConnection {
             next_attempt: now,
             consecutive_failures: 0,
             last_error: None,
+            last_frame: None,
+            last_send: now,
         }
     }
 
@@ -194,6 +211,7 @@ impl UdmxConnection {
         match self.connector.open() {
             Ok(Some(handle)) => {
                 self.handle = Some(handle);
+                self.last_frame = None;
                 self.consecutive_failures = 0;
                 self.last_error = None;
                 Some(ConnectionEvent::Connected)
@@ -204,7 +222,62 @@ impl UdmxConnection {
     }
 
     pub(crate) fn send(&mut self, now: Instant, data: &[u8]) -> Option<ConnectionEvent> {
-        let result = self.handle.as_ref()?.write_frame(data);
+        let handle = self.handle.as_ref()?;
+        if data.is_empty() || data.len() > UDMX_MAX_CHANNELS {
+            return self.changed_error(Error::InvalidParam);
+        }
+        // Always retain the whole universe, including zeroes beyond the current stage.
+        // The firmware keeps channel values and never shrinks its DMX packet length.
+        let mut frame = [0; UDMX_MAX_CHANNELS];
+        frame[..data.len()].copy_from_slice(data);
+        let ranges = match &self.last_frame {
+            None => std::iter::once(0..UDMX_MAX_CHANNELS).collect(),
+            Some(previous) => {
+                let mut ranges: Vec<std::ops::Range<usize>> = Vec::new();
+                for (index, (old, new)) in previous.iter().zip(&frame).enumerate() {
+                    if old == new {
+                        continue;
+                    }
+                    // Merge nearby changes, but don't spend USB bandwidth on large unchanged gaps.
+                    if let Some(last) = ranges.last_mut()
+                        && index <= last.end + MIN_UPDATE_CHANNELS
+                    {
+                        last.end = index + 1;
+                    } else {
+                        ranges.push(index..index + 1);
+                    }
+                }
+                for range in &mut ranges {
+                    range.end = range
+                        .end
+                        .max(range.start + MIN_UPDATE_CHANNELS)
+                        .min(UDMX_MAX_CHANNELS);
+                    range.start = range.start.min(range.end - MIN_UPDATE_CHANNELS);
+                }
+                if ranges.is_empty() {
+                    if now.saturating_duration_since(self.last_send) < KEEPALIVE_INTERVAL {
+                        return None;
+                    }
+                    ranges.push(0..MIN_UPDATE_CHANNELS);
+                }
+                ranges
+            }
+        };
+        let result = ranges.iter().try_for_each(|range| {
+            match handle.write_range(range.start as u16, &frame[range.clone()]) {
+                Ok(transferred) if transferred == range.len() => Ok(()),
+                Ok(_) => Err(Error::Io),
+                Err(error) => Err(error),
+            }
+        });
+        if result.is_ok() {
+            self.last_frame = Some(frame);
+            self.last_send = now;
+        } else {
+            // A failed/short transfer may have changed part of the firmware buffer.
+            // Resend the complete current frame next time, even if values reverted.
+            self.last_frame = None;
+        }
         match result {
             Ok(_) => {
                 self.consecutive_failures = 0;
@@ -226,6 +299,7 @@ impl UdmxConnection {
 
     fn disconnect(&mut self, now: Instant, category: ErrorCategory) -> Option<ConnectionEvent> {
         self.handle = None;
+        self.last_frame = None;
         self.next_attempt = now + RECONNECT_INTERVAL;
         self.consecutive_failures = 0;
         self.last_error = Some(category);
@@ -329,7 +403,7 @@ mod tests {
     }
 
     impl UsbHandle for FakeHandle {
-        fn write_frame(&self, data: &[u8]) -> Result<usize, Error> {
+        fn write_range(&self, _start: u16, data: &[u8]) -> Result<usize, Error> {
             self.results
                 .borrow_mut()
                 .pop_front()
@@ -392,25 +466,140 @@ mod tests {
         )
     }
 
+    #[derive(Default)]
+    struct DeviceBuffer {
+        channels: Vec<u8>,
+        writes: Vec<(u16, Vec<u8>)>,
+        fail: bool,
+    }
+
+    struct BufferHandle(Rc<RefCell<DeviceBuffer>>);
+
+    impl UsbHandle for BufferHandle {
+        fn write_range(&self, start: u16, data: &[u8]) -> Result<usize, Error> {
+            let mut device = self.0.borrow_mut();
+            device.writes.push((start, data.to_vec()));
+            device.channels.resize(512, 0);
+            let start = usize::from(start);
+            if device.fail {
+                device.fail = false;
+                device.channels[start] = data[0];
+                return Ok(1);
+            }
+            device.channels[start..start + data.len()].copy_from_slice(data);
+            Ok(data.len())
+        }
+    }
+
+    struct BufferConnector(Rc<RefCell<DeviceBuffer>>);
+
+    impl UsbConnector for BufferConnector {
+        fn open(&mut self) -> Result<Option<Box<dyn UsbHandle>>, Error> {
+            Ok(Some(Box::new(BufferHandle(Rc::clone(&self.0)))))
+        }
+    }
+
+    #[test]
+    fn updates_changed_span_clears_removed_channels_and_keeps_static_output_alive() {
+        let now = Instant::now();
+        let device = Rc::new(RefCell::new(DeviceBuffer::default()));
+        let mut connection =
+            UdmxConnection::with_connector(now, Box::new(BufferConnector(Rc::clone(&device))));
+        assert_eq!(connection.poll(now), Some(ConnectionEvent::Connected));
+        let mut frame = [0; 512];
+        frame[400] = 255;
+        connection.send(now, &frame);
+        assert_eq!(device.borrow().writes[0], (0, frame.to_vec()));
+        connection.send(now, &frame);
+        assert_eq!(device.borrow().writes.len(), 1);
+        frame[30..33].copy_from_slice(&[1, 2, 3]);
+        connection.send(now, &frame);
+        assert_eq!(device.borrow().writes[1], (30, frame[30..46].to_vec()));
+        frame[511] = 100;
+        connection.send(now, &frame);
+        assert_eq!(device.borrow().writes[2], (496, frame[496..].to_vec()));
+        connection.send(now, &frame[..64]);
+        assert_eq!(device.borrow().channels[400], 0);
+        assert_eq!(device.borrow().channels[511], 0);
+        let writes = device.borrow().writes.len();
+        connection.send(now + KEEPALIVE_INTERVAL, &frame[..64]);
+        assert_eq!(device.borrow().writes.len(), writes + 1);
+        assert_eq!(
+            device.borrow().writes.last().unwrap(),
+            &(0, frame[..16].to_vec())
+        );
+    }
+
+    #[test]
+    fn partial_transfer_then_reverted_values_force_full_resynchronization() {
+        let now = Instant::now();
+        let device = Rc::new(RefCell::new(DeviceBuffer::default()));
+        let mut connection =
+            UdmxConnection::with_connector(now, Box::new(BufferConnector(Rc::clone(&device))));
+        connection.poll(now);
+        connection.send(now, &[0; 512]);
+        let mut changed = [0; 512];
+        changed[300] = 255;
+        device.borrow_mut().fail = true;
+        assert_eq!(
+            connection.send(now, &changed),
+            Some(ConnectionEvent::Error(ErrorCategory::Other))
+        );
+        assert_eq!(device.borrow().channels[300], 255);
+        assert_eq!(
+            connection.send(now, &[0; 512]),
+            Some(ConnectionEvent::Recovered)
+        );
+        assert_eq!(device.borrow().channels, vec![0; 512]);
+        assert_eq!(device.borrow().writes.last().unwrap().1.len(), 512);
+        connection.disconnect(now, ErrorCategory::NoDevice);
+        connection.poll(now + RECONNECT_INTERVAL);
+        connection.send(now + RECONNECT_INTERVAL, &changed);
+        assert_eq!(
+            device.borrow().writes.last().unwrap(),
+            &(0, changed.to_vec())
+        );
+    }
+
+    #[test]
+    fn channel_range_uses_zero_based_offset_and_rejects_overflow() {
+        let control = RecordingControl(RefCell::new(None));
+        assert_eq!(write_udmx_range(&control, 511, &[17]), Ok(1));
+        let transfer = control.0.borrow().clone().unwrap();
+        assert_eq!(transfer.index, 511);
+        assert_eq!(transfer.value, 1);
+        assert_eq!(transfer.request_type, 0x40);
+        assert_eq!(
+            write_udmx_range(&control, 511, &[17, 18]),
+            Err(Error::InvalidParam)
+        );
+        assert_eq!(
+            write_udmx_range(&control, 512, &[17]),
+            Err(Error::InvalidParam)
+        );
+    }
+
     #[test]
     fn sends_exact_udmx_setup_and_enforces_limit() {
         let control = RecordingControl(RefCell::new(None));
         let data = [1, 2, 3];
-        assert_eq!(write_udmx_frame(&control, &data), Ok(3));
+        assert_eq!(write_udmx_range(&control, 0, &data), Ok(3));
+        let transfer = control.0.borrow().clone().expect("Transfer missing");
         assert_eq!(
-            control.0.borrow().as_ref(),
-            Some(&Transfer {
+            transfer,
+            Transfer {
                 request_type: 0x40,
                 request: 0x02,
                 value: 3,
                 index: 0,
                 data: data.to_vec(),
-                timeout: Duration::from_millis(500),
-            })
+                timeout: transfer.timeout,
+            }
         );
-        assert_eq!(write_udmx_frame(&control, &[]), Err(Error::InvalidParam));
+        assert!(!transfer.timeout.is_zero() && transfer.timeout <= TRANSFER_TIMEOUT);
+        assert_eq!(write_udmx_range(&control, 0, &[]), Err(Error::InvalidParam));
         assert_eq!(
-            write_udmx_frame(&control, &[0; UDMX_MAX_CHANNELS + 1]),
+            write_udmx_range(&control, 0, &[0; UDMX_MAX_CHANNELS + 1]),
             Err(Error::InvalidParam)
         );
     }
@@ -421,7 +610,7 @@ mod tests {
             results: RefCell::new(VecDeque::from([Err(Error::Timeout), Ok(2), Ok(3)])),
             calls: RefCell::new(0),
         };
-        assert_eq!(write_udmx_frame(&control, &[1, 2, 3]), Ok(3));
+        assert_eq!(write_udmx_range(&control, 0, &[1, 2, 3]), Ok(3));
         assert_eq!(*control.calls.borrow(), 3);
     }
 
@@ -431,7 +620,7 @@ mod tests {
             results: RefCell::new(VecDeque::from([Err(Error::Access)])),
             calls: RefCell::new(0),
         };
-        assert_eq!(write_udmx_frame(&control, &[1]), Err(Error::Access));
+        assert_eq!(write_udmx_range(&control, 0, &[1]), Err(Error::Access));
         assert_eq!(*control.calls.borrow(), 1);
     }
 
@@ -477,7 +666,7 @@ mod tests {
         connection.poll(now);
         results.borrow_mut().extend([
             Err(Error::Timeout),
-            Ok(1),
+            Ok(512),
             Err(Error::Timeout),
             Err(Error::Timeout),
             Err(Error::Timeout),
@@ -488,7 +677,7 @@ mod tests {
         );
         assert_eq!(connection.send(now, &[0]), Some(ConnectionEvent::Recovered));
         assert_eq!(
-            connection.send(now, &[0]),
+            connection.send(now, &[1]),
             Some(ConnectionEvent::Error(ErrorCategory::Timeout))
         );
         assert_eq!(connection.send(now, &[0]), None);

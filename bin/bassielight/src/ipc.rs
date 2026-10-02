@@ -46,13 +46,15 @@ pub(crate) fn set_usb_status(status: UsbStatus) {
 }
 
 // MARK: Broadcast
-static BROADCAST_SENDER: LazyLock<Option<mpsc::Sender<String>>> = LazyLock::new(|| {
-    let (sender, receiver) = mpsc::channel::<String>();
+type Broadcast = (Option<IpcConnection>, String);
+
+static BROADCAST_SENDER: LazyLock<Option<mpsc::Sender<Broadcast>>> = LazyLock::new(|| {
+    let (sender, receiver) = mpsc::channel::<Broadcast>();
     std::thread::Builder::new()
         .name("ipc-broadcast".to_string())
         .spawn(move || {
-            for message in receiver {
-                send_to_connections(None, &message);
+            for (sender, message) in receiver {
+                send_to_connections(sender.as_ref(), &message);
             }
         })
         .ok()
@@ -61,9 +63,13 @@ static BROADCAST_SENDER: LazyLock<Option<mpsc::Sender<String>>> = LazyLock::new(
 
 /// Broadcast a message to all connections without blocking the caller on slow clients
 pub(crate) fn broadcast(message: &IpcMessage) {
+    queue_broadcast(None, message);
+}
+
+fn queue_broadcast(sender: Option<IpcConnection>, message: &IpcMessage) {
     if BROADCAST_SENDER
         .as_ref()
-        .is_none_or(|sender| sender.send(message.to_json()).is_err())
+        .is_none_or(|queue| queue.send((sender, message.to_json())).is_err())
     {
         warn!("IPC broadcast thread stopped");
     }
@@ -181,6 +187,10 @@ pub(crate) enum IpcMessage {
     UsbStatusChanged {
         status: UsbStatus,
     },
+    SetFixtureProps {
+        fixtures: Vec<u32>,
+        props: Vec<FixtureProp>,
+    },
     SetFixtureProp {
         fixtures: Vec<u32>,
         prop: FixtureProp,
@@ -233,6 +243,7 @@ pub(crate) struct State {
 // MARK: IpcConnection
 pub(crate) static IPC_CONNECTIONS: Mutex<Vec<IpcConnection>> = Mutex::new(Vec::new());
 
+#[derive(Clone)]
 pub(crate) enum IpcConnection {
     WebviewIpc(Arc<EventLoopProxy<crate::AppEvent>>),
     WebSocket(WebSocket),
@@ -262,7 +273,7 @@ impl IpcConnection {
 
     /// Send a message to all other connections
     pub(crate) fn broadcast(&mut self, message: &IpcMessage) {
-        send_to_connections(Some(self), &message.to_json());
+        queue_broadcast(Some(self.clone()), message);
     }
 }
 
@@ -471,6 +482,21 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             }
         }
 
+        IpcMessage::SetFixtureProps {
+            ref fixtures,
+            ref props,
+        } => {
+            for id in fixtures {
+                let state = dmx_state
+                    .fixtures
+                    .entry(*id)
+                    .or_insert(FixtureState::DEFAULT);
+                for prop in props {
+                    state.apply(*prop);
+                }
+            }
+            connection.broadcast(&message);
+        }
         IpcMessage::SetFixtureProp { ref fixtures, prop } => {
             for id in fixtures {
                 dmx_state
@@ -556,7 +582,37 @@ mod tests {
     }
 
     #[test]
+    fn parses_atomic_fixture_updates() {
+        let message = parse_client_message(
+            r#"{"type":"setFixtureProps","fixtures":[1,2],"props":[{"preset":null},{"toggleColor":16711680},{"toggleSpeed":1}]}"#,
+        );
+        assert!(matches!(
+            message,
+            Ok(IpcMessage::SetFixtureProps { fixtures, props })
+                if fixtures == [1, 2] && props.len() == 3
+        ));
+    }
+
+    #[test]
     fn parses_fixture_prop_messages() {
+        assert!(matches!(
+            parse_client_message(
+                r#"{"type":"setFixtureProp","fixtures":[3],"prop":{"switchOn":true}}"#,
+            ),
+            Ok(IpcMessage::SetFixtureProp {
+                prop: FixtureProp::SwitchOn(true),
+                ..
+            })
+        ));
+        assert!(matches!(
+            parse_client_message(
+                r#"{"type":"setFixtureProp","fixtures":[3],"prop":{"switchAllPress":true}}"#,
+            ),
+            Ok(IpcMessage::SetFixtureProp {
+                prop: FixtureProp::SwitchAllPress(true),
+                ..
+            })
+        ));
         let message = parse_client_message(
             r#"{"type":"setFixtureProp","fixtures":[1,2],"prop":{"toggleSpeed":null}}"#,
         )

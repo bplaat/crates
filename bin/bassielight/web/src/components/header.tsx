@@ -104,14 +104,6 @@ export function Header() {
                 <div class="header-start">
                     {path && (
                         <>
-                            <button
-                                class="icon-button"
-                                title="Save stage (Cmd+S / Ctrl+S)"
-                                disabled={!dirty}
-                                onClick={() => void saveStage(ipc)}
-                            >
-                                <ContentSaveOutlineIcon />
-                            </button>
                             {isApp && (
                                 <>
                                     <button
@@ -128,15 +120,16 @@ export function Header() {
                                     >
                                         <FolderOpenOutlineIcon />
                                     </button>
-                                    <button
-                                        class="icon-button"
-                                        title="Save stage as..."
-                                        onClick={() => ipc.send('saveStageAs')}
-                                    >
-                                        <ContentSaveOutlineIcon />
-                                    </button>
                                 </>
                             )}
+                            <button
+                                class="icon-button"
+                                title="Save stage (Cmd+S / Ctrl+S)"
+                                disabled={!dirty}
+                                onClick={() => void saveStage(ipc)}
+                            >
+                                <ContentSaveOutlineIcon />
+                            </button>
                             <span class="header-filename" title={path}>
                                 {fileName(path)}
                                 {dirty && '*'}

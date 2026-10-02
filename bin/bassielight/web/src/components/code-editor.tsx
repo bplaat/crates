@@ -59,6 +59,8 @@ const PROPS = [
     'movement',
     'movement_speed',
     'switches',
+    'switch_on',
+    'switch_all_press',
     'flash_on',
     'flash_intensity',
     'flash_speed',

@@ -62,6 +62,8 @@ interface FixtureState {
     toggleTween: string;
     toggleSpeed: number | null;
     strobeSpeed: Speed;
+    switchOn: boolean;
+    switchAllPress: boolean;
     switchesToggle: boolean[];
     switchesPress: boolean[];
     flashOn: boolean;
@@ -89,12 +91,14 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     toggleTween: 'direct',
     toggleSpeed: null,
     strobeSpeed: null,
+    switchOn: false,
+    switchAllPress: false,
     switchesToggle: [false, false, false, false],
     switchesPress: [false, false, false, false],
     flashOn: false,
     flashPress: false,
     flashIntensity: 1,
-    flashSpeed: 0.5,
+    flashSpeed: 1,
     preset: null,
     presetSpeed: 0.5,
     gobo: null,
@@ -232,6 +236,29 @@ function SwitchControls({
 }) {
     return (
         <>
+            <div class="buttons is-grid is-two">
+                <button
+                    class={`button is-pill ${state.switchOn ? 'is-selected' : ''}`}
+                    onClick={() => setProp({ switchOn: !state.switchOn })}
+                >
+                    {state.switchOn ? 'On' : 'Off'}
+                </button>
+                <button
+                    class={`button is-pill ${state.switchAllPress ? 'is-selected' : ''}`}
+                    onPointerDown={(event: PointerEvent) => {
+                        (event.currentTarget as HTMLElement).setPointerCapture(event.pointerId);
+                        setProp({ switchAllPress: true });
+                    }}
+                    onPointerUp={(event: PointerEvent) => {
+                        setProp({ switchAllPress: false });
+                        (event.currentTarget as HTMLElement).blur();
+                    }}
+                    onLostPointerCapture={() => setProp({ switchAllPress: false })}
+                >
+                    Press
+                </button>
+            </div>
+
             <h2 class="title">Toggle</h2>
             <div class="buttons is-grid">
                 {labels.map((label, index) => (
@@ -409,8 +436,13 @@ export function StagePage() {
         });
 
     useEffect(() => {
-        const listener = ipc.on('setFixtureProp', ({ fixtures, prop }: any) => applyProp(fixtures, prop));
-        return () => listener.remove();
+        const listeners = [
+            ipc.on('setFixtureProp', ({ fixtures, prop }: any) => applyProp(fixtures, prop)),
+            ipc.on('setFixtureProps', ({ fixtures, props }: any) => {
+                for (const prop of props) applyProp(fixtures, prop);
+            }),
+        ];
+        return () => listeners.forEach((listener) => listener.remove());
     }, []);
     // Freeze the setup while performing, changes to the stage folder are picked up afterwards
     const fixtureOutputs = useDmxOutput(ipc, true);
@@ -454,10 +486,9 @@ export function StagePage() {
             const state = fixtureStates[ids[0]] ?? DEFAULT_FIXTURE_STATE;
             const setProp = (prop: FixtureProp) => {
                 applyProp(ids, prop);
-                // The IPC protocol accepts one property per message.
-                for (const [key, value] of Object.entries(prop)) {
-                    ipc.send('setFixtureProp', { fixtures: ids, prop: { [key]: value } });
-                }
+                const props = Object.entries(prop).map(([key, value]) => ({ [key]: value }));
+                if (props.length === 1) ipc.send('setFixtureProp', { fixtures: ids, prop: props[0] });
+                else ipc.send('setFixtureProps', { fixtures: ids, props });
             };
             const { presets, movingHead } = findProfile(fixtureTypes, fixtures[0].type);
             return { kind, count: fixtures.length, labels: fixtures[0].switches, presets, movingHead, state, setProp };

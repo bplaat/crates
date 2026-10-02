@@ -317,8 +317,8 @@ const fn map_ioreturn(code: KernReturn) -> Error {
         0xe000_02c2 => Error::InvalidParam,
         0xe000_02c5 | 0xe000_02d5 => Error::Busy,
         0xe000_02c7 | 0xe000_02e6 => Error::NotSupported,
-        0xe000_02ca => Error::Io,
-        0xe000_02d6 | 0xe000_02ed => Error::Timeout,
+        0xe000_02ca | 0xe000_02ed => Error::Io,
+        0xe000_02d6 => Error::Timeout,
         0xe000_02e1 | 0xe000_02e8 => Error::Overflow,
         0xe000_02eb => Error::Interrupted,
         0xe000_02f0 => Error::NotFound,
@@ -342,6 +342,7 @@ mod tests {
         assert_eq!(map_ioreturn(0xe000_02c1u32 as i32), Error::Access);
         assert_eq!(map_ioreturn(0xe000_02c5u32 as i32), Error::Busy);
         assert_eq!(map_ioreturn(0xe000_02d6u32 as i32), Error::Timeout);
+        assert_eq!(map_ioreturn(0xe000_02edu32 as i32), Error::Io);
         assert_eq!(map_ioreturn(0xe000_02c7u32 as i32), Error::NotSupported);
         assert_eq!(map_ioreturn(-1), Error::Other);
     }

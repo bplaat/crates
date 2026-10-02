@@ -5,14 +5,12 @@
  */
 
 use std::collections::{BTreeMap, BTreeSet};
-use std::env;
 use std::fmt::{self, Display};
-use std::io::{self, IsTerminal};
 use std::sync::Mutex;
 use std::thread::sleep;
 use std::time::{Duration, Instant};
 
-use log::{info, trace, warn};
+use log::{info, warn};
 use serde::{Deserialize, Serialize};
 
 use crate::config::{CONFIG, DMX_LENGTH};
@@ -111,6 +109,8 @@ pub(crate) struct FixtureState {
     pub toggle_speed: Option<f32>,
     /// Beats per strobe flash
     pub strobe_speed: Option<f32>,
+    pub switch_on: bool,
+    pub switch_all_press: bool,
     pub switches_toggle: [bool; DMX_SWITCHES_LENGTH],
     pub switches_press: [bool; DMX_SWITCHES_LENGTH],
     pub flash_on: bool,
@@ -137,12 +137,14 @@ impl FixtureState {
         toggle_tween: ToggleTween::Direct,
         toggle_speed: None,
         strobe_speed: None,
+        switch_on: false,
+        switch_all_press: false,
         switches_toggle: [false; DMX_SWITCHES_LENGTH],
         switches_press: [false; DMX_SWITCHES_LENGTH],
         flash_on: false,
         flash_press: false,
         flash_intensity: 1.0,
-        flash_speed: 0.5,
+        flash_speed: 1.0,
         preset: None,
         preset_speed: 0.5,
         gobo: None,
@@ -159,6 +161,8 @@ impl FixtureState {
             FixtureProp::ToggleTween(toggle_tween) => self.toggle_tween = toggle_tween,
             FixtureProp::ToggleSpeed(toggle_speed) => self.toggle_speed = toggle_speed,
             FixtureProp::StrobeSpeed(strobe_speed) => self.strobe_speed = strobe_speed,
+            FixtureProp::SwitchOn(on) => self.switch_on = on,
+            FixtureProp::SwitchAllPress(on) => self.switch_all_press = on,
             FixtureProp::SwitchToggle { index, on } => {
                 if index < DMX_SWITCHES_LENGTH {
                     self.switches_toggle[index] = on;
@@ -193,6 +197,8 @@ pub(crate) enum FixtureProp {
     ToggleTween(ToggleTween),
     ToggleSpeed(Option<f32>),
     StrobeSpeed(Option<f32>),
+    SwitchOn(bool),
+    SwitchAllPress(bool),
     SwitchToggle { index: usize, on: bool },
     SwitchPress { index: usize, on: bool },
     FlashOn(bool),
@@ -331,10 +337,10 @@ const LAMP_ON: u8 = 90;
 
 // MARK: DMX Thread
 pub(crate) fn dmx_thread() {
-    let (dmx_length, dmx_fps) = {
+    let dmx_fps = {
         let config = CONFIG.lock().expect("Failed to lock config");
         let config = config.as_ref().expect("Config not loaded");
-        (config.dmx_length, config.dmx_fps)
+        config.dmx_fps
     };
     let frame_interval = Duration::from_secs_f64(1.0 / dmx_fps.max(1) as f64);
     let mut connection = usb::UdmxConnection::new(Instant::now());
@@ -342,9 +348,6 @@ pub(crate) fn dmx_thread() {
     let mut next_frame = Instant::now();
     let mut dmx = Vec::new();
     let mut engine = scripts::Engine::new().expect("Failed to start the script engine");
-    let use_colors = io::stdout().is_terminal()
-        && env::var_os("NO_COLOR").is_none()
-        && env::var_os("CI").is_none();
 
     loop {
         log_connection_event(connection.poll(Instant::now()));
@@ -353,6 +356,8 @@ pub(crate) fn dmx_thread() {
             dmx_state.is_running.then_some(dmx_state.tempo)
         };
         let Some(tempo) = tempo else {
+            // Clear the firmware's retained output when leaving a live page.
+            log_connection_event(connection.send(Instant::now(), &[0; DMX_LENGTH]));
             // FIXME: Create async framework don't do micro sleeps
             sleep(Duration::from_millis(100));
             next_frame = Instant::now();
@@ -360,7 +365,7 @@ pub(crate) fn dmx_thread() {
         };
 
         // Frames are timed by fixed deadlines so send jitter doesn't shift the beat clock
-        let frame_time = next_frame;
+        let frame_time = Instant::now();
         let elapsed = frame_time.saturating_duration_since(tempo.downbeat.unwrap_or(clock_start));
         let clock = Clock {
             tempo,
@@ -381,30 +386,12 @@ pub(crate) fn dmx_thread() {
         engine.update(clock.beat, tempo, &stage);
         let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
 
-        // Only send channels up to the last one used by a fixture to keep transfers short
-        let send_length = fixtures
-            .iter()
-            .map(|f| f.addr - 1 + f.r#type.channel_count())
-            .max()
-            .unwrap_or(dmx_length)
-            .min(dmx_length)
-            .min(DMX_LENGTH);
-
         // Update DMX data
         dmx.clear();
-        dmx.resize(dmx_length, 0);
+        dmx.resize(DMX_LENGTH, 0);
         let outputs = render_fixtures(fixtures, &dmx_state, &clock, &mut dmx);
 
-        if let Some(FixtureOutput::Rgb(Some(color))) = outputs.values().next() {
-            if use_colors {
-                trace!(
-                    "Color: \x1b[38;2;{};{};{}m{color}\x1b[0m",
-                    color.r, color.g, color.b
-                );
-            } else {
-                trace!("Color: {color}");
-            }
-        }
+        log_connection_event(connection.send(Instant::now(), &dmx));
         let mut fixture_outputs = FIXTURE_OUTPUTS
             .lock()
             .expect("Failed to lock fixture outputs");
@@ -416,12 +403,11 @@ pub(crate) fn dmx_thread() {
         }
         drop(fixture_outputs);
 
-        log_connection_event(connection.send(Instant::now(), &dmx[..send_length]));
         next_frame += frame_interval;
         let now = Instant::now();
         if next_frame < now {
             // Fell behind, continue from now instead of sending a burst of frames
-            next_frame = now;
+            next_frame = now + frame_interval;
         }
         sleep(next_frame - now);
     }
@@ -446,7 +432,9 @@ fn render_fixtures(
                     if *channel == Channel::Switch {
                         let index = switches.len();
                         let is_on = dmx_state.mode == Mode::Manual
-                            && (state.switches_toggle.get(index) == Some(&true)
+                            && (state.switch_on
+                                || state.switch_all_press
+                                || state.switches_toggle.get(index) == Some(&true)
                                 || state.switches_press.get(index) == Some(&true));
                         *value = if is_on { 255 } else { 0 };
                         switches.push(is_on);
@@ -625,6 +613,41 @@ mod tests {
 
     const RED: Color = Color { r: 255, g: 0, b: 0 };
     const BLUE: Color = Color { r: 0, g: 0, b: 255 };
+
+    #[test]
+    fn global_switch_controls_preserve_channels_and_respect_blackout() {
+        let mut state = FixtureState::DEFAULT;
+        state.apply(FixtureProp::SwitchToggle { index: 1, on: true });
+        state.apply(FixtureProp::SwitchPress { index: 3, on: true });
+        for prop in [
+            FixtureProp::SwitchOn(true),
+            FixtureProp::SwitchAllPress(true),
+        ] {
+            state.apply(prop);
+            for (mode, expected) in [
+                (Mode::Manual, vec![255; 4]),
+                (Mode::Black, vec![0; 4]),
+                (Mode::Auto, vec![0; 4]),
+            ] {
+                let (channels, output) =
+                    render_fixture(FixtureType::ShowtecMultidimMKII, mode, state, clock(0.0, 0));
+                assert_eq!(channels, expected);
+                assert_eq!(
+                    output,
+                    FixtureOutput::Switch(expected.iter().map(|value| *value != 0).collect())
+                );
+            }
+            state.apply(FixtureProp::SwitchOn(false));
+            state.apply(FixtureProp::SwitchAllPress(false));
+            let (channels, _) = render_fixture(
+                FixtureType::ShowtecMultidimMKII,
+                Mode::Manual,
+                state,
+                clock(0.0, 0),
+            );
+            assert_eq!(channels, [0, 255, 0, 255]);
+        }
+    }
 
     fn clock(beat: f64, frame: u64) -> Clock {
         Clock {

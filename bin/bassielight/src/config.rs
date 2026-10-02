@@ -60,6 +60,9 @@ impl Config {
         if config.dmx_length == 0 || config.dmx_length > DMX_LENGTH {
             panic!("Invalid config.json: DMX length must be between 1 and {DMX_LENGTH}");
         }
+        if !(1..=DMX_FPS).contains(&config.dmx_fps) {
+            panic!("Invalid config.json: DMX FPS must be between 1 and {DMX_FPS}");
+        }
         config
     }
 

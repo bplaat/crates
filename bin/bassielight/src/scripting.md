@@ -84,6 +84,7 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `movement` | movement name or number, `false` to stand still | movingHead |
 | `movement_speed` | 0 to 1 | movingHead |
 | `switches` | list of booleans like `{ true, false, true, false }` | switch |
+| `switch_on`, `switch_all_press` | boolean; turns on all channels, preserving individual settings | switch |
 | `flash_on` | boolean | strobe |
 | `flash_intensity`, `flash_speed` | 0 to 1 | strobe |
 

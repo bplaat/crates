@@ -121,7 +121,7 @@ const COLORS: [(&str, u32); 11] = [
 ];
 
 /// Props that are ignored for fixtures that don't have them
-const PROPS: [&str; 17] = [
+const PROPS: [&str; 19] = [
     "color",
     "toggle_color",
     "intensity",
@@ -135,6 +135,8 @@ const PROPS: [&str; 17] = [
     "movement",
     "movement_speed",
     "switches",
+    "switch_on",
+    "switch_all_press",
     "flash_on",
     "flash_press",
     "flash_intensity",
@@ -270,6 +272,10 @@ fn parse_prop(
         }
         "movement_speed" if head.is_some() => P::MovementSpeed(fraction(value)?),
         "focus" if head.is_some() => P::Focus(fraction(value)?),
+        "switch_on" if profile.kind == FixtureKind::Switch => P::SwitchOn(boolean(value)?),
+        "switch_all_press" if profile.kind == FixtureKind::Switch => {
+            P::SwitchAllPress(boolean(value)?)
+        }
         "switches" if profile.kind == FixtureKind::Switch => {
             let switches = value
                 .as_table()
