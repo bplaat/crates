@@ -69,17 +69,14 @@
     opacity: 0.6;
 }
 
-/* Sidebar */
+/* Sidebar, scrolls as a whole so the create fields follow the list instead of sticking to the bottom */
 .script-sidebar {
     display: flex;
     flex-direction: column;
     gap: 0.5rem;
-    overflow: hidden;
 }
-.script-tree {
-    flex: 1;
-    min-height: 0;
-    overflow-y: auto;
+.script-sidebar > * {
+    flex-shrink: 0;
 }
 .script-tree > * {
     flex-shrink: 0;

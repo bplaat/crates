@@ -4,8 +4,8 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { signal } from '@preact/signals';
-import { useEffect, useState } from 'preact/hooks';
+import { signal, useSignal, type ReadonlySignal } from '@preact/signals';
+import { useEffect } from 'preact/hooks';
 import type { Ipc } from './ipc.ts';
 
 export type Channel =
@@ -204,13 +204,27 @@ export function syncDmxOutput(ipc: Ipc, location: string) {
     $dmxLive.value = live;
 }
 
-/// Subscribe to the fixture outputs for the visualization
-export function useDmxOutput(ipc: Ipc): Record<number, FixtureOutput> {
-    const [outputs, setOutputs] = useState<Record<number, FixtureOutput>>({});
+/// Subscribe to the fixture outputs for the visualization. They change every DMX frame, so they are
+/// applied once per animation frame and kept in a signal that only the visualization reads.
+export function useDmxOutput(ipc: Ipc): ReadonlySignal<Record<number, FixtureOutput>> {
+    const outputs = useSignal<Record<number, FixtureOutput>>({});
     useEffect(() => {
-        const listener = ipc.on('fixtureOutputs', ({ outputs }: any) => setOutputs(outputs));
-        ipc.request('getState').then(({ state }: any) => setOutputs(state.fixtureOutputs));
-        return () => listener.remove();
+        let pending: Record<number, FixtureOutput> = {};
+        let frame = 0;
+        const update = (next: Record<number, FixtureOutput>) => {
+            pending = next;
+            if (frame === 0)
+                frame = requestAnimationFrame(() => {
+                    frame = 0;
+                    outputs.value = pending;
+                });
+        };
+        const listener = ipc.on('fixtureOutputs', ({ outputs }: any) => update(outputs));
+        ipc.request('getState').then(({ state }: any) => update(state.fixtureOutputs));
+        return () => {
+            listener.remove();
+            cancelAnimationFrame(frame);
+        };
     }, []);
     return outputs;
 }

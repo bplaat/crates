@@ -18,7 +18,11 @@
     border-radius: 9999px;
     outline: none;
     cursor: pointer;
-    transition: all 0.15s;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        opacity 0.15s,
+        transform 0.15s;
 }
 .gobo svg {
     display: block;

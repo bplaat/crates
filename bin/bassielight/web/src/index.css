@@ -47,6 +47,9 @@ html {
     -webkit-user-select: none;
     user-select: none;
     -webkit-touch-callout: none;
+    /* No double tap zoom delay and tap flash on tablets */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
     overflow: hidden;
     scrollbar-width: thin;
     scrollbar-color: rgba(255, 255, 255, 0.1) transparent;
@@ -78,6 +81,8 @@ body {
     display: flex;
     flex-direction: column;
     height: 100vh;
+    /* Without the browser toolbars on tablets */
+    height: 100dvh;
 }
 
 a {
@@ -145,7 +150,11 @@ a:focus {
     background-color: var(--color-surface-btn);
     color: var(--color-text);
     cursor: pointer;
-    transition: all 0.15s;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        opacity 0.15s,
+        transform 0.15s;
     outline: none;
 }
 .button:where(:not(.monaco-editor *)):hover,
@@ -186,7 +195,11 @@ a:focus {
     color: var(--color-text);
     opacity: 0.75;
     outline: none;
-    transition: all 0.15s;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        opacity 0.15s,
+        transform 0.15s;
 }
 .icon-button:hover,
 .icon-button:focus-visible {
@@ -350,4 +363,62 @@ a:focus {
     display: flex;
     align-items: center;
     gap: 0.5rem;
+}
+
+/* Touch screens: bigger targets, and no hover styles that stick after a tap and look selected,
+   html raises the specificity over the page stylesheets that load later */
+@media (pointer: coarse) {
+    html .button:where(:not(.monaco-editor *)).is-pill,
+    html .button:where(:not(.monaco-editor *)).is-expanded {
+        height: 3.5rem;
+    }
+    html .icon-button {
+        width: 2.75rem;
+        height: 2.75rem;
+    }
+    html .input:where(:not(.monaco-editor *)) {
+        height: 3rem;
+    }
+    html .checkbox {
+        min-height: 2.75rem;
+        margin-bottom: 0;
+    }
+    html .checkbox input {
+        width: 1.5rem;
+        height: 1.5rem;
+    }
+    html .slider:where(:not(.monaco-editor *)) {
+        height: 0.75rem;
+        border-radius: 0.375rem;
+    }
+    html .slider:where(:not(.monaco-editor *))::-webkit-slider-thumb {
+        width: 2rem;
+        height: 2rem;
+    }
+    html .slider:where(:not(.monaco-editor *))::-moz-range-thumb {
+        width: 2rem;
+        height: 2rem;
+    }
+    html .header-tab {
+        height: 2.5rem;
+    }
+}
+@media (hover: none) {
+    html .button:where(:not(.monaco-editor *)):hover:not(:focus-visible, :active, .is-selected) {
+        background-color: var(--color-surface-btn);
+        border-color: transparent;
+    }
+    html .icon-button:hover:not(:focus-visible) {
+        opacity: 0.75;
+        background-color: transparent;
+    }
+    html .swatch:hover:not(:focus-visible, .is-selected) {
+        border-color: rgba(255, 255, 255, 0.1);
+    }
+    html .gobo:hover:not(:focus-visible, .is-selected) {
+        border-color: transparent;
+    }
+    html .visualization-fixture:hover:not(.is-selected) .visualization-body {
+        stroke: var(--color-surface-active);
+    }
 }

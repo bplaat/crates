@@ -46,7 +46,9 @@
     stroke: var(--color-surface-active);
     stroke-width: 2px;
     stroke-dasharray: 6 4;
-    transition: all 0.15s;
+    transition:
+        fill 0.15s,
+        stroke 0.15s;
 }
 .visualization-group:hover rect {
     fill: rgba(255, 255, 255, 0.06);
@@ -63,7 +65,9 @@
     fill: var(--color-surface-btn);
     stroke: transparent;
     stroke-width: 2px;
-    transition: all 0.15s;
+    transition:
+        fill 0.15s,
+        stroke 0.15s;
 }
 .visualization-button:hover rect {
     fill: var(--color-surface-hover);
@@ -113,8 +117,10 @@
 .visualization-block-icon {
     fill: #fff;
     pointer-events: none;
-    /* Stays readable on a white or yellow fixture */
-    filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.6));
+    /* Stays readable on a white or yellow fixture, an outline is much cheaper to paint than a drop shadow */
+    stroke: rgba(0, 0, 0, 0.6);
+    stroke-width: 1px;
+    paint-order: stroke;
 }
 .visualization-flash {
     fill: #fefce8;
@@ -133,9 +139,9 @@
 }
 
 .visualization-haze {
-    fill: #cbd5e1;
+    /* A soft gradient instead of a blur filter, which is slow to animate */
+    fill: url(#visualization-haze);
     pointer-events: none;
-    filter: blur(4px);
     animation: visualization-haze ease-in-out infinite alternate;
 }
 @keyframes visualization-haze {
@@ -157,17 +163,12 @@
     display: none;
 }
 
-/* Music: RGB fixtures run their own sound active program, like fixtures running a preset */
+/* Music: RGB fixtures run their own sound active program, like fixtures running a preset, the
+   gradient rotates in the SVG itself as animating a hue-rotate filter is slow */
 .visualization-body.is-program,
 .visualization.is-mode-auto .visualization-body.is-rgb {
     fill: url(#visualization-music) !important;
-    animation: visualization-music 4s linear infinite;
 }
 .visualization.is-mode-auto .visualization-glow {
     display: none;
-}
-@keyframes visualization-music {
-    to {
-        filter: hue-rotate(360deg);
-    }
 }

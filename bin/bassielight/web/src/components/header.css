@@ -40,7 +40,11 @@ body.is-bwebview-macos:not(.is-fullscreen) .header {
     font-weight: 500;
     color: var(--color-text);
     opacity: 0.65;
-    transition: all 0.15s;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        opacity 0.15s,
+        transform 0.15s;
     -webkit-user-drag: none;
 }
 .header-tab:hover,

@@ -5,6 +5,7 @@
  */
 
 import { mdiFlash, mdiLightbulbFluorescentTube, mdiPowerSocketDe, mdiSpotlightBeam, mdiWeatherFog } from '@mdi/js';
+import type { ReadonlySignal } from '@preact/signals';
 import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { boundsBox, pointBox, snapDrag, type Box, type Guide } from '../snap.ts';
@@ -73,7 +74,8 @@ export function Visualization({
 }: {
     stage: Stage;
     fixtureTypes: FixtureProfile[];
-    outputs?: Record<number, FixtureOutput>;
+    /// Read here so only the visualization re-renders on every DMX frame
+    outputs?: ReadonlySignal<Record<number, FixtureOutput>>;
     mode?: string;
     selection: Selection;
     onSelect: (selection: Selection) => void;
@@ -90,6 +92,7 @@ export function Visualization({
         delta: { x: number; y: number };
         guides: Guide[];
     } | null>(null);
+    const fixtureOutputs = outputs?.value;
     const isEditor = onFixturesMove !== undefined;
     const { width, height } = stage.room;
     const margin = Math.max(width, height) * 0.08;
@@ -207,7 +210,19 @@ export function Visualization({
                     <stop offset="33%" stop-color="#eab308" />
                     <stop offset="66%" stop-color="#22c55e" />
                     <stop offset="100%" stop-color="#3b82f6" />
+                    <animateTransform
+                        attributeName="gradientTransform"
+                        type="rotate"
+                        from="0 0.5 0.5"
+                        to="360 0.5 0.5"
+                        dur="4s"
+                        repeatCount="indefinite"
+                    />
                 </linearGradient>
+                <radialGradient id="visualization-haze">
+                    <stop offset="40%" stop-color="#cbd5e1" />
+                    <stop offset="100%" stop-color="#cbd5e1" stop-opacity="0" />
+                </radialGradient>
             </defs>
 
             <rect
@@ -270,7 +285,7 @@ export function Visualization({
 
             {fixtures.map((fixture) => {
                 const profile = findProfile(fixtureTypes, fixture.type);
-                const output = outputs?.[fixture.id];
+                const output = fixtureOutputs?.[fixture.id];
                 const size = bodySize(profile);
                 const isSelected = selection?.type === 'fixture' && selection.id === fixture.id;
                 const isDimmed = highlightedIds !== null && !highlightedIds.includes(fixture.id);

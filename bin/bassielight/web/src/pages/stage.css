@@ -12,7 +12,11 @@
     border-radius: 0.5rem;
     border: 2px solid rgba(255, 255, 255, 0.1);
     cursor: pointer;
-    transition: all 0.15s;
+    transition:
+        background-color 0.15s,
+        border-color 0.15s,
+        opacity 0.15s,
+        transform 0.15s;
 }
 .swatch:hover,
 .swatch:focus-visible {

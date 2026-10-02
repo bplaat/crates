@@ -24,16 +24,30 @@ declare global {
 
 export type IpcType = 'ipc' | 'websocket';
 
+type Callback = (data: any) => void;
+
 export class Ipc {
     type: IpcType;
     ws?: WebSocket;
+    /// Callbacks by message type, so each message is parsed once whatever the number of listeners
+    callbacks = new Map<string, Set<Callback>>();
 
     constructor() {
+        const dispatch = (event: MessageEvent) => {
+            const { type, ...data } = JSON.parse(event.data);
+            const callbacks = this.callbacks.get(type);
+            if (!callbacks) return;
+            // Fixture outputs arrive every DMX frame, logging them slows down the page
+            if (import.meta.env.MODE !== 'release' && type !== 'fixtureOutputs') console.debug(`Recv ${event.data}`);
+            for (const callback of [...callbacks]) callback(data);
+        };
         if ('ipc' in window) {
             this.type = 'ipc';
+            window.ipc.addEventListener('message', dispatch);
         } else {
             this.type = 'websocket';
             this.ws = new WebSocket('/ipc');
+            this.ws.addEventListener('message', dispatch);
         }
     }
 
@@ -62,21 +76,14 @@ export class Ipc {
         });
     }
 
-    on(type: string, callback: (data: object) => void) {
-        const listener = (event: MessageEvent) => {
-            const { type: receivedType, ...data } = JSON.parse(event.data);
-            if (receivedType === type) {
-                console.debug(`Recv ${event.data}`);
-                callback(data);
-            }
-        };
-        if (this.type === 'ipc') window.ipc.addEventListener('message', listener);
-        if (this.type === 'websocket') this.ws!.addEventListener('message', listener);
+    on(type: string, callback: Callback) {
+        let callbacks = this.callbacks.get(type);
+        if (!callbacks) this.callbacks.set(type, (callbacks = new Set()));
+        // Wrap so the same function can be registered more than once
+        const listener: Callback = (data) => callback(data);
+        callbacks.add(listener);
         return {
-            remove: () => {
-                if (this.type === 'ipc') window.ipc.removeEventListener('message', listener);
-                if (this.type === 'websocket') this.ws!.removeEventListener('message', listener);
-            },
+            remove: () => void callbacks.delete(listener),
         };
     }
 
