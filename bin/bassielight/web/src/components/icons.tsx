@@ -32,6 +32,7 @@ import {
     mdiSpotlightBeam,
     mdiSquareEditOutline,
     mdiStop,
+    mdiWeatherFog,
 } from '@mdi/js';
 import type { ControlKind } from '../stage.ts';
 
@@ -71,6 +72,7 @@ export const ScriptTextOutlineIcon = () => <Icon path={mdiScriptTextOutline} />;
 export const SpotlightBeamIcon = () => <Icon path={mdiSpotlightBeam} />;
 export const StopIcon = () => <Icon path={mdiStop} />;
 export const SquareEditOutlineIcon = () => <Icon path={mdiSquareEditOutline} />;
+export const WeatherFogIcon = () => <Icon path={mdiWeatherFog} />;
 
 const KIND_ICONS: Record<ControlKind, () => preact.JSX.Element> = {
     rgb: LightbulbIcon,
@@ -78,6 +80,7 @@ const KIND_ICONS: Record<ControlKind, () => preact.JSX.Element> = {
     strobe: FlashIcon,
     preset: PlaylistPlayIcon,
     movingHead: SpotlightBeamIcon,
+    haze: WeatherFogIcon,
 };
 
 export function KindIcon({ kind }: { kind: ControlKind }) {

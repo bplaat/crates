@@ -27,11 +27,13 @@ export type Channel =
               | 'movementSpeed'
               | 'shutter'
               | 'lampOn'
+              | 'haze'
+              | 'fan'
               | 'unused';
       }
     | { type: 'music'; value: number };
 
-export type FixtureKind = 'rgb' | 'switch' | 'strobe' | 'movingHead';
+export type FixtureKind = 'rgb' | 'switch' | 'strobe' | 'movingHead' | 'haze';
 
 /// Groups of controls in the stage sidebar, a fixture can have more than one
 export type ControlKind = FixtureKind | 'preset';
@@ -66,7 +68,8 @@ export type FixtureOutput =
     | { rgb: number | null }
     | { movingHead: { color: number | null; gobo: string | null } }
     | { switch: boolean[] }
-    | { strobe: { intensity: number; speed: number } };
+    | { strobe: { intensity: number; speed: number } }
+    | { haze: { on: boolean; volume: number; fan: number } };
 
 export interface Fixture {
     id: number;

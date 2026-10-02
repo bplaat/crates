@@ -64,6 +64,9 @@ const PROPS = [
     'flash_on',
     'flash_intensity',
     'flash_speed',
+    'haze_on',
+    'haze_volume',
+    'fan_speed',
 ];
 
 monaco.languages.registerCompletionItemProvider('lua', {

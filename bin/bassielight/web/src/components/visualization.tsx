@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-import { mdiFlash, mdiLightbulbFluorescentTube, mdiPowerSocketDe, mdiSpotlightBeam } from '@mdi/js';
+import { mdiFlash, mdiLightbulbFluorescentTube, mdiPowerSocketDe, mdiSpotlightBeam, mdiWeatherFog } from '@mdi/js';
 import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { boundsBox, pointBox, snapDrag, type Box, type Guide } from '../snap.ts';
@@ -28,13 +28,18 @@ import './visualization.css';
 /// Snap distance in screen pixels
 const SNAP_DISTANCE = 8;
 const SWITCHES_PER_ROW = 4;
-/// Switch packs, strobes and tubes are drawn as the same easy to see and click block
+/// Switch packs, strobes, hazers and tubes are drawn as the same easy to see and click block
 const BLOCK_SIZE: Size = { width: 69, height: 37 };
+
+/// Pars with a front this close to square are round
+const ROUND_ASPECT_TOLERANCE = 0.1;
 
 /// Round pars are drawn at real size, other fixtures as a block
 function bodySize(profile: FixtureProfile): Size {
     const [width, height] = profile.size;
-    return profile.kind === 'rgb' && width === height ? { width: width / 10, height: height / 10 } : BLOCK_SIZE;
+    const diameter = Math.max(width, height);
+    const isRound = profile.kind === 'rgb' && Math.abs(width - height) <= diameter * ROUND_ASPECT_TOLERANCE;
+    return isRound ? { width: diameter / 10, height: diameter / 10 } : BLOCK_SIZE;
 }
 
 function buttonBox(button: Button): Box {
@@ -304,6 +309,9 @@ export function Visualization({
                                 size={size}
                             />
                         )}
+                        {profile.kind === 'haze' && (
+                            <HazeShape output={output && 'haze' in output ? output.haze : undefined} size={size} />
+                        )}
                         <text y={size.height / 2 + px(16)} text-anchor="middle">
                             {fixture.name}
                         </text>
@@ -448,6 +456,26 @@ function StrobeShape({ output, size }: { output?: { intensity: number; speed: nu
                 />
             )}
             <BlockIcon path={mdiFlash} size={size} />
+        </>
+    );
+}
+
+/// A cloud around the hazer that grows with its volume, it drifts faster with the fan
+function HazeShape({ output, size }: { output?: { on: boolean; volume: number; fan: number }; size: Size }) {
+    return (
+        <>
+            {output?.on && (
+                <rect
+                    class="visualization-haze"
+                    {...blockRect({
+                        width: size.width + size.height * (1.2 + output.volume * 1.2),
+                        height: size.height * (2.2 + output.volume * 1.2),
+                    })}
+                    style={{ animationDuration: `${4 - output.fan * 3}s` }}
+                />
+            )}
+            <rect class="visualization-body" {...blockRect(size)} />
+            <BlockIcon path={mdiWeatherFog} size={size} />
         </>
     );
 }

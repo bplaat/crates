@@ -249,7 +249,7 @@ const COLORS: [(&str, u32); 11] = [
 ];
 
 /// Props that are ignored for fixtures that don't have them
-const PROPS: [&str; 19] = [
+const PROPS: [&str; 23] = [
     "color",
     "toggle_color",
     "intensity",
@@ -269,6 +269,10 @@ const PROPS: [&str; 19] = [
     "flash_press",
     "flash_intensity",
     "flash_speed",
+    "haze_on",
+    "haze_press",
+    "haze_volume",
+    "fan_speed",
 ];
 
 fn error(message: impl Into<String>) -> mlua::Error {
@@ -370,6 +374,7 @@ fn parse_prop(
     use FixtureProp as P;
     let colored = matches!(profile.kind, FixtureKind::Rgb | FixtureKind::MovingHead);
     let strobe = profile.kind == FixtureKind::Strobe;
+    let haze = profile.kind == FixtureKind::Haze;
     let presets = profile.presets;
     let head = profile.moving_head;
     let prop = match key {
@@ -418,6 +423,10 @@ fn parse_prop(
         "flash_press" if strobe => P::FlashPress(boolean(value)?),
         "flash_intensity" if strobe => P::FlashIntensity(fraction(value)?),
         "flash_speed" if strobe => P::FlashSpeed(fraction(value)?),
+        "haze_on" if haze => P::HazeOn(boolean(value)?),
+        "haze_press" if haze => P::HazePress(boolean(value)?),
+        "haze_volume" if haze => P::HazeVolume(fraction(value)?),
+        "fan_speed" if haze => P::FanSpeed(fraction(value)?),
         _ if PROPS.contains(&key) => return Ok(Vec::new()),
         _ => return Err(error(format!("Unknown prop {key}"))),
     };
@@ -480,6 +489,8 @@ enum TweenField {
     Intensity,
     FlashIntensity,
     FlashSpeed,
+    HazeVolume,
+    FanSpeed,
     PresetSpeed,
     MovementSpeed,
     Focus,
@@ -500,6 +511,8 @@ impl TweenField {
             FixtureProp::Intensity(value) => (TweenField::Intensity, Number(value)),
             FixtureProp::FlashIntensity(value) => (TweenField::FlashIntensity, Number(value)),
             FixtureProp::FlashSpeed(value) => (TweenField::FlashSpeed, Number(value)),
+            FixtureProp::HazeVolume(value) => (TweenField::HazeVolume, Number(value)),
+            FixtureProp::FanSpeed(value) => (TweenField::FanSpeed, Number(value)),
             FixtureProp::PresetSpeed(value) => (TweenField::PresetSpeed, Number(value)),
             FixtureProp::MovementSpeed(value) => (TweenField::MovementSpeed, Number(value)),
             FixtureProp::Focus(value) => (TweenField::Focus, Number(value)),
@@ -514,6 +527,8 @@ impl TweenField {
             TweenField::Intensity => TweenValue::Number(state.intensity),
             TweenField::FlashIntensity => TweenValue::Number(state.flash_intensity),
             TweenField::FlashSpeed => TweenValue::Number(state.flash_speed),
+            TweenField::HazeVolume => TweenValue::Number(state.haze_volume),
+            TweenField::FanSpeed => TweenValue::Number(state.fan_speed),
             TweenField::PresetSpeed => TweenValue::Number(state.preset_speed),
             TweenField::MovementSpeed => TweenValue::Number(state.movement_speed),
             TweenField::Focus => TweenValue::Number(state.focus),
@@ -529,6 +544,8 @@ impl TweenField {
                 FixtureProp::FlashIntensity(value)
             }
             (TweenField::FlashSpeed, TweenValue::Number(value)) => FixtureProp::FlashSpeed(value),
+            (TweenField::HazeVolume, TweenValue::Number(value)) => FixtureProp::HazeVolume(value),
+            (TweenField::FanSpeed, TweenValue::Number(value)) => FixtureProp::FanSpeed(value),
             (TweenField::PresetSpeed, TweenValue::Number(value)) => FixtureProp::PresetSpeed(value),
             (TweenField::MovementSpeed, TweenValue::Number(value)) => {
                 FixtureProp::MovementSpeed(value)

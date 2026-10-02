@@ -49,6 +49,7 @@ tabs when there are no unsaved edits. On the stage tab the setup is frozen until
     - Controls its connected array of [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html) tubes as one fixture
 - [Chauvet Intimidator Beam 140SR](https://www.chauvetdj.com/wp-content/uploads/2016/09/Intimidator_Beam_140SR_UM_Rev5_WO.pdf)
     - 14 channel mode
+- [Chauvet Amhaze Stadium](https://www.manualslib.com/manual/1299932/Chauvet-Amhaze-Stadium.html)
 
 ## Installation
 

@@ -132,6 +132,21 @@
     }
 }
 
+.visualization-haze {
+    fill: #cbd5e1;
+    pointer-events: none;
+    filter: blur(4px);
+    animation: visualization-haze ease-in-out infinite alternate;
+}
+@keyframes visualization-haze {
+    from {
+        opacity: 0.15;
+    }
+    to {
+        opacity: 0.35;
+    }
+}
+
 /* Blackout: everything is off, so fixtures are dimmed instead of drawn black */
 .visualization.is-mode-black .visualization-body {
     fill: var(--color-surface-btn) !important;

@@ -343,6 +343,9 @@ a:focus {
 .kind-icon.is-movingHead {
     color: #fb923c;
 }
+.kind-icon.is-haze {
+    color: #94a3b8;
+}
 .title:where(:not(.monaco-editor *)).has-icon {
     display: flex;
     align-items: center;

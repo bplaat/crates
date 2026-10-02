@@ -77,7 +77,7 @@ A selection is a list of fixtures, loop over it with `ipairs` and get its size w
 - `selection:filter(function(fixture) return true end)`: new selection of the fixtures the function accepts
 - `selection:sorted(field)`: new selection sorted by `"x"`, `"y"`, `"name"` or `"id"`
 
-A fixture has the fields `id`, `name`, `type`, `kind` (`rgb`, `switch`, `strobe` or `movingHead`) and its position
+A fixture has the fields `id`, `name`, `type`, `kind` (`rgb`, `switch`, `strobe`, `movingHead` or `haze`) and its position
 `x` and `y`, with the methods `fixture:set(props)`, `fixture:tween(props, beats)` and `fixture:get(prop)`.
 
 ### Props
@@ -100,6 +100,8 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `switch_on`, `switch_all_press` | boolean; turns on all channels, preserving individual settings | switch |
 | `flash_on` | boolean | strobe |
 | `flash_intensity`, `flash_speed` | 0 to 1 | strobe |
+| `haze_on` | boolean; hazers run in every mode | haze |
+| `haze_volume`, `fan_speed` | 0 to 1 | haze |
 
 Colors are a name (`black`, `white`, `red`, `green`, `blue`, `yellow`, `magenta`, `cyan`, `orange`, `purple`,
 `pink`), a `"#rrggbb"` string or a number like `0xff8000`. Moving heads use the closest color of their color wheel.

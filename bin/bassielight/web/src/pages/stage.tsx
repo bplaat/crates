@@ -77,6 +77,10 @@ interface FixtureState {
     focus: number;
     movement: number | null;
     movementSpeed: number;
+    hazeOn: boolean;
+    hazePress: boolean;
+    hazeVolume: number;
+    fanSpeed: number;
 }
 
 type SwitchChange = { index: number; on: boolean };
@@ -106,6 +110,10 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     focus: 0,
     movement: null,
     movementSpeed: 0.5,
+    hazeOn: false,
+    hazePress: false,
+    hazeVolume: 0.5,
+    fanSpeed: 0.5,
 };
 
 function applyFixtureProp(state: FixtureState, prop: FixtureProp): FixtureState {
@@ -122,6 +130,7 @@ const KIND_LABELS: Record<ControlKind, string> = {
     movingHead: 'Moving heads',
     switch: 'Switches',
     strobe: 'Strobes',
+    haze: 'Hazers',
 };
 
 function useIpcState(key: string): [any, (value: any, isUserInitiated?: boolean) => void] {
@@ -323,6 +332,38 @@ function StrobeControls({ state, setProp }: { state: FixtureState; setProp: (pro
 
             <h2 class="title">Flash Speed</h2>
             <Slider value={state.flashSpeed} onChange={(flashSpeed) => setProp({ flashSpeed })} />
+        </>
+    );
+}
+
+function HazeControls({ state, setProp }: { state: FixtureState; setProp: (prop: FixtureProp) => void }) {
+    return (
+        <>
+            <div class="buttons is-grid is-two">
+                <button
+                    class={`button is-pill ${state.hazeOn ? 'is-selected' : ''}`}
+                    onClick={() => setProp({ hazeOn: !state.hazeOn })}
+                >
+                    {state.hazeOn ? 'On' : 'Off'}
+                </button>
+                <button
+                    class={`button is-pill ${state.hazePress ? 'is-selected' : ''}`}
+                    onPointerDown={() => setProp({ hazePress: true })}
+                    onPointerUp={(event: PointerEvent) => {
+                        setProp({ hazePress: false });
+                        (event.currentTarget as HTMLElement).blur();
+                    }}
+                    onPointerLeave={() => state.hazePress && setProp({ hazePress: false })}
+                >
+                    Haze
+                </button>
+            </div>
+
+            <h2 class="title">Haze Volume</h2>
+            <Slider value={state.hazeVolume} onChange={(hazeVolume) => setProp({ hazeVolume })} />
+
+            <h2 class="title">Fan Speed</h2>
+            <Slider value={state.fanSpeed} onChange={(fanSpeed) => setProp({ fanSpeed })} />
         </>
     );
 }
@@ -568,6 +609,7 @@ export function StagePage() {
                             <SwitchControls labels={labels ?? ['', '', '', '']} state={state} setProp={setProp} />
                         )}
                         {kind === 'strobe' && <StrobeControls state={state} setProp={setProp} />}
+                        {kind === 'haze' && <HazeControls state={state} setProp={setProp} />}
                     </section>
                 ))}
             </div>

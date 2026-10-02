@@ -36,6 +36,8 @@ pub(crate) enum FixtureType {
     JbSystemsTubeled,
     #[serde(rename = "chauvet_intimidator_beam_140sr")]
     ChauvetIntimidatorBeam140SR,
+    #[serde(rename = "chauvet_amhaze_stadium")]
+    ChauvetAmhazeStadium,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -45,6 +47,7 @@ pub(crate) enum FixtureKind {
     Switch,
     Strobe,
     MovingHead,
+    Haze,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
@@ -76,6 +79,10 @@ pub(crate) enum Channel {
     Shutter,
     /// Turn on the discharge lamp through the fixture function channel
     LampOn,
+    /// Haze output volume, low to high
+    Haze,
+    /// Fan speed of a hazer, slow to fast
+    Fan,
     Unused,
 }
 
@@ -313,7 +320,7 @@ const TUBELED_PRESETS: Presets = Presets {
 };
 
 impl FixtureType {
-    pub(crate) const ALL: [FixtureType; 8] = [
+    pub(crate) const ALL: [FixtureType; 9] = [
         FixtureType::AmericanDJP56Led,
         FixtureType::AmericanDJMegaTripar,
         FixtureType::AyraCompar10,
@@ -322,6 +329,7 @@ impl FixtureType {
         FixtureType::ShowtecTitanStrobe,
         FixtureType::JbSystemsTubeled,
         FixtureType::ChauvetIntimidatorBeam140SR,
+        FixtureType::ChauvetAmhazeStadium,
     ];
 
     pub(crate) const fn profile(self) -> &'static FixtureProfile {
@@ -419,6 +427,15 @@ impl FixtureType {
                 ],
                 presets: None,
                 moving_head: Some(&INTIMIDATOR_BEAM_140SR),
+            },
+            FixtureType::ChauvetAmhazeStadium => &FixtureProfile {
+                r#type: FixtureType::ChauvetAmhazeStadium,
+                name: "Chauvet Amhaze Stadium",
+                kind: FixtureKind::Haze,
+                size: [275, 406],
+                channels: &[Fan, Haze],
+                presets: None,
+                moving_head: None,
             },
         }
     }

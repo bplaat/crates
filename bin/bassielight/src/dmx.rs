@@ -127,6 +127,10 @@ pub(crate) struct FixtureState {
     /// Index of the running built-in movement macro, `None` to stand still
     pub movement: Option<usize>,
     pub movement_speed: f32,
+    pub haze_on: bool,
+    pub haze_press: bool,
+    pub haze_volume: f32,
+    pub fan_speed: f32,
 }
 
 impl FixtureState {
@@ -151,6 +155,10 @@ impl FixtureState {
         focus: 0.0,
         movement: None,
         movement_speed: 0.5,
+        haze_on: false,
+        haze_press: false,
+        haze_volume: 0.5,
+        fan_speed: 0.5,
     };
 
     pub(crate) const fn apply(&mut self, prop: FixtureProp) {
@@ -183,6 +191,10 @@ impl FixtureState {
             FixtureProp::Focus(focus) => self.focus = focus,
             FixtureProp::Movement(movement) => self.movement = movement,
             FixtureProp::MovementSpeed(movement_speed) => self.movement_speed = movement_speed,
+            FixtureProp::HazeOn(haze_on) => self.haze_on = haze_on,
+            FixtureProp::HazePress(haze_press) => self.haze_press = haze_press,
+            FixtureProp::HazeVolume(haze_volume) => self.haze_volume = haze_volume,
+            FixtureProp::FanSpeed(fan_speed) => self.fan_speed = fan_speed,
         }
     }
 }
@@ -211,6 +223,10 @@ pub(crate) enum FixtureProp {
     Focus(f32),
     Movement(Option<usize>),
     MovementSpeed(f32),
+    HazeOn(bool),
+    HazePress(bool),
+    HazeVolume(f32),
+    FanSpeed(f32),
 }
 
 // MARK: DmxState
@@ -261,6 +277,11 @@ pub(crate) enum FixtureOutput {
     Strobe {
         intensity: f32,
         speed: f32,
+    },
+    Haze {
+        on: bool,
+        volume: f32,
+        fan: f32,
     },
 }
 
@@ -460,6 +481,26 @@ fn render_fixtures(
                 }
                 outputs.insert(fixture.id, FixtureOutput::Strobe { intensity, speed });
             }
+            FixtureKind::Haze => {
+                let state = dmx_state.fixture(fixture.id);
+                // Haze is part of the room, not of the light show, so it runs in every mode
+                let on = state.haze_on || state.haze_press;
+                for (value, channel) in channels.iter_mut().zip(profile.channels) {
+                    *value = match channel {
+                        Channel::Haze if on => haze_level(state.haze_volume),
+                        Channel::Fan if on => haze_level(state.fan_speed),
+                        _ => 0,
+                    };
+                }
+                outputs.insert(
+                    fixture.id,
+                    FixtureOutput::Haze {
+                        on,
+                        volume: state.haze_volume,
+                        fan: state.fan_speed,
+                    },
+                );
+            }
             FixtureKind::Rgb | FixtureKind::MovingHead => {
                 let state = dmx_state.fixture(fixture.id);
 
@@ -574,6 +615,12 @@ fn render_fixtures(
         }
     }
     outputs
+}
+
+/// Hazer channels do nothing below 6, from there they go from 1% to 100%
+fn haze_level(fraction: f32) -> u8 {
+    const MIN: f32 = 6.0;
+    (MIN + fraction.clamp(0.0, 1.0) * (255.0 - MIN)).round() as u8
 }
 
 fn log_connection_event(event: Option<usb::ConnectionEvent>) {
@@ -928,6 +975,64 @@ mod tests {
             }),
             RED
         );
+    }
+
+    #[test]
+    fn hazer_renders_fan_and_volume_in_every_mode() {
+        let state = FixtureState {
+            haze_volume: 1.0,
+            fan_speed: 0.0,
+            ..FixtureState::DEFAULT
+        };
+        let (channels, output) = render_fixture(
+            FixtureType::ChauvetAmhazeStadium,
+            Mode::Manual,
+            state,
+            clock(0.0, 0),
+        );
+        assert_eq!(channels, [0, 0]);
+        assert!(matches!(output, FixtureOutput::Haze { on: false, .. }));
+
+        for (mode, state) in [
+            (
+                Mode::Manual,
+                FixtureState {
+                    haze_on: true,
+                    ..state
+                },
+            ),
+            (
+                Mode::Black,
+                FixtureState {
+                    haze_press: true,
+                    ..state
+                },
+            ),
+            (
+                Mode::Auto,
+                FixtureState {
+                    haze_on: true,
+                    ..state
+                },
+            ),
+        ] {
+            let (channels, output) = render_fixture(
+                FixtureType::ChauvetAmhazeStadium,
+                mode,
+                state,
+                clock(0.0, 0),
+            );
+            // Fan speed then haze volume, a stopped fan is still the lowest speed
+            assert_eq!(channels, [6, 255], "{mode:?}");
+            assert_eq!(
+                output,
+                FixtureOutput::Haze {
+                    on: true,
+                    volume: 1.0,
+                    fan: 0.0
+                }
+            );
+        }
     }
 
     #[test]
