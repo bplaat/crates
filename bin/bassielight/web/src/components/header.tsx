@@ -5,9 +5,9 @@
  */
 
 import { useContext, useEffect, useState } from 'preact/hooks';
-import { Link, useRoute } from 'wouter-preact';
+import { Link, useLocation, useRoute } from 'wouter-preact';
 import { IpcContext } from '../app.tsx';
-import { $dmxLive, $document, fileName } from '../stage.ts';
+import { $dmxLive, $document, fileName, saveStage } from '../stage.ts';
 import {
     ContentSaveOutlineIcon,
     FilePlusOutlineIcon,
@@ -59,6 +59,7 @@ function NavLink({ href, children }: { href: string; children: any }) {
 
 export function Header() {
     const ipc = useContext(IpcContext)!;
+    const [location] = useLocation();
     const [showQrCode, setShowQrCode] = useState(false);
     const [usbStatus, setUsbStatus] = useState<UsbStatus>({ state: 'disconnected' });
     // File dialogs and window dragging need the native window
@@ -78,6 +79,17 @@ export function Header() {
 
     const status = outputStatus(usbStatus, $dmxLive.value);
     const path = $document.value?.path;
+    const dirty = $document.value?.dirty ?? false;
+    useEffect(() => {
+        const page = location === '/editor' ? 'Editor' : location === '/scripts' ? 'Scripts' : 'Stage';
+        document.title = `BassieLight - ${page}${path ? ` - ${fileName(path)}${dirty ? '*' : ''}` : ''}`;
+        if (document.body.classList.contains('is-bwebview-macos')) {
+            ipc.send('macosDocumentEdited', { edited: dirty });
+        }
+    }, [location, path, dirty]);
+    const openStage = async (type: string) => {
+        if (await saveStage(ipc)) ipc.send(type);
+    };
 
     return (
         <>
@@ -92,15 +104,27 @@ export function Header() {
                 <div class="header-start">
                     {path && (
                         <>
+                            <button
+                                class="icon-button"
+                                title="Save stage (Cmd+S / Ctrl+S)"
+                                disabled={!dirty}
+                                onClick={() => void saveStage(ipc)}
+                            >
+                                <ContentSaveOutlineIcon />
+                            </button>
                             {isApp && (
                                 <>
-                                    <button class="icon-button" title="New stage" onClick={() => ipc.send('newStage')}>
+                                    <button
+                                        class="icon-button"
+                                        title="New stage"
+                                        onClick={() => void openStage('newStage')}
+                                    >
                                         <FilePlusOutlineIcon />
                                     </button>
                                     <button
                                         class="icon-button"
                                         title="Open stage..."
-                                        onClick={() => ipc.send('openStage')}
+                                        onClick={() => void openStage('openStage')}
                                     >
                                         <FolderOpenOutlineIcon />
                                     </button>
@@ -115,6 +139,7 @@ export function Header() {
                             )}
                             <span class="header-filename" title={path}>
                                 {fileName(path)}
+                                {dirty && '*'}
                             </span>
                         </>
                     )}

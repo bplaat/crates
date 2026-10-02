@@ -120,10 +120,21 @@ pub(crate) enum IpcMessage {
     GetStageResponse {
         path: PathBuf,
         stage: Stage,
+        dirty: bool,
         #[serde(rename = "fixtureTypes")]
         fixture_types: Vec<&'static FixtureProfile>,
         #[serde(rename = "dmxLength")]
         dmx_length: usize,
+    },
+    SaveStage,
+    #[serde(skip_deserializing)]
+    SaveStageResponse {
+        error: Option<String>,
+    },
+    #[serde(skip_deserializing)]
+    StageDirty {
+        path: PathBuf,
+        dirty: bool,
     },
     SetStage {
         stage: Stage,
@@ -198,6 +209,8 @@ impl IpcMessage {
             IpcMessage::GetStateResponse { .. }
                 | IpcMessage::GetStageResponse { .. }
                 | IpcMessage::StageOpened { .. }
+                | IpcMessage::StageDirty { .. }
+                | IpcMessage::SaveStageResponse { .. }
                 | IpcMessage::GetScriptsResponse { .. }
                 | IpcMessage::ScriptsChanged { .. }
                 | IpcMessage::ScriptsRunning { .. }
@@ -326,13 +339,14 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             }
         }
         IpcMessage::GetStage => {
-            let (path, stage) = {
+            let (path, stage, dirty) = {
                 let open_stage = STAGE.lock().expect("Failed to lock stage");
                 let open = open_stage.as_ref().expect("Stage not loaded");
-                (open.path.clone(), open.stage.clone())
+                (open.path.clone(), open.stage.clone(), open.is_dirty())
             };
             let response = IpcMessage::GetStageResponse {
                 path,
+                dirty,
                 stage,
                 fixture_types: FixtureType::ALL.map(FixtureType::profile).to_vec(),
                 dmx_length: config::dmx_length(),
@@ -348,6 +362,13 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                 // Resync the sender with the current stage
                 warn!("Rejecting invalid stage: {error}");
                 let stage = open.stage.clone();
+                let _ = connection.send(
+                    IpcMessage::StageDirty {
+                        path: open.path.clone(),
+                        dirty: open.is_dirty(),
+                    }
+                    .to_json(),
+                );
                 return connection
                     .send(IpcMessage::SetStage { stage }.to_json())
                     .is_ok();
@@ -356,10 +377,31 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                 .fixtures
                 .retain(|id, _| stage.fixtures.iter().any(|f| f.id == *id));
             open.stage = stage.clone();
-            if let Err(error) = open.save() {
-                warn!("Can't save {}: {error}", open.path.display());
-            }
             connection.broadcast(&message);
+            broadcast(&IpcMessage::StageDirty {
+                path: open.path.clone(),
+                dirty: open.is_dirty(),
+            });
+        }
+
+        IpcMessage::SaveStage => {
+            let mut open_stage = STAGE.lock().expect("Failed to lock stage");
+            let open = open_stage.as_mut().expect("Stage not loaded");
+            let error = if open.is_dirty() {
+                open.save().err().map(|error| error.to_string())
+            } else {
+                None
+            };
+            broadcast(&IpcMessage::StageDirty {
+                path: open.path.clone(),
+                dirty: open.is_dirty(),
+            });
+            if connection
+                .send(IpcMessage::SaveStageResponse { error }.to_json())
+                .is_err()
+            {
+                return false;
+            }
         }
 
         // Scripts
@@ -454,6 +496,8 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
         IpcMessage::GetStateResponse { .. }
         | IpcMessage::GetStageResponse { .. }
         | IpcMessage::StageOpened { .. }
+        | IpcMessage::StageDirty { .. }
+        | IpcMessage::SaveStageResponse { .. }
         | IpcMessage::GetScriptsResponse { .. }
         | IpcMessage::ScriptsChanged { .. }
         | IpcMessage::ScriptsRunning { .. }

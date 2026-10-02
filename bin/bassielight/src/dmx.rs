@@ -862,10 +862,18 @@ mod tests {
         assert_eq!(&channels[8..], &[198, 127, 0, 0]);
 
         // Direct RGB must clear the program selector and replace the speed channel with red.
-        state.fixtures.get_mut(&2).expect("Tube state missing").preset = None;
+        state
+            .fixtures
+            .get_mut(&2)
+            .expect("Tube state missing")
+            .preset = None;
         render_fixtures(&fixtures, &state, &clock, &mut channels);
         assert_eq!(&channels[8..], &[0, 255, 0, 0]);
-        state.fixtures.get_mut(&2).expect("Tube state missing").preset = Some(33);
+        state
+            .fixtures
+            .get_mut(&2)
+            .expect("Tube state missing")
+            .preset = Some(33);
         render_fixtures(&fixtures, &state, &clock, &mut channels);
         assert_eq!(&channels[8..], &[198, 127, 0, 0]);
 

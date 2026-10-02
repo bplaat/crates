@@ -44,12 +44,14 @@ pub(crate) fn watch_thread() {
             let mut open_stage = STAGE.lock().expect("Failed to lock stage");
             if let Some(open) = open_stage.as_mut()
                 && open.path == folder
+                && !open.is_dirty()
                 && json != open.json
                 && json != rejected
             {
                 match Stage::parse(&json, config::dmx_length()) {
                     Ok(stage) => {
                         info!("Reloading changed stage.json");
+                        open.saved_json = stage.to_json();
                         open.stage = stage.clone();
                         open.json = json;
                         drop(open_stage);

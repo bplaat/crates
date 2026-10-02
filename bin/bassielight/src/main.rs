@@ -24,7 +24,7 @@ use small_http::Response;
 use small_websocket::Message;
 
 use crate::config::{CONFIG, Config};
-use crate::ipc::{IPC_CONNECTIONS, IpcConnection, ipc_message_handler};
+use crate::ipc::{IPC_CONNECTIONS, IpcConnection, IpcMessage, ipc_message_handler};
 use crate::stage::{OpenStage, STAGE, Stage};
 
 mod config;
@@ -54,6 +54,10 @@ enum WindowMessage {
     NewStage,
     OpenStage,
     SaveStageAs,
+    #[cfg(target_os = "macos")]
+    MacosDocumentEdited {
+        edited: bool,
+    },
     #[cfg(target_os = "macos")]
     StartWindowDrag,
     #[cfg(target_os = "macos")]
@@ -131,6 +135,8 @@ fn handle_window_message(window: &mut Window, message: WindowMessage) {
                 create_and_open_stage(window, path, &stage, Some(&folder));
             }
         }
+        #[cfg(target_os = "macos")]
+        WindowMessage::MacosDocumentEdited { edited } => window.macos_set_document_edited(edited),
         #[cfg(target_os = "macos")]
         WindowMessage::StartWindowDrag => window.macos_start_window_drag(),
         #[cfg(target_os = "macos")]
@@ -288,6 +294,22 @@ fn main() {
     let event_loop_proxy = Arc::new(event_loop.create_proxy());
     event_loop.run(move |event| match event {
         // Window events
+        Event::Window(_, bwindow::WindowEvent::CloseRequested(request)) => {
+            let result = {
+                let mut open_stage = STAGE.lock().expect("Failed to lock stage");
+                let open = open_stage.as_mut().expect("Stage not loaded");
+                let result = if open.is_dirty() { open.save() } else { Ok(()) };
+                ipc::broadcast(&IpcMessage::StageDirty {
+                    path: open.path.clone(),
+                    dirty: open.is_dirty(),
+                });
+                result
+            };
+            if let Err(error) = result {
+                request.prevent_default();
+                show_error(&window, "Can't save stage", &error.to_string());
+            }
+        }
         Event::UserEvent(AppEvent::Webview(_window_id, WebviewEvent::PageTitleChange(title))) => {
             window.set_title(title)
         }

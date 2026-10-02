@@ -409,8 +409,6 @@ export function StagePage() {
         });
 
     useEffect(() => {
-        document.title = 'BassieLight - Stage';
-
         const listener = ipc.on('setFixtureProp', ({ fixtures, prop }: any) => applyProp(fixtures, prop));
         return () => listener.remove();
     }, []);

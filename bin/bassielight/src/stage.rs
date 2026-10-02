@@ -503,12 +503,14 @@ pub(crate) struct Stage {
     pub buttons: Vec<Button>,
 }
 
-/// The opened stage folder, edits are saved to it right away
+/// The opened stage folder and its unsaved edits
 pub(crate) struct OpenStage {
     pub path: PathBuf,
     pub stage: Stage,
     /// Last read or written stage.json, to notice changes by others
     pub json: String,
+    /// Canonical saved contents, used to compare edits independently of file formatting
+    pub saved_json: String,
 }
 
 pub(crate) static STAGE: Mutex<Option<OpenStage>> = Mutex::new(None);
@@ -531,14 +533,22 @@ impl OpenStage {
         }
         Ok(OpenStage {
             path: folder.to_path_buf(),
+            saved_json: stage.to_json(),
             stage,
             json,
         })
     }
 
+    pub(crate) fn is_dirty(&self) -> bool {
+        self.stage.to_json() != self.saved_json
+    }
+
     pub(crate) fn save(&mut self) -> io::Result<()> {
-        self.json = self.stage.to_json();
-        std::fs::write(self.path.join(STAGE_FILE), &self.json)
+        let json = self.stage.to_json();
+        std::fs::write(self.path.join(STAGE_FILE), &json)?;
+        self.saved_json = json.clone();
+        self.json = json;
+        Ok(())
     }
 }
 
@@ -806,5 +816,39 @@ mod tests {
         assert!(stage.validate(512).is_err());
         stage.fixtures[1] = fixture(1, 7);
         assert!(stage.validate(512).is_err());
+    }
+
+    #[test]
+    fn tracks_unsaved_changes_and_only_clears_after_successful_save() {
+        let folder =
+            std::env::temp_dir().join(format!("bassielight-dirty-test-{}", std::process::id()));
+        std::fs::create_dir_all(&folder).expect("Failed to create test folder");
+        let stage = Stage::default();
+        // Formatting differences on disk must not mark a newly opened document dirty.
+        let json = serde_json::to_string(&stage).expect("Failed to serialize stage");
+        std::fs::write(folder.join(STAGE_FILE), &json).expect("Failed to write test stage");
+        let mut open = OpenStage::open(&folder, 512).expect("Failed to open test stage");
+        assert!(!open.is_dirty());
+        open.stage.room.width += 100;
+        assert!(open.is_dirty());
+        assert_eq!(
+            std::fs::read_to_string(folder.join(STAGE_FILE)).expect("Failed to read stage"),
+            json
+        );
+        open.stage.room.width -= 100;
+        assert!(!open.is_dirty());
+        open.stage.room.width += 100;
+        open.save().expect("Failed to save stage");
+        assert!(!open.is_dirty());
+        assert_eq!(
+            std::fs::read_to_string(folder.join(STAGE_FILE)).expect("Failed to read stage"),
+            open.stage.to_json()
+        );
+        let saved = open.json.clone();
+        open.stage.room.height += 100;
+        std::fs::remove_dir_all(&folder).expect("Failed to remove test folder");
+        assert!(open.save().is_err());
+        assert!(open.is_dirty());
+        assert_eq!(open.json, saved);
     }
 }

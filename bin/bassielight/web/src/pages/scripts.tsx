@@ -39,9 +39,6 @@ export function ScriptsPage() {
     const name = selected !== null && selected in scripts ? selected : (names[0] ?? null);
     const isDirty = (script: string) => script in drafts && drafts[script] !== scripts[script];
 
-    useEffect(() => {
-        document.title = 'BassieLight - Scripts';
-    }, []);
     useEffect(() => disposeCodeModels(names), [names.join('\n')]);
 
     const save = (script: string) => {

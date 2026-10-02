@@ -24,6 +24,7 @@ import {
     findProfile,
     nextId,
     pasteOffset,
+    saveStage,
     switchCount,
     updateStage,
     type Button,
@@ -155,8 +156,13 @@ export function EditorPage() {
     const path = $document.value?.path;
 
     useEffect(() => {
-        document.title = 'BassieLight - Editor';
         const onKeyDown = (event: KeyboardEvent) => {
+            if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === 's') {
+                event.preventDefault();
+                if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+                void saveStage(ipc);
+                return;
+            }
             if ((event.target as Element).closest('input, select, textarea')) return;
             const action =
                 event.metaKey || event.ctrlKey
@@ -168,7 +174,10 @@ export function EditorPage() {
             }
         };
         document.addEventListener('keydown', onKeyDown);
-        return () => document.removeEventListener('keydown', onKeyDown);
+        return () => {
+            document.removeEventListener('keydown', onKeyDown);
+            void saveStage(ipc);
+        };
     }, []);
     useEffect(() => setSelection(null), [path]);
 

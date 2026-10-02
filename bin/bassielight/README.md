@@ -28,8 +28,8 @@ its `stage.json`. Scripts are started from the scripts tab or with buttons on th
 of the BPM button.
 
 Every stage folder gets an `AGENTS.md` with the file formats and the script API, so AI agents like Claude Code and
-Codex can edit the setup and write scripts. BassieLight picks up their changes right away in the editor and scripts
-tabs, on the stage tab the setup is frozen until you leave it.
+Codex can edit the setup and write scripts. BassieLight picks up setup changes in the editor and scripts
+tabs when there are no unsaved edits. On the stage tab the setup is frozen until you leave it.
 
 ## Compatibility
 
@@ -46,10 +46,8 @@ tabs, on the stage tab the setup is frozen until you leave it.
 - [SHOWTEC Titan Strobe](https://www.manualslib.com/manual/1569275/Showtec-Titan-Strobe.html)
 - [JB Systems TUBELED Controller](https://www.manualslib.com/manual/1158327/Jb-Systems-Tubeled.html)
     - Controls its connected array of [JB Systems TUBELED](https://www.manualslib.com/manual/1165842/Jb-Systems-Tubeled.html) tubes as one fixture
-    - Own colors or one of the 38 built-in presets
 - [Chauvet Intimidator Beam 140SR](https://www.chauvetdj.com/wp-content/uploads/2016/09/Intimidator_Beam_140SR_UM_Rev5_WO.pdf)
     - 14 channel mode
-    - Focus adjusts the projected gobo size
 
 ## Installation
 

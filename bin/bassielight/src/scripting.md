@@ -4,7 +4,7 @@ This folder is a [BassieLight](https://github.com/bplaat/crates/tree/master/bin/
 regenerates this file every time it opens the stage, don't edit it.
 
 BassieLight watches this folder while the editor or scripts tab is open: changes to `stage.json` and `scripts/*.lua`
-show up right away. On the stage tab the setup is frozen, changes are picked up when leaving it.
+show up when there are no unsaved editor changes. On the stage tab the setup is frozen, changes are picked up when leaving it.
 
 ## Files
 

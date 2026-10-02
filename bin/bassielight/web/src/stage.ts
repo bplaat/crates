@@ -104,6 +104,7 @@ export interface Stage {
 }
 
 export interface StageDocument {
+    dirty: boolean;
     path: string;
     stage: Stage;
     fixtureTypes: FixtureProfile[];
@@ -177,8 +178,11 @@ export function initStageStore(ipc: Ipc) {
     ipc.on('setStage', ({ stage }: any) => {
         if ($document.value) $document.value = { ...$document.value, stage };
     });
+    ipc.on('stageDirty', ({ path, dirty }: any) => {
+        if ($document.value && $document.value.path === path) $document.value = { ...$document.value, dirty };
+    });
     ipc.on('stageOpened', ({ path, stage }: any) => {
-        if ($document.value) $document.value = { ...$document.value, path, stage };
+        if ($document.value) $document.value = { ...$document.value, path, stage, dirty: false };
     });
 
     ipc.request('getScripts').then((scripts) => ($scripts.value = scripts as ScriptsState));
@@ -222,8 +226,28 @@ export function toggleScript(ipc: Ipc, name: string) {
 }
 
 export function updateStage(ipc: Ipc, stage: Stage) {
-    $document.value = { ...$document.value!, stage };
+    $document.value = { ...$document.value!, stage, dirty: true };
     ipc.send('setStage', { stage });
+}
+
+let pendingSave: Promise<boolean> | null = null;
+
+export async function saveStage(ipc: Ipc): Promise<boolean> {
+    if (pendingSave && !(await pendingSave)) return false;
+    if (!$document.value?.dirty) return true;
+    pendingSave = (async () => {
+        try {
+            const { error } = (await ipc.request('saveStage')) as { error: string | null };
+            if (error) throw new Error(error);
+            return true;
+        } catch (error) {
+            window.alert(`Can't save stage: ${error instanceof Error ? error.message : error}`);
+            return false;
+        } finally {
+            pendingSave = null;
+        }
+    })();
+    return pendingSave;
 }
 
 export function fileName(path: string): string {
