@@ -70,6 +70,39 @@
 }
 
 /* Sidebar */
+.script-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    overflow: hidden;
+}
+.script-tree {
+    flex: 1;
+    min-height: 0;
+    overflow-y: auto;
+}
+.script-tree > * {
+    flex-shrink: 0;
+}
+.script-folder {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.5rem;
+    text-align: left;
+    color: var(--color-text);
+    opacity: 0.65;
+    border-radius: 0.5rem;
+}
+.script-folder.is-selected {
+    background-color: var(--color-surface-btn);
+    opacity: 1;
+}
+.script-location {
+    font-size: 0.75rem;
+    opacity: 0.6;
+    overflow-wrap: anywhere;
+}
 .script-item {
     display: flex;
     align-items: center;

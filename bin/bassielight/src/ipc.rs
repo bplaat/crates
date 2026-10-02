@@ -155,12 +155,16 @@ pub(crate) enum IpcMessage {
     #[serde(skip_deserializing)]
     GetScriptsResponse {
         scripts: BTreeMap<String, String>,
+        folders: Vec<String>,
         running: Vec<String>,
         errors: BTreeMap<String, String>,
     },
     SaveScript {
         name: String,
         source: String,
+    },
+    CreateScriptFolder {
+        name: String,
     },
     DeleteScript {
         name: String,
@@ -174,6 +178,7 @@ pub(crate) enum IpcMessage {
     #[serde(skip_deserializing)]
     ScriptsChanged {
         scripts: BTreeMap<String, String>,
+        folders: Vec<String>,
     },
     #[serde(skip_deserializing)]
     ScriptsRunning {
@@ -421,12 +426,18 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
                 let scripts = scripts::SCRIPTS.lock().expect("Failed to lock scripts");
                 IpcMessage::GetScriptsResponse {
                     scripts: scripts.sources.clone(),
+                    folders: scripts.folders.iter().cloned().collect(),
                     running: dmx_state.running_scripts.iter().cloned().collect(),
                     errors: scripts.errors.clone(),
                 }
             };
             if connection.send(response.to_json()).is_err() {
                 return false;
+            }
+        }
+        IpcMessage::CreateScriptFolder { ref name } => {
+            if let Err(error) = scripts::create_script_folder(&stage_folder(), name) {
+                warn!("Can't create script folder {name}: {error}");
             }
         }
         IpcMessage::SaveScript {
@@ -534,11 +545,11 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
     true
 }
 
-fn parse_client_message(message: &str) -> Result<IpcMessage, &'static str> {
-    let message: IpcMessage =
-        serde_json::from_str(message).map_err(|_| "invalid JSON or message shape")?;
+fn parse_client_message(message: &str) -> Result<IpcMessage, String> {
+    let message: IpcMessage = serde_json::from_str(message)
+        .map_err(|error| format!("invalid JSON or message shape: {error}"))?;
     if message.is_response() {
-        Err("response-only message received from client")
+        Err("response-only message received from client".to_string())
     } else {
         Ok(message)
     }
@@ -579,6 +590,20 @@ mod tests {
             .is_err()
         );
         assert!(parse_client_message(r#"{"type":"getUsbStatus"}"#).is_ok());
+    }
+
+    #[test]
+    fn parses_stage_save_messages() {
+        assert!(matches!(
+            parse_client_message(r#"{"type":"saveStage"}"#),
+            Ok(IpcMessage::SaveStage)
+        ));
+        assert!(matches!(
+            parse_client_message(
+                r#"{"type":"setStage","stage":{"room":{"width":800,"height":1000},"fixtures":[],"groups":[],"buttons":[{"id":1,"label":"","x":63,"y":25,"width":125,"height":50,"target":null}]}}"#
+            ),
+            Ok(IpcMessage::SetStage { .. })
+        ));
     }
 
     #[test]

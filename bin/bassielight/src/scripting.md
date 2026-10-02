@@ -9,7 +9,7 @@ show up when there are no unsaved editor changes. On the stage tab the setup is 
 ## Files
 
 - `stage.json`: the room, fixtures, groups and buttons
-- `scripts/<name>.lua`: light animation scripts, the file name is the script name
+- `scripts/<name>.lua`: light animation scripts, organized in real folders if desired
 
 ### stage.json
 
@@ -28,6 +28,11 @@ show up when there are no unsaved editor changes. On the stage tab the setup is 
 - `addr` is the DMX start address, fixtures must fit in the 512 DMX channels. Ids must be unique.
 - A button `target` is `{ "type": "fixture", "id": 1 }`, `{ "type": "group", "id": 1 }`,
   `{ "type": "script", "name": "chase" }` or `null`. Pressing a script button starts or stops the script.
+
+Script IDs are paths relative to `scripts/` without `.lua`, for example `Shows/Party Mix` or
+`Effects/Pars/Acid Rain`. Use the full ID for script button targets. Folder and file names can contain ASCII
+letters, digits, spaces, underscores and hyphens; each component is at most 64 characters. BassieLight shows
+all folders in a static tree, including empty folders. Select a folder to create scripts or subfolders in it.
 
 ## Scripts
 
@@ -49,6 +54,14 @@ end
 
 A script must call `wait` or `sync` regularly, a script that runs too long without waiting is stopped. Scripts have no
 access to files or the system, only the `string`, `table`, `math`, `utf8` and `coroutine` libraries are available.
+
+Reusable layers should only change their own fixture group, including any setup at the start. Avoid `mode()` or
+resetting `fixtures()` in a layer. Leave `movement` and `movement_speed` untouched unless movement is part of the
+effect, even when a full-room show resets colors and brightness. Combine layers on different groups, for example
+pars, heads and tubes. Scripts that control the same fixture property compete for it; they are not automatically
+mixed. Put full-room shows in `Shows/` (or prefix their names with `Show -`) and run them on their own.
+A show can mix two animated RGB looks and tween between their colors
+for a crossfade. Stopping a script cancels its pending tweens and leaves its current values in place.
 
 ### Selecting fixtures
 

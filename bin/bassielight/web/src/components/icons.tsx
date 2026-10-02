@@ -14,6 +14,7 @@ import {
     mdiFilePlusOutline,
     mdiFlash,
     mdiFolderOpenOutline,
+    mdiFolderPlusOutline,
     mdiGestureTapButton,
     mdiGroup,
     mdiLightbulb,
@@ -50,6 +51,7 @@ export const ContentSaveOutlineIcon = () => <Icon path={mdiContentSaveOutline} /
 export const DeleteIcon = () => <Icon path={mdiDelete} />;
 export const FilePlusOutlineIcon = () => <Icon path={mdiFilePlusOutline} />;
 export const FolderOpenOutlineIcon = () => <Icon path={mdiFolderOpenOutline} />;
+export const FolderPlusOutlineIcon = () => <Icon path={mdiFolderPlusOutline} />;
 export const FlashIcon = () => <Icon path={mdiFlash} />;
 export const GestureTapButtonIcon = () => <Icon path={mdiGestureTapButton} />;
 export const GroupIcon = () => <Icon path={mdiGroup} />;

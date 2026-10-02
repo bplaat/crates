@@ -58,15 +58,17 @@ export function snapDrag(
 
     const snapAxis = (axis: Axis) => {
         // Range of offsets that keeps the moving boxes inside the room
-        const lowest = -Math.min(...moving.map((box) => min(box, axis)));
-        const highest = max(roomBox, axis) - Math.max(...moving.map((box) => max(box, axis)));
-        const offset = Math.min(Math.max(delta[axis], lowest), highest);
+        const lowest = Math.ceil(-Math.min(...moving.map((box) => min(box, axis))));
+        const highest = Math.floor(max(roomBox, axis) - Math.max(...moving.map((box) => max(box, axis))));
+        const offset = Math.min(Math.max(Math.round(delta[axis]), lowest), highest);
         if (threshold === null) return offset;
 
         let best: number | null = null;
         for (const line of allTargets.flatMap((box) => anchors(box, axis))) {
             for (const value of moving.flatMap((box) => anchors(box, axis))) {
                 const diff = line - (value + offset);
+                // Stage positions use whole centimeters, including snaps to half-centimeter edges
+                if (!Number.isInteger(diff)) continue;
                 if (Math.abs(diff) <= threshold && (best === null || Math.abs(diff) < Math.abs(best))) best = diff;
             }
         }

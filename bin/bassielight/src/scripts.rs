@@ -4,9 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::io;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
@@ -23,6 +23,7 @@ use crate::stage::{FixtureKind, FixtureProfile, SCRIPTS_DIR, Stage};
 /// Scripts of the opened stage folder, the version changes when any source changes
 pub(crate) struct Scripts {
     pub sources: BTreeMap<String, String>,
+    pub folders: BTreeSet<String>,
     /// Last error of each script that stopped by an error
     pub errors: BTreeMap<String, String>,
     version: u64,
@@ -30,60 +31,187 @@ pub(crate) struct Scripts {
 
 pub(crate) static SCRIPTS: Mutex<Scripts> = Mutex::new(Scripts {
     sources: BTreeMap::new(),
+    folders: BTreeSet::new(),
     errors: BTreeMap::new(),
     version: 0,
 });
 
-/// Read all scripts in a stage folder
-pub(crate) fn read_scripts(folder: &Path) -> BTreeMap<String, String> {
-    let mut sources = BTreeMap::new();
-    for path in std::fs::read_dir(folder.join(SCRIPTS_DIR))
-        .into_iter()
-        .flatten()
-        .flatten()
-        .map(|entry| entry.path())
-    {
-        if path.extension() == Some("lua".as_ref())
-            && let (Some(name), Ok(source)) = (path.file_stem(), std::fs::read_to_string(&path))
-        {
-            sources.insert(name.to_string_lossy().into_owned(), source);
+#[derive(Default)]
+pub(crate) struct ScriptFiles {
+    pub sources: BTreeMap<String, String>,
+    pub folders: BTreeSet<String>,
+}
+
+impl From<BTreeMap<String, String>> for ScriptFiles {
+    fn from(sources: BTreeMap<String, String>) -> Self {
+        Self {
+            sources,
+            ..Self::default()
         }
     }
-    sources
 }
 
-/// Use new script sources, notifying all connections when they changed
-pub(crate) fn set_sources(sources: BTreeMap<String, String>) {
+/// Read real folders recursively, keeping script IDs relative to scripts/ without .lua.
+pub(crate) fn read_scripts(folder: &Path) -> ScriptFiles {
+    fn read(directory: &Path, prefix: &str, files: &mut ScriptFiles) {
+        let Ok(entries) = std::fs::read_dir(directory) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let Ok(kind) = entry.file_type() else {
+                continue;
+            };
+            let filename = entry.file_name();
+            let Some(filename) = filename.to_str() else {
+                continue;
+            };
+            let name = if prefix.is_empty() {
+                filename.to_string()
+            } else {
+                format!("{prefix}/{filename}")
+            };
+            if kind.is_dir() && is_valid_name(&name) {
+                files.folders.insert(name.clone());
+                read(&entry.path(), &name, files);
+            } else if kind.is_file()
+                && let Some(name) = name.strip_suffix(".lua")
+                && is_valid_name(name)
+                && let Ok(source) = std::fs::read_to_string(entry.path())
+            {
+                files.sources.insert(name.to_string(), source);
+            }
+        }
+    }
+    let mut files = ScriptFiles::default();
+    read(&folder.join(SCRIPTS_DIR), "", &mut files);
+    files
+}
+
+/// Notify on folder changes too; empty folders don't restart running scripts.
+pub(crate) fn set_sources(files: impl Into<ScriptFiles>) {
+    let files = files.into();
     let mut scripts = SCRIPTS.lock().expect("Failed to lock scripts");
-    if scripts.sources == sources {
+    if scripts.sources == files.sources && scripts.folders == files.folders {
         return;
     }
-    scripts.sources = sources.clone();
-    scripts.version += 1;
+    if scripts.sources != files.sources {
+        scripts.sources = files.sources.clone();
+        scripts.version += 1;
+    }
+    scripts.folders = files.folders.clone();
     drop(scripts);
-    ipc::broadcast(&IpcMessage::ScriptsChanged { scripts: sources });
+    ipc::broadcast(&IpcMessage::ScriptsChanged {
+        scripts: files.sources,
+        folders: files.folders.into_iter().collect(),
+    });
 }
 
-/// Script names are file names, so only simple names are allowed
+/// Simple relative paths, with no empty, absolute, traversal or platform-specific components.
 pub(crate) fn is_valid_name(name: &str) -> bool {
     !name.is_empty()
-        && name.len() <= 64
-        && name
-            .chars()
-            .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ' '))
+        && name.len() <= 255
+        && name.split('/').all(|part| {
+            !part.is_empty()
+                && part.len() <= 64
+                && part.trim() == part
+                && part
+                    .chars()
+                    .all(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_' | ' '))
+        })
+}
+
+fn script_directory(folder: &Path, name: &str, create: bool) -> io::Result<PathBuf> {
+    if !name.is_empty() && !is_valid_name(name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid script folder",
+        ));
+    }
+    let mut directory = folder.join(SCRIPTS_DIR);
+    if create {
+        std::fs::create_dir_all(&directory)?;
+    }
+    for part in std::iter::once("").chain(name.split('/').filter(|part| !part.is_empty())) {
+        if !part.is_empty() {
+            directory.push(part);
+        }
+        if create && !directory.exists() {
+            std::fs::create_dir(&directory)?;
+        }
+        if !std::fs::symlink_metadata(&directory)?.file_type().is_dir() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "Script folders must be real directories",
+            ));
+        }
+    }
+    Ok(directory)
+}
+
+fn script_path(folder: &Path, name: &str, create: bool) -> io::Result<PathBuf> {
+    if !is_valid_name(name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid script path",
+        ));
+    }
+    let (parent, file) = name.rsplit_once('/').unwrap_or(("", name));
+    let path = script_directory(folder, parent, create)?.join(format!("{file}.lua"));
+    if std::fs::symlink_metadata(&path).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Scripts must be real files",
+        ));
+    }
+    Ok(path)
+}
+
+pub(crate) fn create_script_folder(folder: &Path, name: &str) -> io::Result<()> {
+    if !is_valid_name(name) {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Invalid script folder",
+        ));
+    }
+    script_directory(folder, name, true)?;
+    set_sources(read_scripts(folder));
+    Ok(())
 }
 
 pub(crate) fn save_script(folder: &Path, name: &str, source: &str) -> io::Result<()> {
-    let scripts = folder.join(SCRIPTS_DIR);
-    std::fs::create_dir_all(&scripts)?;
-    std::fs::write(scripts.join(format!("{name}.lua")), source)?;
+    std::fs::write(script_path(folder, name, true)?, source)?;
     set_sources(read_scripts(folder));
     Ok(())
 }
 
 pub(crate) fn delete_script(folder: &Path, name: &str) -> io::Result<()> {
-    std::fs::remove_file(folder.join(SCRIPTS_DIR).join(format!("{name}.lua")))?;
+    std::fs::remove_file(script_path(folder, name, false)?)?;
     set_sources(read_scripts(folder));
+    Ok(())
+}
+
+/// Copy the complete script tree when a stage is duplicated, including empty folders.
+pub(crate) fn copy_scripts(source: &Path, destination: &Path) -> io::Result<()> {
+    std::fs::create_dir_all(destination)?;
+    if destination
+        .canonicalize()?
+        .starts_with(source.canonicalize()?)
+    {
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "Cannot copy scripts into their own tree",
+        ));
+    }
+    for entry in std::fs::read_dir(source)? {
+        let entry = entry?;
+        let kind = entry.file_type()?;
+        let target = destination.join(entry.file_name());
+        if kind.is_dir() {
+            copy_scripts(&entry.path(), &target)?;
+        } else if kind.is_file() {
+            std::fs::copy(entry.path(), target)?;
+        }
+    }
     Ok(())
 }
 
@@ -426,6 +554,7 @@ impl TweenValue {
 }
 
 struct Tween {
+    script: String,
     id: u32,
     field: TweenField,
     from: TweenValue,
@@ -705,6 +834,7 @@ impl Engine {
             (state.running_scripts.clone(), state.fixtures.clone())
         };
         self.running.retain(|name, _| wanted.contains(name));
+        self.tweens.retain(|tween| wanted.contains(&tween.script));
         for name in &wanted {
             if !self.running.contains_key(name) {
                 match self.start(name, beat) {
@@ -738,6 +868,7 @@ impl Engine {
             deadline: Instant::now(),
             commands: Vec::new(),
         });
+        let mut commands = Vec::new();
         for (name, running) in &mut self.running {
             if beat - running.cursor > MAX_LAG_BEATS {
                 running.cursor = beat;
@@ -794,17 +925,21 @@ impl Engine {
                     }
                 };
             }
+            let pending = std::mem::take(
+                &mut self
+                    .lua
+                    .app_data_mut::<Frame>()
+                    .expect("Frame is set")
+                    .commands,
+            );
+            commands.extend(pending.into_iter().map(|command| (name.clone(), command)));
         }
-        let commands = self
-            .lua
-            .remove_app_data::<Frame>()
-            .map(|frame| frame.commands)
-            .unwrap_or_default();
+        self.lua.remove_app_data::<Frame>();
 
         // Apply the commands and tweens
         let mut broadcasts = Vec::new();
         let mut state = DMX_STATE.lock().expect("Failed to lock DMX state");
-        for command in commands {
+        for (script, command) in commands {
             match command {
                 Command::Set { id, prop } => {
                     let field = TweenField::of(prop).map(|(field, _)| field);
@@ -831,6 +966,7 @@ impl Engine {
                         .retain(|tween| !(tween.id == id && tween.field == field));
                     let from = field.get(&state.fixture(id));
                     self.tweens.push(Tween {
+                        script,
                         id,
                         field,
                         from,
@@ -898,8 +1034,115 @@ mod tests {
     use super::*;
     use crate::stage::{Fixture, FixtureType};
 
+    static TEST_LOCK: Mutex<()> = Mutex::new(());
+
+    struct TestFolder(PathBuf);
+
+    impl TestFolder {
+        fn new() -> Self {
+            let nonce = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .unwrap()
+                .as_nanos();
+            let path = std::env::temp_dir().join(format!(
+                "bassielight-scripts-{}-{nonce}",
+                std::process::id()
+            ));
+            std::fs::create_dir(&path).unwrap();
+            Self(path)
+        }
+    }
+
+    impl Drop for TestFolder {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+
+    #[test]
+    fn nested_scripts_and_empty_folders_are_read_copied_and_deleted() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let folder = TestFolder::new();
+        save_script(&folder.0, "Effects/Pars/Pulse", "wait(1)").unwrap();
+        save_script(&folder.0, "Shows/Pulse", "wait(2)").unwrap();
+        let version = SCRIPTS.lock().unwrap().version;
+        create_script_folder(&folder.0, "Effects/Empty").unwrap();
+        assert_eq!(SCRIPTS.lock().unwrap().version, version);
+        let files = read_scripts(&folder.0);
+        assert_eq!(
+            files.sources,
+            BTreeMap::from([
+                ("Effects/Pars/Pulse".into(), "wait(1)".into()),
+                ("Shows/Pulse".into(), "wait(2)".into()),
+            ])
+        );
+        assert_eq!(
+            files.folders,
+            ["Effects", "Effects/Empty", "Effects/Pars", "Shows"]
+                .map(String::from)
+                .into()
+        );
+        let copy = folder.0.join("Copy.stage");
+        crate::stage::create_folder(&copy, &Stage::default(), Some(&folder.0)).unwrap();
+        let copied = read_scripts(&copy);
+        assert_eq!(copied.sources, files.sources);
+        assert_eq!(copied.folders, files.folders);
+        delete_script(&folder.0, "Effects/Pars/Pulse").unwrap();
+        let files = read_scripts(&folder.0);
+        assert_eq!(files.sources.len(), 1);
+        assert!(files.sources.contains_key("Shows/Pulse"));
+        assert!(files.folders.contains("Effects/Pars"));
+        assert!(copy_scripts(&folder.0.join(SCRIPTS_DIR), &folder.0.join("scripts/Copy")).is_err());
+    }
+
+    #[test]
+    fn script_paths_reject_traversal_and_symlinks() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let folder = TestFolder::new();
+        for path in [
+            "",
+            "../escape",
+            "/absolute",
+            "Effects//Bad",
+            "Effects/",
+            "Effects/../Bad",
+            "Effects\\Bad",
+            "C:/Bad",
+            " Bad",
+        ] {
+            assert!(!is_valid_name(path), "{path}");
+            assert!(save_script(&folder.0, path, "wait(1)").is_err());
+            assert!(create_script_folder(&folder.0, path).is_err());
+            assert!(delete_script(&folder.0, path).is_err());
+        }
+        #[cfg(unix)]
+        {
+            let outside = folder.0.join("Outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::create_dir(folder.0.join(SCRIPTS_DIR)).unwrap();
+            std::fs::write(outside.join("Original.lua"), "original").unwrap();
+            std::os::unix::fs::symlink(&outside, folder.0.join("scripts/Link")).unwrap();
+            std::os::unix::fs::symlink(
+                outside.join("Original.lua"),
+                folder.0.join("scripts/Linked.lua"),
+            )
+            .unwrap();
+            assert!(save_script(&folder.0, "Link/Attack", "bad").is_err());
+            assert!(save_script(&folder.0, "Linked", "bad").is_err());
+            assert!(delete_script(&folder.0, "Linked").is_err());
+            assert!(read_scripts(&folder.0).sources.is_empty());
+            assert!(read_scripts(&folder.0).folders.is_empty());
+            assert_eq!(
+                std::fs::read_to_string(outside.join("Original.lua")).unwrap(),
+                "original"
+            );
+            assert!(!outside.join("Attack.lua").exists());
+        }
+    }
+
     #[test]
     fn runs_scripts_on_the_beat() {
+        let _guard = TEST_LOCK.lock().unwrap();
         let stage = Stage {
             fixtures: vec![Fixture {
                 id: 1,
@@ -957,5 +1200,57 @@ mod tests {
         assert!(!DMX_STATE.lock().unwrap().running_scripts.contains("blink"));
         let errors = SCRIPTS.lock().unwrap().errors.clone();
         assert!(errors["blink"].contains("Unknown prop glow"), "{errors:?}");
+    }
+
+    #[test]
+    fn stopping_a_layer_cancels_only_its_tweens() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let stage = Stage {
+            fixtures: (1..=2)
+                .map(|id| Fixture {
+                    id,
+                    name: format!("Par {id}"),
+                    r#type: FixtureType::AmericanDJP56Led,
+                    addr: id as usize * 6,
+                    x: 0,
+                    y: 0,
+                    switches: None,
+                })
+                .collect(),
+            ..Stage::default()
+        };
+        let tempo = Tempo {
+            bpm: 120.0,
+            downbeat: None,
+        };
+        set_sources(BTreeMap::from([
+            ("Effects/Pars/a".into(), "fixture(1):set({ intensity = 0, color = 'red' }); fixture(1):tween({ intensity = 1 }, 4); wait(8)".into()),
+            ("Shows/b".into(), "fixture(2):set({ intensity = 0, color = 'blue' }); fixture(2):tween({ intensity = 1 }, 4); wait(8)".into()),
+        ]));
+        {
+            let mut state = DMX_STATE.lock().unwrap();
+            state.fixtures.clear();
+            state.running_scripts = ["Effects/Pars/a".into(), "Shows/b".into()].into();
+        }
+        let mut engine = Engine::new().unwrap();
+        engine.update(0.0, tempo, &stage);
+        engine.update(1.0, tempo, &stage);
+        {
+            let mut state = DMX_STATE.lock().unwrap();
+            assert_eq!(state.fixture(1).intensity, 0.25);
+            assert_eq!(state.fixture(2).intensity, 0.25);
+            state.running_scripts.remove("Effects/Pars/a");
+        }
+        engine.update(2.0, tempo, &stage);
+        {
+            let mut state = DMX_STATE.lock().unwrap();
+            assert_eq!(state.fixture(1).intensity, 0.25);
+            assert_eq!(state.fixture(2).intensity, 0.5);
+            state.fixtures.get_mut(&1).unwrap().intensity = 0.8;
+        }
+        engine.update(3.0, tempo, &stage);
+        let state = DMX_STATE.lock().unwrap();
+        assert_eq!(state.fixture(1).intensity, 0.8);
+        assert_eq!(state.fixture(2).intensity, 0.75);
     }
 }

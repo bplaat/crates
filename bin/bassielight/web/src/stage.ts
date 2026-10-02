@@ -186,7 +186,7 @@ export function initStageStore(ipc: Ipc) {
     });
 
     ipc.request('getScripts').then((scripts) => ($scripts.value = scripts as ScriptsState));
-    ipc.on('scriptsChanged', ({ scripts }: any) => ($scripts.value = { ...$scripts.value, scripts }));
+    ipc.on('scriptsChanged', ({ scripts, folders }: any) => ($scripts.value = { ...$scripts.value, scripts, folders }));
     ipc.on('scriptsRunning', ({ running, errors }: any) => ($scripts.value = { ...$scripts.value, running, errors }));
 }
 
@@ -214,12 +214,41 @@ export function useDmxOutput(ipc: Ipc, freeze: boolean): Record<number, FixtureO
 export interface ScriptsState {
     /// Source of each script by name
     scripts: Record<string, string>;
+    folders: string[];
     running: string[];
     /// Error of each script that stopped by an error
     errors: Record<string, string>;
 }
 
-export const $scripts = signal<ScriptsState>({ scripts: {}, running: [], errors: {} });
+export const $scripts = signal<ScriptsState>({ scripts: {}, folders: [], running: [], errors: {} });
+
+export const scriptFolder = (path: string) => path.slice(0, Math.max(0, path.lastIndexOf('/')));
+export const scriptLabel = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+
+export function scriptTree(names: string[], folders: string[]) {
+    const directories = new Set<string>();
+    const addDirectory = (path: string) => {
+        const parts = path.split('/');
+        for (let i = 1; i <= parts.length; i++) {
+            const parent = parts.slice(0, i).join('/');
+            if (parent) directories.add(parent);
+        }
+    };
+    folders.forEach(addDirectory);
+    names.forEach((name) => addDirectory(scriptFolder(name)));
+    type Entry = { path: string; label: string; depth: number; folder: boolean };
+    const children = (parent: string, depth: number): Entry[] => [
+        ...[...directories]
+            .filter((path) => scriptFolder(path) === parent)
+            .sort()
+            .flatMap((path) => [{ path, label: scriptLabel(path), depth, folder: true }, ...children(path, depth + 1)]),
+        ...names
+            .filter((path) => scriptFolder(path) === parent)
+            .sort()
+            .map((path) => ({ path, label: scriptLabel(path), depth, folder: false })),
+    ];
+    return children('', 1);
+}
 
 export function toggleScript(ipc: Ipc, name: string) {
     ipc.send($scripts.value.running.includes(name) ? 'stopScript' : 'startScript', { name });

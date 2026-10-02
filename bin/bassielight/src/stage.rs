@@ -600,9 +600,7 @@ pub(crate) fn create_folder(
     std::fs::create_dir_all(&scripts)?;
     std::fs::write(folder.join(STAGE_FILE), stage.to_json())?;
     if let Some(from) = scripts_from {
-        for entry in std::fs::read_dir(from.join(SCRIPTS_DIR))?.flatten() {
-            std::fs::copy(entry.path(), scripts.join(entry.file_name()))?;
-        }
+        crate::scripts::copy_scripts(&from.join(SCRIPTS_DIR), &scripts)?;
     }
     write_docs(folder)
 }

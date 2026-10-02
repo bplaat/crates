@@ -143,13 +143,13 @@ export function Header() {
                         <MotionPlayOutlineIcon />
                         <span class="header-label">Stage</span>
                     </NavLink>
-                    <NavLink href="/editor">
-                        <SquareEditOutlineIcon />
-                        <span class="header-label">Editor</span>
-                    </NavLink>
                     <NavLink href="/scripts">
                         <ScriptTextOutlineIcon />
                         <span class="header-label">Scripts</span>
+                    </NavLink>
+                    <NavLink href="/editor">
+                        <SquareEditOutlineIcon />
+                        <span class="header-label">Editor</span>
                     </NavLink>
                 </nav>
 

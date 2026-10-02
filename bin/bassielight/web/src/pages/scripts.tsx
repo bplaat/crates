@@ -7,9 +7,17 @@
 import { useContext, useEffect, useState } from 'preact/hooks';
 import { IpcContext } from '../app.tsx';
 import { CodeEditor, disposeCodeModels } from '../components/code-editor.tsx';
-import { ContentSaveOutlineIcon, DeleteIcon, PlayIcon, PlusIcon, StopIcon } from '../components/icons.tsx';
+import {
+    ContentSaveOutlineIcon,
+    DeleteIcon,
+    FolderOpenOutlineIcon,
+    FolderPlusOutlineIcon,
+    PlayIcon,
+    PlusIcon,
+    StopIcon,
+} from '../components/icons.tsx';
 import { Visualization } from '../components/visualization.tsx';
-import { $document, $scripts, toggleScript, useDmxOutput } from '../stage.ts';
+import { $document, $scripts, scriptFolder, scriptTree, toggleScript, useDmxOutput } from '../stage.ts';
 import './scripts.css';
 
 const TEMPLATE = `-- Runs on the beat of the BPM button, see AGENTS.md in the stage folder for the full API
@@ -22,17 +30,26 @@ while true do
 end
 `;
 
-/// Same rule as the app, script names are file names
-const isValidName = (name: string) => /^[A-Za-z0-9 _-]{1,64}$/.test(name);
+/// Same relative path rule as the app
+const isValidName = (name: string) =>
+    name.length > 0 &&
+    name.length <= 255 &&
+    name.split('/').every((part) => /^[A-Za-z0-9 _-]{1,64}$/.test(part) && part.trim() === part);
 
 export function ScriptsPage() {
     const ipc = useContext(IpcContext)!;
-    const { scripts, running, errors } = $scripts.value;
+    const { scripts, folders = [], running, errors } = $scripts.value;
     const names = Object.keys(scripts);
     const [selected, setSelected] = useState<string | null>(null);
     // Unsaved edits per script, scripts without edits follow their file, like when AI agents change it
     const [drafts, setDrafts] = useState<Record<string, string>>({});
     const [newName, setNewName] = useState('');
+    const [newFolder, setNewFolder] = useState('');
+    const [directory, setDirectory] = useState('');
+    const currentDirectory = folders.includes(directory) ? directory : '';
+    const pathInDirectory = (name: string) => (currentDirectory ? `${currentDirectory}/${name}` : name);
+    const newScriptPath = pathInDirectory(newName);
+    const newFolderPath = pathInDirectory(newFolder);
     // Scripts run while editing them and the stage folder keeps following changes
     const outputs = useDmxOutput(ipc, false);
 
@@ -48,10 +65,16 @@ export function ScriptsPage() {
         setDrafts(rest);
     };
     const create = () => {
-        if (!isValidName(newName) || newName in scripts) return;
-        ipc.send('saveScript', { name: newName, source: TEMPLATE });
-        setSelected(newName);
+        if (!newName || !isValidName(newScriptPath) || newScriptPath in scripts) return;
+        ipc.send('saveScript', { name: newScriptPath, source: TEMPLATE });
+        setSelected(newScriptPath);
         setNewName('');
+    };
+    const createFolder = () => {
+        if (!newFolder || !isValidName(newFolderPath) || folders.includes(newFolderPath)) return;
+        ipc.send('createScriptFolder', { name: newFolderPath });
+        setDirectory(newFolderPath);
+        setNewFolder('');
     };
     const remove = (script: string) => {
         if (!confirm(`Delete script ${script}?`)) return;
@@ -62,29 +85,61 @@ export function ScriptsPage() {
 
     return (
         <>
-            <div class="sidebar is-left">
+            <div class="sidebar is-left script-sidebar">
                 <h2 class="title">Scripts</h2>
-                <div class="list">
-                    {names.length === 0 && <p>No scripts yet</p>}
-                    {names.map((script) => (
-                        <div key={script} class={`script-item ${script === name ? 'is-selected' : ''}`}>
-                            <button class="script-item-name" onClick={() => setSelected(script)}>
-                                <span
-                                    class={`script-dot ${running.includes(script) ? 'is-running' : ''} ${errors[script] ? 'is-error' : ''}`}
-                                />
-                                {script}
-                                {isDirty(script) && <span class="script-dirty" title="Unsaved changes" />}
-                            </button>
+                <nav class="list script-tree" aria-label="Script files">
+                    <button
+                        class={`script-folder ${currentDirectory === '' ? 'is-selected' : ''}`}
+                        onClick={() => setDirectory('')}
+                        aria-pressed={currentDirectory === ''}
+                    >
+                        <FolderOpenOutlineIcon /> scripts
+                    </button>
+                    {names.length === 0 && folders.length === 0 && <p>No scripts yet</p>}
+                    {scriptTree(names, folders).map(({ path: script, label, depth, folder }) =>
+                        folder ? (
                             <button
-                                class="icon-button"
-                                title={running.includes(script) ? 'Stop' : 'Start'}
-                                onClick={() => toggleScript(ipc, script)}
+                                key={`folder:${script}`}
+                                class={`script-folder ${currentDirectory === script ? 'is-selected' : ''}`}
+                                style={{ marginLeft: `${depth * 0.75}rem` }}
+                                title={script}
+                                aria-pressed={currentDirectory === script}
+                                onClick={() => setDirectory(script)}
                             >
-                                {running.includes(script) ? <StopIcon /> : <PlayIcon />}
+                                <FolderOpenOutlineIcon /> {label}
                             </button>
-                        </div>
-                    ))}
-                </div>
+                        ) : (
+                            <div
+                                key={script}
+                                class={`script-item ${script === name ? 'is-selected' : ''}`}
+                                style={{ marginLeft: `${depth * 0.75}rem` }}
+                                title={script}
+                            >
+                                <button
+                                    class="script-item-name"
+                                    onClick={() => {
+                                        setSelected(script);
+                                        setDirectory(scriptFolder(script));
+                                    }}
+                                >
+                                    <span
+                                        class={`script-dot ${running.includes(script) ? 'is-running' : ''} ${errors[script] ? 'is-error' : ''}`}
+                                    />
+                                    {label}
+                                    {isDirty(script) && <span class="script-dirty" title="Unsaved changes" />}
+                                </button>
+                                <button
+                                    class="icon-button"
+                                    title={running.includes(script) ? 'Stop' : 'Start'}
+                                    onClick={() => toggleScript(ipc, script)}
+                                >
+                                    {running.includes(script) ? <StopIcon /> : <PlayIcon />}
+                                </button>
+                            </div>
+                        ),
+                    )}
+                </nav>
+                <p class="script-location">Create in: {currentDirectory || 'scripts'}</p>
                 <div class="script-new">
                     <input
                         class="input"
@@ -93,14 +148,36 @@ export function ScriptsPage() {
                         onInput={(e) => setNewName(e.currentTarget.value)}
                         onKeyDown={(e) => e.key === 'Enter' && create()}
                     />
-                    <button class="icon-button" title="Add script" disabled={!isValidName(newName)} onClick={create}>
+                    <button
+                        class="icon-button"
+                        title="Add script"
+                        disabled={!newName || !isValidName(newScriptPath) || newScriptPath in scripts}
+                        onClick={create}
+                    >
                         <PlusIcon />
+                    </button>
+                </div>
+                <div class="script-new">
+                    <input
+                        class="input"
+                        placeholder="New folder name"
+                        value={newFolder}
+                        onInput={(e) => setNewFolder(e.currentTarget.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && createFolder()}
+                    />
+                    <button
+                        class="icon-button"
+                        title="Add folder"
+                        disabled={!newFolder || !isValidName(newFolderPath) || folders.includes(newFolderPath)}
+                        onClick={createFolder}
+                    >
+                        <FolderPlusOutlineIcon />
                     </button>
                 </div>
 
                 <p class="block script-hint">
-                    Timing is in beats of the BPM button. The stage folder has an AGENTS.md with the full API, so AI
-                    agents like Claude Code and Codex can write scripts, which show up here right away.
+                    Combine scripts that control different groups. Run full-room shows on their own. Timing follows the
+                    BPM button; the stage folder has an AGENTS.md with the full API.
                 </p>
             </div>
 

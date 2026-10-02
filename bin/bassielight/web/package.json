@@ -4,6 +4,7 @@
     "version": "0.1.0",
     "type": "module",
     "scripts": {
+        "test": "node --test test/*.test.mjs",
         "build-debug": "tsc -p tsconfig.app.json --noEmit && vite build --mode debug --minify=false",
         "build-release": "tsc -p tsconfig.app.json --noEmit && vite build --mode release"
     },
