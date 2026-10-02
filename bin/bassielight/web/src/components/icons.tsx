@@ -20,6 +20,7 @@ import {
     mdiLightbulb,
     mdiLightbulbOff,
     mdiMetronome,
+    mdiMicrophone,
     mdiMotionPlayOutline,
     mdiMusic,
     mdiPlay,
@@ -58,6 +59,7 @@ export const GroupIcon = () => <Icon path={mdiGroup} />;
 export const LightbulbIcon = () => <Icon path={mdiLightbulb} />;
 export const LightbulbOffIcon = () => <Icon path={mdiLightbulbOff} />;
 export const MetronomeIcon = () => <Icon path={mdiMetronome} />;
+export const MicrophoneIcon = () => <Icon path={mdiMicrophone} />;
 export const MusicIcon = () => <Icon path={mdiMusic} />;
 export const MotionPlayOutlineIcon = () => <Icon path={mdiMotionPlayOutline} />;
 export const PlaylistPlayIcon = () => <Icon path={mdiPlaylistPlay} />;

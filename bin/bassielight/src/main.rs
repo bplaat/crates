@@ -27,6 +27,7 @@ use crate::config::{CONFIG, Config};
 use crate::ipc::{IPC_CONNECTIONS, IpcConnection, IpcMessage, ipc_message_handler};
 use crate::stage::{OpenStage, STAGE, Stage};
 
+mod bpm;
 mod config;
 mod dmx;
 mod ipc;

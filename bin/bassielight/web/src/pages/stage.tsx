@@ -18,6 +18,7 @@ import {
     KindIcon,
     LightbulbOffIcon,
     MetronomeIcon,
+    MicrophoneIcon,
     MusicIcon,
 } from '../components/icons.tsx';
 import { Visualization } from '../components/visualization.tsx';
@@ -163,7 +164,7 @@ function TapTempoButton({ bpm, onTap }: { bpm: number | undefined; onTap: (bpm: 
             }}
         >
             <MetronomeIcon />
-            {bpm ? `${bpm} BPM` : 'BPM'}
+            {bpm ? `${Math.round(bpm)} BPM` : 'BPM'}
         </button>
     );
 }
@@ -427,6 +428,7 @@ export function StagePage() {
     const [fixtureStates, setFixtureStates] = useState<Record<number, FixtureState>>({});
     const [selectedMode, setSelectedMode] = useIpcState('mode');
     const [bpm, setBpm] = useIpcState('bpm');
+    const [autoBpm, setAutoBpm] = useIpcState('autoBpm');
 
     const applyProp = (fixtures: number[], prop: FixtureProp) =>
         setFixtureStates((states) => {
@@ -445,7 +447,7 @@ export function StagePage() {
         return () => listeners.forEach((listener) => listener.remove());
     }, []);
     // Freeze the setup while performing, changes to the stage folder are picked up afterwards
-    const fixtureOutputs = useDmxOutput(ipc, true);
+    const fixtureOutputs = useDmxOutput(ipc);
 
     // (Re)load the DMX state when a stage file is opened, the app resets fixture state then
     const path = $document.value?.path;
@@ -456,12 +458,14 @@ export function StagePage() {
                 state: {
                     mode: string;
                     bpm: number;
+                    autoBpm: boolean;
                     fixtures: Record<number, FixtureState>;
                 };
             };
             setFixtureStates(state.fixtures);
             setSelectedMode(state.mode, false);
             setBpm(Math.round(state.bpm), false);
+            setAutoBpm(state.autoBpm, false);
         })();
     }, [path]);
 
@@ -519,6 +523,14 @@ export function StagePage() {
                         </button>
                     ))}
                     <TapTempoButton bpm={bpm} onTap={setBpm} />
+                    <button
+                        class={`button is-expanded ${autoBpm ? 'is-selected' : ''}`}
+                        title="Follow the tempo with the microphone"
+                        onClick={() => setAutoBpm(!autoBpm)}
+                    >
+                        <MicrophoneIcon />
+                        Listen
+                    </button>
                 </div>
             </div>
 

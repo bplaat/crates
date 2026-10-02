@@ -6,6 +6,7 @@
 
 use std::collections::BTreeMap;
 use std::io;
+use std::path::PathBuf;
 use std::sync::{Arc, LazyLock, Mutex, mpsc};
 use std::time::Instant;
 
@@ -14,15 +15,13 @@ use log::{debug, warn};
 use serde::{Deserialize, Serialize};
 use small_websocket::{Message, WebSocket};
 
-use std::path::PathBuf;
-
 use crate::config::{self, CONFIG};
 use crate::dmx::{
     DMX_STATE, FIXTURE_OUTPUTS, FixtureOutput, FixtureProp, FixtureState, Mode, Tempo,
 };
-use crate::scripts;
 use crate::stage::{FixtureProfile, FixtureType, OpenStage, STAGE, Stage};
 use crate::usb::ErrorCategory;
+use crate::{bpm, scripts};
 
 // MARK: UsbStatus
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -211,6 +210,11 @@ pub(crate) enum IpcMessage {
     SetBpm {
         bpm: f32,
     },
+    /// Follow the tempo with the microphone
+    SetAutoBpm {
+        #[serde(rename = "autoBpm")]
+        auto_bpm: bool,
+    },
 }
 
 impl IpcMessage {
@@ -241,6 +245,7 @@ impl IpcMessage {
 pub(crate) struct State {
     pub mode: Mode,
     pub bpm: f32,
+    pub auto_bpm: bool,
     pub fixtures: BTreeMap<u32, FixtureState>,
     pub fixture_outputs: BTreeMap<u32, FixtureOutput>,
 }
@@ -337,6 +342,7 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             let state = State {
                 mode: dmx_state.mode,
                 bpm: dmx_state.tempo.bpm,
+                auto_bpm: bpm::is_enabled(),
                 fixtures: open_stage
                     .iter()
                     .flat_map(|open| &open.stage.fixtures)
@@ -529,6 +535,10 @@ pub(crate) fn ipc_message_handler(mut connection: IpcConnection, message: &str) 
             };
             connection.broadcast(&message);
         }
+        IpcMessage::SetAutoBpm { auto_bpm } => {
+            bpm::set_enabled(auto_bpm);
+            connection.broadcast(&message);
+        }
 
         IpcMessage::GetStateResponse { .. }
         | IpcMessage::GetStageResponse { .. }
@@ -603,6 +613,14 @@ mod tests {
                 r#"{"type":"setStage","stage":{"room":{"width":800,"height":1000},"fixtures":[],"groups":[],"buttons":[{"id":1,"label":"","x":63,"y":25,"width":125,"height":50,"target":null}]}}"#
             ),
             Ok(IpcMessage::SetStage { .. })
+        ));
+    }
+
+    #[test]
+    fn parses_auto_bpm_messages() {
+        assert!(matches!(
+            parse_client_message(r#"{"type":"setAutoBpm","autoBpm":true}"#),
+            Ok(IpcMessage::SetAutoBpm { auto_bpm: true })
         ));
     }
 

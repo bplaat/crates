@@ -51,7 +51,7 @@ export function ScriptsPage() {
     const newScriptPath = pathInDirectory(newName);
     const newFolderPath = pathInDirectory(newFolder);
     // Scripts run while editing them and the stage folder keeps following changes
-    const outputs = useDmxOutput(ipc, false);
+    const outputs = useDmxOutput(ipc);
 
     const name = selected !== null && selected in scripts ? selected : (names[0] ?? null);
     const isDirty = (script: string) => script in drafts && drafts[script] !== scripts[script];

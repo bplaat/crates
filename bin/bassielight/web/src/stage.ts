@@ -193,19 +193,21 @@ export function initStageStore(ipc: Ipc) {
 // MARK: DMX output
 export const $dmxLive = signal(false);
 
-/// Run the DMX output while a page is shown, returns the fixture outputs for the visualization
-export function useDmxOutput(ipc: Ipc, freeze: boolean): Record<number, FixtureOutput> {
+/// Keep output running between Stage and Scripts, even while the scripts page loads
+export function syncDmxOutput(ipc: Ipc, location: string) {
+    const live = location === '/' || location === '/scripts';
+    if (live) ipc.send('start', { freeze: location === '/' });
+    else ipc.send('stop');
+    $dmxLive.value = live;
+}
+
+/// Subscribe to the fixture outputs for the visualization
+export function useDmxOutput(ipc: Ipc): Record<number, FixtureOutput> {
     const [outputs, setOutputs] = useState<Record<number, FixtureOutput>>({});
     useEffect(() => {
         const listener = ipc.on('fixtureOutputs', ({ outputs }: any) => setOutputs(outputs));
         ipc.request('getState').then(({ state }: any) => setOutputs(state.fixtureOutputs));
-        ipc.send('start', { freeze });
-        $dmxLive.value = true;
-        return () => {
-            listener.remove();
-            ipc.send('stop');
-            $dmxLive.value = false;
-        };
+        return () => listener.remove();
     }, []);
     return outputs;
 }

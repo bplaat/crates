@@ -11,6 +11,7 @@ name = "BassieLight"
 identifier = "nl.bplaat.BassieLight"
 copyright = "Copyright © 2025 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
+info_plist = "meta/macos/Info.plist"
 # entitlements = "meta/macos/Entitlements.plist"
 
 [lints]
@@ -19,6 +20,7 @@ workspace = true
 [dependencies]
 bwindow = { path = "../../lib/bwindow", features = ["dialog"] }
 bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
+cpal = "0.18.2"
 directories = "6.0"
 log = "0.4.34"
 local-ip-address = { version = "0.6.13" }

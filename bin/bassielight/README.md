@@ -20,12 +20,13 @@
 - Select fixtures or groups on a live visualization of the room and control their lights
 - Control setup with a remote device through the web interface
 - Animate your lights with [Lua](https://www.lua.org/) scripts that stay in sync with the beat
+- Follow the tempo and beat of the music with the microphone
 
 ## Stages and scripts
 
 A stage is a `.stage` folder with a `stage.json` with the setup and a `scripts` folder with Lua scripts, open it by
 its `stage.json`. Scripts are started from the scripts tab or with buttons on the stage, all their timing is in beats
-of the BPM button.
+of the BPM button. Turn on **Listen** to follow the tempo of the music with the default microphone instead.
 
 Every stage folder gets an `AGENTS.md` with the file formats and the script API, so AI agents like Claude Code and
 Codex can edit the setup and write scripts. BassieLight picks up setup changes in the editor and scripts
@@ -80,6 +81,8 @@ sudo udevadm trigger
 ```
 
 The rule grants the logged-in user access, so BassieLight does not need root.
+
+Following the tempo with the microphone uses ALSA, install its runtime library (`libasound2` on Debian / Ubuntu).
 
 ## License
 

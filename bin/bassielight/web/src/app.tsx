@@ -6,13 +6,14 @@
 
 import { createContext } from 'preact';
 import { lazy, Suspense } from 'preact/compat';
-import { Route, Switch } from 'wouter-preact';
+import { useEffect } from 'preact/hooks';
+import { Route, Switch, useLocation } from 'wouter-preact';
 import { Header } from './components/header.tsx';
 import { Ipc } from './ipc.ts';
 import { EditorPage } from './pages/editor.tsx';
 import { NotFoundPage } from './pages/notfound.tsx';
 import { StagePage } from './pages/stage.tsx';
-import { initStageStore } from './stage.ts';
+import { initStageStore, syncDmxOutput } from './stage.ts';
 
 export const IpcContext = createContext<Ipc | null>(null);
 
@@ -23,6 +24,10 @@ const ipc = new Ipc();
 initStageStore(ipc);
 
 export function App() {
+    const [location] = useLocation();
+    useEffect(() => syncDmxOutput(ipc, location), [location]);
+    useEffect(() => () => void ipc.send('stop'), []);
+
     return (
         <IpcContext.Provider value={ipc}>
             <Header />

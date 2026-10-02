@@ -1,0 +1,10 @@
+[package]
+name = "cpal"
+version = "0.18.2+patch"
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+
+[lints]
+workspace = true

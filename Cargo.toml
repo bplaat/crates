@@ -29,6 +29,7 @@ bsql = { path = "lib/bsql" }
 bsql_derive = { path = "lib/bsql_derive" }
 chrono = { path = "lib/chrono" }
 copy_dir = { path = "lib/copy_dir" }
+cpal = { path = "lib/cpal" }
 digest = { path = "lib/digest" }
 directories = { path = "lib/directories" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }

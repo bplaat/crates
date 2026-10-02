@@ -9,11 +9,10 @@ use std::time::Duration;
 
 use log::{info, warn};
 
-use crate::config;
 use crate::dmx::DMX_STATE;
 use crate::ipc::{self, IpcMessage};
-use crate::scripts;
 use crate::stage::{STAGE, Stage};
+use crate::{config, scripts};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(500);
 

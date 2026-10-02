@@ -282,7 +282,7 @@ pub(crate) struct Tempo {
 
 impl Tempo {
     /// Beats elapsed since the downbeat
-    fn beats(&self, elapsed: Duration) -> f64 {
+    pub(crate) fn beats(&self, elapsed: Duration) -> f64 {
         elapsed.as_secs_f64() * self.bpm as f64 / 60.0
     }
 
