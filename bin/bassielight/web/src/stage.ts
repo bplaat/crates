@@ -69,7 +69,7 @@ export type FixtureOutput =
     | { movingHead: { color: number | null; gobo: string | null } }
     | { switch: boolean[] }
     | { strobe: { intensity: number; speed: number } }
-    | { haze: { on: boolean; volume: number; fan: number } };
+    | { haze: { on: boolean; volume: number; fan: number; remaining: number | null } };
 
 export interface Fixture {
     id: number;
@@ -88,7 +88,8 @@ export interface Group {
     hide_outline?: boolean;
 }
 
-/// Rect in the room that selects its target when pressed, positioned by its center
+/// Rect in the room that selects or blacks out its fixtures and groups and toggles its scripts when
+/// pressed, positioned by its center
 export interface Button {
     id: number;
     label: string;
@@ -96,7 +97,8 @@ export interface Button {
     y: number;
     width: number;
     height: number;
-    target: ButtonTarget | null;
+    action: ButtonAction;
+    targets: ButtonTarget[];
 }
 
 export interface Stage {
@@ -115,8 +117,12 @@ export interface StageDocument {
 }
 
 export type Target = { type: 'fixture' | 'group'; id: number };
-/// Buttons select a fixture or group, or start and stop a script
+/// Buttons select or black out fixtures and groups, and start and stop scripts
 export type ButtonTarget = Target | { type: 'script'; name: string };
+export type ButtonAction = 'select' | 'blackout';
+
+export const targetKey = (target: ButtonTarget) =>
+    target.type === 'script' ? `script:${target.name}` : `${target.type}:${target.id}`;
 export type Selection = Target | { type: 'button'; id: number } | null;
 
 /// Offset for pasted fixtures, in centimeters
@@ -131,15 +137,27 @@ export function nextId(items: { id: number }[]): number {
 export function selectedFixtureIds(stage: Stage, selection: Selection): number[] {
     if (selection?.type === 'fixture') return [selection.id];
     if (selection?.type === 'group') return stage.groups.find((g) => g.id === selection.id)?.fixtures ?? [];
-    if (selection?.type === 'button') return [];
+    if (selection?.type === 'button') {
+        const button = stage.buttons.find((b) => b.id === selection.id);
+        return button ? buttonFixtureIds(stage, button) : [];
+    }
     return stage.fixtures.map((f) => f.id);
 }
 
+/// Fixtures of the fixture and group targets of a button
+export function buttonFixtureIds(stage: Stage, button: Button): number[] {
+    const ids = button.targets.flatMap((target) => (target.type === 'script' ? [] : selectedFixtureIds(stage, target)));
+    return [...new Set(ids)];
+}
+
+export const buttonScripts = (button: Button) =>
+    button.targets.flatMap((target) => (target.type === 'script' ? [target.name] : []));
+
 /// Fixtures highlighted in the visualization while the others are dimmed, `null` highlights all
 export function highlightedFixtureIds(stage: Stage, selection: Selection): number[] | null {
-    const target =
-        selection?.type === 'button' ? (stage.buttons.find((b) => b.id === selection.id)?.target ?? null) : selection;
-    return target && target.type !== 'script' ? selectedFixtureIds(stage, target) : null;
+    if (selection === null) return null;
+    const ids = selectedFixtureIds(stage, selection);
+    return selection.type === 'button' && ids.length === 0 ? null : ids;
 }
 
 export function selectionName(stage: Stage, selection: Selection): string | undefined {
@@ -152,9 +170,10 @@ export function selectionName(stage: Stage, selection: Selection): string | unde
 }
 
 export function buttonLabel(stage: Stage, button: Button): string {
-    const target = button.target;
-    const name = target?.type === 'script' ? target.name : selectionName(stage, target);
-    return button.label || name || 'Button';
+    const names = button.targets.map((target) =>
+        target.type === 'script' ? target.name : selectionName(stage, target),
+    );
+    return button.label || names.filter(Boolean).join(', ') || 'Button';
 }
 
 export function findProfile(fixtureTypes: FixtureProfile[], type: string): FixtureProfile {
@@ -270,7 +289,18 @@ export function scriptTree(names: string[], folders: string[]) {
 }
 
 export function toggleScript(ipc: Ipc, name: string) {
-    ipc.send($scripts.value.running.includes(name) ? 'stopScript' : 'startScript', { name });
+    toggleScripts(ipc, [name]);
+}
+
+export const scriptsRunning = (names: string[]) =>
+    names.length > 0 && names.every((name) => $scripts.value.running.includes(name));
+
+/// Start the scripts, or stop them when they all run
+export function toggleScripts(ipc: Ipc, names: string[]) {
+    const stop = scriptsRunning(names);
+    for (const name of names) {
+        if (stop || !$scripts.value.running.includes(name)) ipc.send(stop ? 'stopScript' : 'startScript', { name });
+    }
 }
 
 export function updateStage(ipc: Ipc, stage: Stage) {

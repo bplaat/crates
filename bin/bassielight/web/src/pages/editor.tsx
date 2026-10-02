@@ -26,8 +26,10 @@ import {
     pasteOffset,
     saveStage,
     switchCount,
+    targetKey,
     updateStage,
     type Button,
+    type ButtonAction,
     type ButtonTarget,
     type Fixture,
     type Group,
@@ -133,17 +135,34 @@ function SidebarHeader({ onClose, children }: { onClose: () => void; children: C
     );
 }
 
-/// Button target values are `type:id`, or `script:name`
-const targetValue = (target: ButtonTarget) =>
-    target.type === 'script' ? `script:${target.name}` : `${target.type}:${target.id}`;
-
-function parseTarget(value: string): ButtonTarget | null {
-    const separator = value.indexOf(':');
-    const type = value.slice(0, separator);
-    const rest = value.slice(separator + 1);
-    if (type === 'script') return { type, name: rest };
-    if (type === 'fixture' || type === 'group') return { type, id: Number(rest) };
-    return null;
+function TargetChecklist({
+    title,
+    button,
+    targets,
+    onToggle,
+}: {
+    title: string;
+    button: Button;
+    targets: { target: ButtonTarget; name: string }[];
+    onToggle: (target: ButtonTarget) => void;
+}) {
+    if (targets.length === 0) return null;
+    const keys = button.targets.map(targetKey);
+    return (
+        <>
+            <h2 class="title">{title}</h2>
+            {targets.map(({ target, name }) => (
+                <label key={targetKey(target)} class="checkbox">
+                    <input
+                        type="checkbox"
+                        checked={keys.includes(targetKey(target))}
+                        onChange={() => onToggle(target)}
+                    />
+                    {name}
+                </label>
+            ))}
+        </>
+    );
 }
 
 /// Copied fixtures, with the group they were copied as, kept while switching pages
@@ -227,13 +246,9 @@ export function EditorPage() {
         });
         setSelection({ type: 'fixture', id });
     };
-    // Buttons of a deleted fixture or group stay, without a target
+    // Buttons of a deleted fixture or group stay, without it as target
     const untargetButtons = (target: Target) =>
-        stage.buttons.map((b) =>
-            b.target && b.target.type !== 'script' && b.target.type === target.type && b.target.id === target.id
-                ? { ...b, target: null }
-                : b,
-        );
+        stage.buttons.map((b) => ({ ...b, targets: b.targets.filter((t) => targetKey(t) !== targetKey(target)) }));
     const deleteFixture = (id: number) => {
         update({
             fixtures: stage.fixtures.filter((f) => f.id !== id),
@@ -267,11 +282,19 @@ export function EditorPage() {
                     width,
                     height: Math.round(width / 2.5),
                     // Start as a shortcut for the selected fixture or group
-                    target: selection?.type === 'fixture' || selection?.type === 'group' ? selection : null,
+                    action: 'select',
+                    targets: selection?.type === 'fixture' || selection?.type === 'group' ? [selection] : [],
                 },
             ],
         });
         setSelection({ type: 'button', id });
+    };
+    const toggleTarget = (button: Button, target: ButtonTarget) => {
+        const key = targetKey(target);
+        const targets = button.targets.some((t) => targetKey(t) === key)
+            ? button.targets.filter((t) => targetKey(t) !== key)
+            : [...button.targets, target];
+        updateButton(button.id, { targets });
     };
     const deleteButton = (id: number) => {
         update({ buttons: stage.buttons.filter((b) => b.id !== id) });
@@ -503,36 +526,16 @@ export function EditorPage() {
                             Button
                         </SidebarHeader>
                         <label class="field">
-                            <span class="field-label">Selects</span>
+                            <span class="field-label">Fixtures and groups</span>
                             <select
                                 class="input"
-                                value={button.target ? targetValue(button.target) : ''}
+                                value={button.action}
                                 onChange={(e) =>
-                                    updateButton(button.id, { target: parseTarget(e.currentTarget.value) })
+                                    updateButton(button.id, { action: e.currentTarget.value as ButtonAction })
                                 }
                             >
-                                <option value="">Nothing</option>
-                                <optgroup label="Scripts">
-                                    {Object.keys($scripts.value.scripts).map((name) => (
-                                        <option key={name} value={`script:${name}`}>
-                                            {name}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Groups">
-                                    {stage.groups.map((group) => (
-                                        <option key={group.id} value={`group:${group.id}`}>
-                                            {group.name}
-                                        </option>
-                                    ))}
-                                </optgroup>
-                                <optgroup label="Fixtures">
-                                    {stage.fixtures.map((fixture) => (
-                                        <option key={fixture.id} value={`fixture:${fixture.id}`}>
-                                            {fixture.name}
-                                        </option>
-                                    ))}
-                                </optgroup>
+                                <option value="select">Select</option>
+                                <option value="blackout">Blackout</option>
                             </select>
                         </label>
                         <TextField
@@ -557,6 +560,31 @@ export function EditorPage() {
                                 onChange={(height) => updateButton(button.id, { height })}
                             />
                         </div>
+
+                        <TargetChecklist
+                            title="Groups"
+                            button={button}
+                            targets={stage.groups.map((g) => ({ target: { type: 'group', id: g.id }, name: g.name }))}
+                            onToggle={(target) => toggleTarget(button, target)}
+                        />
+                        <TargetChecklist
+                            title="Fixtures"
+                            button={button}
+                            targets={stage.fixtures.map((f) => ({
+                                target: { type: 'fixture', id: f.id },
+                                name: f.name,
+                            }))}
+                            onToggle={(target) => toggleTarget(button, target)}
+                        />
+                        <TargetChecklist
+                            title="Scripts"
+                            button={button}
+                            targets={Object.keys($scripts.value.scripts).map((name) => ({
+                                target: { type: 'script', name },
+                                name,
+                            }))}
+                            onToggle={(target) => toggleTarget(button, target)}
+                        />
 
                         <div class="buttons is-centered">
                             <button class="button is-expanded is-danger" onClick={() => deleteButton(button.id)}>

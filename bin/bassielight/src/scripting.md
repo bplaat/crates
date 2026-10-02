@@ -19,15 +19,20 @@ show up when there are no unsaved editor changes. On the stage tab the setup is 
   "fixtures": [{ "id": 1, "name": "Par 1", "type": "american_dj_p56led", "addr": 1, "x": 200, "y": 100 }],
   "groups": [{ "id": 1, "name": "Front", "fixtures": [1, 2], "hide_outline": false }],
   "buttons": [
-    { "id": 1, "label": "", "x": 100, "y": 450, "width": 100, "height": 40, "target": { "type": "script", "name": "chase" } }
+    { "id": 1, "label": "", "x": 100, "y": 450, "width": 100, "height": 40, "action": "select",
+      "targets": [{ "type": "script", "name": "chase" }] },
+    { "id": 2, "label": "Front off", "x": 250, "y": 450, "width": 100, "height": 40, "action": "blackout",
+      "targets": [{ "type": "group", "id": 1 }, { "type": "fixture", "id": 3 }] }
   ]
 }
 ```
 
 - Sizes and positions are in centimeters, `x` and `y` of fixtures and buttons are their centers.
 - `addr` is the DMX start address, fixtures must fit in the 512 DMX channels. Ids must be unique.
-- A button `target` is `{ "type": "fixture", "id": 1 }`, `{ "type": "group", "id": 1 }`,
-  `{ "type": "script", "name": "chase" }` or `null`. Pressing a script button starts or stops the script.
+- A button has a list of `targets`, each `{ "type": "fixture", "id": 1 }`, `{ "type": "group", "id": 1 }` or
+  `{ "type": "script", "name": "chase" }`. Pressing it starts its scripts, or stops them when they all run. Its
+  `action` is what it does with its fixtures and groups: `"select"` selects them all for the controls,
+  `"blackout"` turns them off like black mode, or back on when they are all off.
 
 Script IDs are paths relative to `scripts/` without `.lua`, for example `Shows/Party Mix` or
 `Effects/Pars/Acid Rain`. Use the full ID for script button targets. Folder and file names can contain ASCII
@@ -61,7 +66,9 @@ effect, even when a full-room show resets colors and brightness. Combine layers 
 pars, heads and tubes. Scripts that control the same fixture property compete for it; they are not automatically
 mixed. Put full-room shows in `Shows/` (or prefix their names with `Show -`) and run them on their own.
 A show can mix two animated RGB looks and tween between their colors
-for a crossfade. Stopping a script cancels its pending tweens and leaves its current values in place.
+for a crossfade. Stopping a script, or a script that stops with an error, cancels its pending tweens and puts back
+the props it changed, except props another running script or the stage controls changed since. A script that returns
+keeps its values, so a short script can set a scene.
 
 ### Selecting fixtures
 
@@ -100,8 +107,9 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `switch_on`, `switch_all_press` | boolean; turns on all channels, preserving individual settings | switch |
 | `flash_on` | boolean | strobe |
 | `flash_intensity`, `flash_speed` | 0 to 1 | strobe |
-| `haze_on` | boolean; hazers run in every mode | haze |
+| `haze_on` | boolean; hazers run in every mode and switch off after 1 minute | haze |
 | `haze_volume`, `fan_speed` | 0 to 1 | haze |
+| `blackout` | boolean; off like in black mode while keeping the other props, hazers keep running | all |
 
 Colors are a name (`black`, `white`, `red`, `green`, `blue`, `yellow`, `magenta`, `cyan`, `orange`, `purple`,
 `pink`), a `"#rrggbb"` string or a number like `0xff8000`. Moving heads use the closest color of their color wheel.

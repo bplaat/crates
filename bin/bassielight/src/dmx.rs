@@ -131,6 +131,8 @@ pub(crate) struct FixtureState {
     pub haze_press: bool,
     pub haze_volume: f32,
     pub fan_speed: f32,
+    /// Off like in black mode, while keeping the other settings
+    pub blackout: bool,
 }
 
 impl FixtureState {
@@ -159,6 +161,7 @@ impl FixtureState {
         haze_press: false,
         haze_volume: 0.5,
         fan_speed: 0.5,
+        blackout: false,
     };
 
     pub(crate) const fn apply(&mut self, prop: FixtureProp) {
@@ -195,12 +198,52 @@ impl FixtureState {
             FixtureProp::HazePress(haze_press) => self.haze_press = haze_press,
             FixtureProp::HazeVolume(haze_volume) => self.haze_volume = haze_volume,
             FixtureProp::FanSpeed(fan_speed) => self.fan_speed = fan_speed,
+            FixtureProp::Blackout(blackout) => self.blackout = blackout,
+        }
+    }
+
+    /// Current value of the same prop
+    pub(crate) const fn current(&self, prop: FixtureProp) -> FixtureProp {
+        use FixtureProp as P;
+        match prop {
+            P::Color(_) => P::Color(self.color),
+            P::ToggleColor(_) => P::ToggleColor(self.toggle_color),
+            P::Intensity(_) => P::Intensity(self.intensity),
+            P::ToggleTween(_) => P::ToggleTween(self.toggle_tween),
+            P::ToggleSpeed(_) => P::ToggleSpeed(self.toggle_speed),
+            P::StrobeSpeed(_) => P::StrobeSpeed(self.strobe_speed),
+            P::SwitchOn(_) => P::SwitchOn(self.switch_on),
+            P::SwitchAllPress(_) => P::SwitchAllPress(self.switch_all_press),
+            P::SwitchToggle { index, .. } if index < DMX_SWITCHES_LENGTH => P::SwitchToggle {
+                index,
+                on: self.switches_toggle[index],
+            },
+            P::SwitchPress { index, .. } if index < DMX_SWITCHES_LENGTH => P::SwitchPress {
+                index,
+                on: self.switches_press[index],
+            },
+            P::SwitchToggle { .. } | P::SwitchPress { .. } => prop,
+            P::FlashOn(_) => P::FlashOn(self.flash_on),
+            P::FlashPress(_) => P::FlashPress(self.flash_press),
+            P::FlashIntensity(_) => P::FlashIntensity(self.flash_intensity),
+            P::FlashSpeed(_) => P::FlashSpeed(self.flash_speed),
+            P::Preset(_) => P::Preset(self.preset),
+            P::PresetSpeed(_) => P::PresetSpeed(self.preset_speed),
+            P::Gobo(_) => P::Gobo(self.gobo),
+            P::Focus(_) => P::Focus(self.focus),
+            P::Movement(_) => P::Movement(self.movement),
+            P::MovementSpeed(_) => P::MovementSpeed(self.movement_speed),
+            P::HazeOn(_) => P::HazeOn(self.haze_on),
+            P::HazePress(_) => P::HazePress(self.haze_press),
+            P::HazeVolume(_) => P::HazeVolume(self.haze_volume),
+            P::FanSpeed(_) => P::FanSpeed(self.fan_speed),
+            P::Blackout(_) => P::Blackout(self.blackout),
         }
     }
 }
 
 // MARK: FixtureProp
-#[derive(Debug, Copy, Clone, Serialize, Deserialize)]
+#[derive(Debug, Copy, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub(crate) enum FixtureProp {
     Color(Color),
@@ -227,6 +270,7 @@ pub(crate) enum FixtureProp {
     HazePress(bool),
     HazeVolume(f32),
     FanSpeed(f32),
+    Blackout(bool),
 }
 
 // MARK: DmxState
@@ -239,6 +283,10 @@ pub(crate) struct DmxState {
     pub tempo: Tempo,
     pub fixtures: BTreeMap<u32, FixtureState>,
     pub running_scripts: BTreeSet<String>,
+    /// Changes when another stage is opened, scripts then forget what they changed
+    pub stage_generation: u64,
+    /// Moment each switched on hazer is cut off
+    pub haze_deadlines: BTreeMap<u32, Instant>,
 }
 
 impl DmxState {
@@ -247,6 +295,27 @@ impl DmxState {
             .get(&id)
             .copied()
             .unwrap_or(FixtureState::DEFAULT)
+    }
+
+    /// Start the cut-off timer of newly switched on hazers and switch off the expired ones,
+    /// returns the ids of the hazers that were switched off
+    fn expire_hazers(&mut self, now: Instant) -> Vec<u32> {
+        let Self {
+            fixtures,
+            haze_deadlines,
+            ..
+        } = self;
+        haze_deadlines.retain(|id, _| fixtures.get(id).is_some_and(|state| state.haze_on));
+        let mut expired = Vec::new();
+        for (id, state) in fixtures.iter_mut().filter(|(_, state)| state.haze_on) {
+            let deadline = *haze_deadlines.entry(*id).or_insert(now + HAZE_TIMEOUT);
+            if now >= deadline {
+                state.haze_on = false;
+                haze_deadlines.remove(id);
+                expired.push(*id);
+            }
+        }
+        expired
     }
 }
 
@@ -260,6 +329,8 @@ pub(crate) static DMX_STATE: Mutex<DmxState> = Mutex::new(DmxState {
     },
     fixtures: BTreeMap::new(),
     running_scripts: BTreeSet::new(),
+    stage_generation: 0,
+    haze_deadlines: BTreeMap::new(),
 });
 
 // MARK: FixtureOutput
@@ -282,12 +353,17 @@ pub(crate) enum FixtureOutput {
         on: bool,
         volume: f32,
         fan: f32,
+        /// Seconds until a switched on hazer is cut off
+        remaining: Option<u64>,
     },
 }
 
 /// Last output of each fixture
 pub(crate) static FIXTURE_OUTPUTS: Mutex<BTreeMap<u32, FixtureOutput>> =
     Mutex::new(BTreeMap::new());
+
+/// A switched on hazer never runs unattended for longer than this
+const HAZE_TIMEOUT: Duration = Duration::from_secs(60);
 
 // MARK: Tempo
 pub(crate) const DEFAULT_BPM: f32 = 120.0;
@@ -314,6 +390,7 @@ impl Tempo {
 
 /// Position of a DMX frame on the beat clock
 struct Clock {
+    time: Instant,
     tempo: Tempo,
     beat: f64,
     frame: u64,
@@ -389,6 +466,7 @@ pub(crate) fn dmx_thread() {
         let frame_time = Instant::now();
         let elapsed = frame_time.saturating_duration_since(tempo.downbeat.unwrap_or(clock_start));
         let clock = Clock {
+            time: frame_time,
             tempo,
             beat: tempo.beats(elapsed),
             frame: (elapsed.as_secs_f64() * dmx_fps as f64) as u64,
@@ -405,7 +483,17 @@ pub(crate) fn dmx_thread() {
 
         // Scripts change the fixture states before they are sent
         engine.update(clock.beat, tempo, &stage);
-        let dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state").clone();
+        let dmx_state = {
+            let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            let expired = dmx_state.expire_hazers(frame_time);
+            if !expired.is_empty() {
+                ipc::broadcast(&IpcMessage::SetFixtureProp {
+                    fixtures: expired,
+                    prop: FixtureProp::HazeOn(false),
+                });
+            }
+            dmx_state.clone()
+        };
 
         // Update DMX data
         dmx.clear();
@@ -445,14 +533,20 @@ fn render_fixtures(
     for fixture in fixtures {
         let profile = fixture.r#type.profile();
         let channels = &mut dmx[fixture.addr - 1..][..profile.channels.len()];
+        let state = dmx_state.fixture(fixture.id);
+        // A blacked out fixture renders like black mode
+        let mode = if state.blackout {
+            Mode::Black
+        } else {
+            dmx_state.mode
+        };
         match profile.kind {
             FixtureKind::Switch => {
-                let state = dmx_state.fixture(fixture.id);
                 let mut switches = Vec::new();
                 for (value, channel) in channels.iter_mut().zip(profile.channels) {
                     if *channel == Channel::Switch {
                         let index = switches.len();
-                        let is_on = dmx_state.mode == Mode::Manual
+                        let is_on = mode == Mode::Manual
                             && (state.switch_on
                                 || state.switch_all_press
                                 || state.switches_toggle.get(index) == Some(&true)
@@ -464,10 +558,9 @@ fn render_fixtures(
                 outputs.insert(fixture.id, FixtureOutput::Switch(switches));
             }
             FixtureKind::Strobe => {
-                let state = dmx_state.fixture(fixture.id);
                 // A strobe has no music program, so it keeps flashing in auto mode
                 let is_on = state.flash_on || state.flash_press;
-                let (intensity, speed) = if dmx_state.mode == Mode::Black || !is_on {
+                let (intensity, speed) = if mode == Mode::Black || !is_on {
                     (0.0, 0.0)
                 } else {
                     (state.flash_intensity, state.flash_speed)
@@ -482,7 +575,6 @@ fn render_fixtures(
                 outputs.insert(fixture.id, FixtureOutput::Strobe { intensity, speed });
             }
             FixtureKind::Haze => {
-                let state = dmx_state.fixture(fixture.id);
                 // Haze is part of the room, not of the light show, so it runs in every mode
                 let on = state.haze_on || state.haze_press;
                 for (value, channel) in channels.iter_mut().zip(profile.channels) {
@@ -498,15 +590,19 @@ fn render_fixtures(
                         on,
                         volume: state.haze_volume,
                         fan: state.fan_speed,
+                        remaining: dmx_state.haze_deadlines.get(&fixture.id).map(|deadline| {
+                            deadline
+                                .saturating_duration_since(clock.time)
+                                .as_secs_f64()
+                                .ceil() as u64
+                        }),
                     },
                 );
             }
             FixtureKind::Rgb | FixtureKind::MovingHead => {
-                let state = dmx_state.fixture(fixture.id);
-
                 // Built-in presets replace the color channels only in manual mode
                 let preset = profile.presets.and_then(|presets| {
-                    let index = match dmx_state.mode {
+                    let index = match mode {
                         Mode::Manual => state.preset,
                         Mode::Black | Mode::Auto => None,
                     }?;
@@ -556,7 +652,7 @@ fn render_fixtures(
                     color_with_intensity
                 };
                 for (value, channel) in channels.iter_mut().zip(profile.channels) {
-                    *value = match (*channel, dmx_state.mode) {
+                    *value = match (*channel, mode) {
                         (Channel::Red, Mode::Manual) => rgb.r,
                         (Channel::Green, Mode::Manual) => rgb.g,
                         (Channel::Blue, Mode::Manual) => rgb.b,
@@ -583,7 +679,7 @@ fn render_fixtures(
                         _ => 0,
                     };
                 }
-                let output_color = match dmx_state.mode {
+                let output_color = match mode {
                     Mode::Black => Some(Color::BLACK),
                     Mode::Manual => Some(color_with_intensity),
                     Mode::Auto
@@ -602,7 +698,7 @@ fn render_fixtures(
                     if head.is_some() {
                         FixtureOutput::MovingHead {
                             color: output_color,
-                            gobo: match dmx_state.mode {
+                            gobo: match mode {
                                 Mode::Manual => gobo.map(|gobo| gobo.shape),
                                 _ => None,
                             },
@@ -698,6 +794,7 @@ mod tests {
 
     fn clock(beat: f64, frame: u64) -> Clock {
         Clock {
+            time: Instant::now(),
             tempo: Tempo {
                 bpm: 120.0,
                 downbeat: None,
@@ -730,6 +827,8 @@ mod tests {
             tempo: clock.tempo,
             fixtures: BTreeMap::from([(1, fixture_state)]),
             running_scripts: BTreeSet::new(),
+            stage_generation: 0,
+            haze_deadlines: BTreeMap::new(),
         };
         let count = fixture_type.channel_count();
         let mut channels = vec![42; count + 4];
@@ -918,6 +1017,8 @@ mod tests {
                 ),
             ]),
             running_scripts: BTreeSet::new(),
+            stage_generation: 0,
+            haze_deadlines: BTreeMap::new(),
         };
         let mut channels = [0; 12];
         let outputs = render_fixtures(&fixtures, &state, &clock, &mut channels);
@@ -1029,10 +1130,95 @@ mod tests {
                 FixtureOutput::Haze {
                     on: true,
                     volume: 1.0,
-                    fan: 0.0
+                    fan: 0.0,
+                    remaining: None,
                 }
             );
         }
+    }
+
+    #[test]
+    fn blackout_renders_a_fixture_like_black_mode() {
+        let state = FixtureState {
+            color: RED,
+            blackout: true,
+            ..FixtureState::DEFAULT
+        };
+        let (blackout, _) = render_fixture(
+            FixtureType::AyraCompar10,
+            Mode::Manual,
+            state,
+            clock(0.0, 0),
+        );
+        let (black, _) = render_fixture(
+            FixtureType::AyraCompar10,
+            Mode::Black,
+            FixtureState {
+                blackout: false,
+                ..state
+            },
+            clock(0.0, 0),
+        );
+        assert_eq!(blackout, black);
+        let (manual, _) = render_fixture(
+            FixtureType::AyraCompar10,
+            Mode::Manual,
+            FixtureState {
+                blackout: false,
+                ..state
+            },
+            clock(0.0, 0),
+        );
+        assert_ne!(blackout, manual);
+    }
+
+    #[test]
+    fn hazer_cuts_off_after_timeout() {
+        let start = Instant::now();
+        let mut state = DmxState {
+            is_running: true,
+            freeze: false,
+            mode: Mode::Manual,
+            tempo: clock(0.0, 0).tempo,
+            fixtures: BTreeMap::from([(
+                1,
+                FixtureState {
+                    haze_on: true,
+                    ..FixtureState::DEFAULT
+                },
+            )]),
+            running_scripts: BTreeSet::new(),
+            stage_generation: 0,
+            haze_deadlines: BTreeMap::new(),
+        };
+        assert!(state.expire_hazers(start).is_empty());
+        assert_eq!(state.haze_deadlines[&1], start + HAZE_TIMEOUT);
+
+        let fixture = Fixture {
+            id: 1,
+            name: String::new(),
+            r#type: FixtureType::ChauvetAmhazeStadium,
+            addr: 1,
+            x: 0,
+            y: 0,
+            switches: None,
+        };
+        let clock = Clock {
+            time: start + Duration::from_millis(500),
+            ..clock(0.0, 0)
+        };
+        let outputs = render_fixtures(&[fixture], &state, &clock, &mut [0; 2]);
+        assert!(matches!(
+            outputs[&1],
+            FixtureOutput::Haze {
+                remaining: Some(60),
+                ..
+            }
+        ));
+
+        assert_eq!(state.expire_hazers(start + HAZE_TIMEOUT), [1]);
+        assert!(!state.fixture(1).haze_on);
+        assert!(state.haze_deadlines.is_empty());
     }
 
     #[test]

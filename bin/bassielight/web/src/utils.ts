@@ -15,3 +15,8 @@ export function colorToHex(color: number): string {
 export function clamp(value: number, min: number, max: number): number {
     return Math.min(Math.max(value, min), max);
 }
+
+/// Format seconds as m:ss
+export function formatDuration(seconds: number): string {
+    return `${Math.floor(seconds / 60)}:${String(seconds % 60).padStart(2, '0')}`;
+}

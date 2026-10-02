@@ -67,6 +67,7 @@ const PROPS = [
     'haze_on',
     'haze_volume',
     'fan_speed',
+    'blackout',
 ];
 
 monaco.languages.registerCompletionItemProvider('lua', {

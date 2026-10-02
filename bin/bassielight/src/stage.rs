@@ -11,7 +11,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 
 use log::warn;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::dmx::Color;
 
@@ -489,18 +489,47 @@ pub(crate) struct Group {
     pub hide_outline: bool,
 }
 
-/// Rect in the room that selects a group or fixture or toggles a script when pressed
+/// Rect in the room that selects or blacks out its fixtures and groups and toggles its scripts
+/// when pressed
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub(crate) struct Button {
     pub id: u32,
-    /// Shows the target name when empty
+    /// Shows the target names when empty
     pub label: String,
     /// Center position and size in centimeters
     pub x: u32,
     pub y: u32,
     pub width: u32,
     pub height: u32,
-    pub target: Option<ButtonTarget>,
+    #[serde(default)]
+    pub action: ButtonAction,
+    /// Older stages have a single `target`
+    #[serde(default, alias = "target", deserialize_with = "one_or_many")]
+    pub targets: Vec<ButtonTarget>,
+}
+
+/// What pressing a button does with its fixtures and groups
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub(crate) enum ButtonAction {
+    #[default]
+    Select,
+    /// Toggle the blackout of the fixtures, they keep their other settings
+    Blackout,
+}
+
+fn one_or_many<'de, D: Deserializer<'de>>(deserializer: D) -> Result<Vec<ButtonTarget>, D::Error> {
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum OneOrMany {
+        One(ButtonTarget),
+        Many(Vec<ButtonTarget>),
+    }
+    Ok(match Option::<OneOrMany>::deserialize(deserializer)? {
+        None => Vec::new(),
+        Some(OneOrMany::One(target)) => vec![target],
+        Some(OneOrMany::Many(targets)) => targets,
+    })
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -773,14 +802,31 @@ mod tests {
     fn parses_buttons_and_hidden_outlines() {
         let stage: Stage = serde_json::from_str(
             r#"{"groups":[{"id":1,"name":"Odd","fixtures":[1],"hide_outline":true}],
-            "buttons":[{"id":1,"label":"","x":100,"y":50,"width":120,"height":40,"target":{"type":"group","id":1}}]}"#,
+            "buttons":[
+                {"id":1,"label":"","x":100,"y":50,"width":120,"height":40,"target":{"type":"group","id":1}},
+                {"id":2,"label":"","x":100,"y":50,"width":120,"height":40,"target":null},
+                {"id":3,"label":"","x":100,"y":50,"width":120,"height":40,"action":"blackout",
+                    "targets":[{"type":"group","id":1},{"type":"fixture","id":2}]}
+            ]}"#,
         )
         .expect("Failed to parse stage");
         assert!(stage.groups[0].hide_outline);
+        assert_eq!(stage.buttons[0].action, ButtonAction::Select);
         assert!(matches!(
-            stage.buttons[0].target,
-            Some(ButtonTarget::Group { id: 1 })
+            stage.buttons[0].targets[..],
+            [ButtonTarget::Group { id: 1 }]
         ));
+        assert!(stage.buttons[1].targets.is_empty());
+        assert_eq!(stage.buttons[2].action, ButtonAction::Blackout);
+        assert!(matches!(
+            stage.buttons[2].targets[..],
+            [
+                ButtonTarget::Group { id: 1 },
+                ButtonTarget::Fixture { id: 2 }
+            ]
+        ));
+        let json = stage.to_json();
+        assert!(json.contains(r#""targets""#) && !json.contains(r#""target""#));
     }
 
     #[test]

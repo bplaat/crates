@@ -5,6 +5,7 @@
  * SPDX-License-Identifier: MIT
  */
 
+import { computed, type ReadonlySignal } from '@preact/signals';
 import { useContext, useEffect, useRef, useState } from 'preact/hooks';
 import { IpcContext } from '../app.tsx';
 import { ButtonList } from '../components/button-list.tsx';
@@ -24,18 +25,24 @@ import {
 import { Visualization } from '../components/visualization.tsx';
 import {
     $document,
+    buttonFixtureIds,
+    buttonScripts,
     controlKinds,
     findProfile,
+    scriptsRunning,
     selectedFixtureIds,
     selectionName,
-    toggleScript,
+    targetKey,
+    toggleScripts,
     useDmxOutput,
+    type Button,
     type ControlKind,
+    type FixtureOutput,
     type MovingHead,
     type Presets,
     type Selection,
 } from '../stage.ts';
-import { capitalize, colorToHex } from '../utils.ts';
+import { capitalize, colorToHex, formatDuration } from '../utils.ts';
 import './stage.css';
 
 const COLORS = [0x000000, 0xff0000, 0x00ff00, 0x0000ff, 0xffff00, 0xff00ff, 0x00ffff, 0xffffff];
@@ -81,6 +88,7 @@ interface FixtureState {
     hazePress: boolean;
     hazeVolume: number;
     fanSpeed: number;
+    blackout: boolean;
 }
 
 type SwitchChange = { index: number; on: boolean };
@@ -114,6 +122,7 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     hazePress: false,
     hazeVolume: 0.5,
     fanSpeed: 0.5,
+    blackout: false,
 };
 
 function applyFixtureProp(state: FixtureState, prop: FixtureProp): FixtureState {
@@ -202,9 +211,16 @@ function RgbControls({ state, setProp }: { state: FixtureState; setProp: (prop: 
                 {COLORS.map((color) => (
                     <button
                         key={color}
-                        class={`swatch ${state.preset === null && state.toggleSpeed !== null && color === state.toggleColor ? 'is-selected' : ''}`}
+                        class={`swatch ${state.preset === null && (state.toggleSpeed !== null || color === 0x000000) && color === state.toggleColor ? 'is-selected' : ''}`}
                         style={{ backgroundColor: colorToHex(color) }}
-                        onClick={() => setProp({ preset: null, toggleColor: color, toggleSpeed: 1 })}
+                        onClick={() =>
+                            // Picking a color starts toggling every beat, a running toggle keeps its speed
+                            setProp({
+                                preset: null,
+                                toggleColor: color,
+                                ...(color !== 0x000000 && state.toggleSpeed === null && { toggleSpeed: 1 }),
+                            })
+                        }
                     />
                 ))}
             </div>
@@ -336,15 +352,26 @@ function StrobeControls({ state, setProp }: { state: FixtureState; setProp: (pro
     );
 }
 
-function HazeControls({ state, setProp }: { state: FixtureState; setProp: (prop: FixtureProp) => void }) {
+function HazeControls({
+    output,
+    state,
+    setProp,
+}: {
+    output: ReadonlySignal<FixtureOutput | undefined>;
+    state: FixtureState;
+    setProp: (prop: FixtureProp) => void;
+}) {
+    // Only these controls follow the outputs, so the countdown doesn't re-render the whole page
+    const remaining = output.value && 'haze' in output.value ? output.value.haze.remaining : null;
     return (
         <>
             <div class="buttons is-grid is-two">
                 <button
                     class={`button is-pill ${state.hazeOn ? 'is-selected' : ''}`}
+                    title="Switches off automatically after 1 minute"
                     onClick={() => setProp({ hazeOn: !state.hazeOn })}
                 >
-                    {state.hazeOn ? 'On' : 'Off'}
+                    {state.hazeOn ? `On${remaining !== null ? ` ${formatDuration(remaining)}` : ''}` : 'Off'}
                 </button>
                 <button
                     class={`button is-pill ${state.hazePress ? 'is-selected' : ''}`}
@@ -519,6 +546,33 @@ export function StagePage() {
     const targetIds = selectedFixtureIds(stage, activeSelection);
     const targets = stage.fixtures.filter((f) => targetIds.includes(f.id));
 
+    // Buttons toggle their scripts and select or black out their fixtures
+    const isBlackedOut = (ids: number[]) => ids.every((id) => fixtureStates[id]?.blackout);
+    const pressButton = (button: Button) => {
+        toggleScripts(ipc, buttonScripts(button));
+        const ids = buttonFixtureIds(stage, button);
+        if (ids.length === 0) return;
+        if (button.action === 'blackout') {
+            const blackout = !isBlackedOut(ids);
+            applyProp(ids, { blackout });
+            ipc.send('setFixtureProp', { fixtures: ids, prop: { blackout } });
+        } else {
+            setSelection({ type: 'button', id: button.id });
+        }
+    };
+    const isButtonActive = (button: Button) => {
+        const ids = buttonFixtureIds(stage, button);
+        if (ids.length === 0) return scriptsRunning(buttonScripts(button));
+        if (button.action === 'blackout') return isBlackedOut(ids);
+        // A button for a single fixture or group is also active when that is selected directly
+        if (activeSelection?.type === 'button') return activeSelection.id === button.id;
+        return (
+            activeSelection !== null &&
+            button.targets.length === 1 &&
+            targetKey(button.targets[0]) === targetKey(activeSelection)
+        );
+    };
+
     // Controls per kind in the selection, each only changes the fixtures of its kind
     const sections = (Object.keys(KIND_LABELS) as ControlKind[])
         .map((kind) => ({
@@ -536,7 +590,9 @@ export function StagePage() {
                 else ipc.send('setFixtureProps', { fixtures: ids, props });
             };
             const { presets, movingHead } = findProfile(fixtureTypes, fixtures[0].type);
-            return { kind, count: fixtures.length, labels: fixtures[0].switches, presets, movingHead, state, setProp };
+            const output = computed(() => fixtureOutputs.value[ids[0]]);
+            const labels = fixtures[0].switches;
+            return { kind, count: fixtures.length, labels, presets, movingHead, output, state, setProp };
         });
 
     return (
@@ -547,7 +603,8 @@ export function StagePage() {
                     fixtureTypes={fixtureTypes}
                     outputs={fixtureOutputs}
                     mode={selectedMode}
-                    onScriptToggle={(name) => toggleScript(ipc, name)}
+                    onButtonPress={pressButton}
+                    isButtonActive={isButtonActive}
                     selection={activeSelection}
                     onSelect={setSelection}
                 />
@@ -589,7 +646,7 @@ export function StagePage() {
                 </div>
 
                 {sections.length === 0 && <p class="block">No fixtures to control</p>}
-                {sections.map(({ kind, count, labels, presets, movingHead, state, setProp }) => (
+                {sections.map(({ kind, count, labels, presets, movingHead, output, state, setProp }) => (
                     <section key={kind}>
                         {sections.length > 1 && (
                             <div class="kind-bar">
@@ -609,7 +666,7 @@ export function StagePage() {
                             <SwitchControls labels={labels ?? ['', '', '', '']} state={state} setProp={setProp} />
                         )}
                         {kind === 'strobe' && <StrobeControls state={state} setProp={setProp} />}
-                        {kind === 'haze' && <HazeControls state={state} setProp={setProp} />}
+                        {kind === 'haze' && <HazeControls output={output} state={state} setProp={setProp} />}
                     </section>
                 ))}
             </div>

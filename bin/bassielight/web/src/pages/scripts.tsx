@@ -17,7 +17,17 @@ import {
     StopIcon,
 } from '../components/icons.tsx';
 import { Visualization } from '../components/visualization.tsx';
-import { $document, $scripts, scriptFolder, scriptTree, toggleScript, useDmxOutput } from '../stage.ts';
+import {
+    $document,
+    $scripts,
+    buttonScripts,
+    scriptFolder,
+    scriptsRunning,
+    scriptTree,
+    toggleScript,
+    toggleScripts,
+    useDmxOutput,
+} from '../stage.ts';
 import './scripts.css';
 
 const TEMPLATE = `-- Runs on the beat of the BPM button, see AGENTS.md in the stage folder for the full API
@@ -228,7 +238,8 @@ export function ScriptsPage() {
                             outputs={outputs}
                             selection={null}
                             onSelect={() => {}}
-                            onScriptToggle={(script) => toggleScript(ipc, script)}
+                            onButtonPress={(button) => toggleScripts(ipc, buttonScripts(button))}
+                            isButtonActive={(button) => scriptsRunning(buttonScripts(button))}
                         />
                     )}
                 </div>

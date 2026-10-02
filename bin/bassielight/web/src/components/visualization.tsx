@@ -10,13 +10,11 @@ import type { ComponentChildren } from 'preact';
 import { useLayoutEffect, useRef, useState } from 'preact/hooks';
 import { boundsBox, pointBox, snapDrag, type Box, type Guide } from '../snap.ts';
 import {
-    $scripts,
     buttonLabel,
     findProfile,
     highlightedFixtureIds,
     switchCount,
     type Button,
-    type ButtonTarget,
     type FixtureOutput,
     type FixtureProfile,
     type Selection,
@@ -52,15 +50,9 @@ function buttonBox(button: Button): Box {
     };
 }
 
-/// Whether a button target is selected, or for scripts running
-const isActive = (selection: Selection, target: ButtonTarget | null) =>
-    target?.type === 'script'
-        ? $scripts.value.running.includes(target.name)
-        : selection !== null && target !== null && selection.type === target.type && selection.id === target.id;
-
 /// Room and fixtures are drawn at real size in centimeters, the room scales to fit, while labels,
 /// padding and strokes keep a constant on screen size. In the editor fixtures, groups and buttons
-/// can be dragged and buttons select themselves, on the stage buttons select their target.
+/// can be dragged and buttons select themselves, elsewhere the page handles button presses.
 export function Visualization({
     stage,
     fixtureTypes,
@@ -70,7 +62,8 @@ export function Visualization({
     onSelect,
     onFixturesMove,
     onButtonMove,
-    onScriptToggle,
+    onButtonPress,
+    isButtonActive,
 }: {
     stage: Stage;
     fixtureTypes: FixtureProfile[];
@@ -81,7 +74,8 @@ export function Visualization({
     onSelect: (selection: Selection) => void;
     onFixturesMove?: (moves: { id: number; x: number; y: number }[]) => void;
     onButtonMove?: (id: number, x: number, y: number) => void;
-    onScriptToggle?: (name: string) => void;
+    onButtonPress?: (button: Button) => void;
+    isButtonActive?: (button: Button) => boolean;
 }) {
     const svgRef = useRef<SVGSVGElement>(null);
     const [pixelsPerCm, setPixelsPerCm] = useState(1);
@@ -251,7 +245,7 @@ export function Visualization({
             {buttons.map((button) => {
                 const isSelected = isEditor
                     ? selection?.type === 'button' && selection.id === button.id
-                    : isActive(selection, button.target);
+                    : (isButtonActive?.(button) ?? false);
                 const box = buttonBox(button);
                 return (
                     <g
@@ -262,10 +256,8 @@ export function Visualization({
                             if (isEditor) {
                                 onSelect({ type: 'button', id: button.id });
                                 startDrag(event, [], button.id);
-                            } else if (button.target?.type === 'script') {
-                                onScriptToggle?.(button.target.name);
-                            } else if (button.target) {
-                                onSelect(button.target);
+                            } else {
+                                onButtonPress?.(button);
                             }
                         }}
                     >

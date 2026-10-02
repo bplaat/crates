@@ -84,6 +84,7 @@ pub(crate) fn open_stage(open: OpenStage) {
         let mut dmx_state = DMX_STATE.lock().expect("Failed to lock DMX state");
         dmx_state.fixtures.clear();
         dmx_state.running_scripts.clear();
+        dmx_state.stage_generation += 1;
     }
     let (path, stage) = (open.path.clone(), open.stage.clone());
     scripts::SCRIPTS

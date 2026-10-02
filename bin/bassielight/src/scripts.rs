@@ -4,11 +4,11 @@
  * SPDX-License-Identifier: MIT
  */
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::io;
+use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
+use std::{io, mem};
 
 use log::info;
 use mlua::thread::ThreadStatus;
@@ -249,7 +249,7 @@ const COLORS: [(&str, u32); 11] = [
 ];
 
 /// Props that are ignored for fixtures that don't have them
-const PROPS: [&str; 23] = [
+const PROPS: [&str; 24] = [
     "color",
     "toggle_color",
     "intensity",
@@ -273,6 +273,7 @@ const PROPS: [&str; 23] = [
     "haze_press",
     "haze_volume",
     "fan_speed",
+    "blackout",
 ];
 
 fn error(message: impl Into<String>) -> mlua::Error {
@@ -427,6 +428,7 @@ fn parse_prop(
         "haze_press" if haze => P::HazePress(boolean(value)?),
         "haze_volume" if haze => P::HazeVolume(fraction(value)?),
         "fan_speed" if haze => P::FanSpeed(fraction(value)?),
+        "blackout" => P::Blackout(boolean(value)?),
         _ if PROPS.contains(&key) => return Ok(Vec::new()),
         _ => return Err(error(format!("Unknown prop {key}"))),
     };
@@ -580,6 +582,92 @@ struct Tween {
     beats: f64,
 }
 
+// MARK: Changes
+/// Prop of a fixture, every switch is a prop of its own
+type PropKey = (u32, mem::Discriminant<FixtureProp>, usize);
+
+const fn prop_key(id: u32, prop: &FixtureProp) -> PropKey {
+    let index = match prop {
+        FixtureProp::SwitchToggle { index, .. } | FixtureProp::SwitchPress { index, .. } => *index,
+        _ => 0,
+    };
+    (id, mem::discriminant(prop), index)
+}
+
+struct Change {
+    /// Order of the first change, the script that changed a prop first found its original value
+    order: u64,
+    original: FixtureProp,
+    /// Last value the script set
+    written: FixtureProp,
+}
+
+/// What each running script changed, so stopping a script can put its fixtures back
+#[derive(Default)]
+struct Changes {
+    scripts: BTreeMap<String, HashMap<PropKey, Change>>,
+    next_order: u64,
+}
+
+impl Changes {
+    fn record(&mut self, script: &str, id: u32, prop: FixtureProp, before: &FixtureState) {
+        let order = &mut self.next_order;
+        self.scripts
+            .entry(script.to_string())
+            .or_default()
+            .entry(prop_key(id, &prop))
+            .or_insert_with(|| {
+                *order += 1;
+                Change {
+                    order: *order,
+                    original: before.current(prop),
+                    written: prop,
+                }
+            })
+            .written = prop;
+    }
+
+    /// Forget what a script changed, returns the original values to put back when it is restored
+    fn release(
+        &mut self,
+        script: &str,
+        restore: bool,
+        states: &BTreeMap<u32, FixtureState>,
+    ) -> Vec<(u32, FixtureProp)> {
+        let Some(changes) = self.scripts.remove(script) else {
+            return Vec::new();
+        };
+        if !restore {
+            return Vec::new();
+        }
+        let mut restores = Vec::new();
+        for (key, change) in changes {
+            // Props other running scripts changed stay theirs, a later one inherits the original
+            if let Some(other) = self
+                .scripts
+                .values_mut()
+                .filter_map(|changes| changes.get_mut(&key))
+                .min_by_key(|other| other.order)
+            {
+                if other.order > change.order {
+                    other.order = change.order;
+                    other.original = change.original;
+                }
+                continue;
+            }
+            // Props the user changed since are kept
+            let (id, ..) = key;
+            if states
+                .get(&id)
+                .is_some_and(|state| state.current(change.written) == change.written)
+            {
+                restores.push((id, change.original));
+            }
+        }
+        restores
+    }
+}
+
 // MARK: Engine
 /// Longest a script may run without waiting
 const MAX_RUN_TIME: Duration = Duration::from_millis(50);
@@ -625,8 +713,10 @@ pub(crate) struct Engine {
     lua: Lua,
     running: BTreeMap<String, Running>,
     tweens: Vec<Tween>,
+    changes: Changes,
     sources: BTreeMap<String, String>,
     version: u64,
+    stage_generation: u64,
     tempo: Option<Tempo>,
     last_beat: f64,
 }
@@ -666,8 +756,10 @@ impl Engine {
             lua,
             running: BTreeMap::new(),
             tweens: Vec::new(),
+            changes: Changes::default(),
             sources: BTreeMap::new(),
             version: 0,
+            stage_generation: 0,
             tempo: None,
             last_beat: 0.0,
         })
@@ -727,10 +819,18 @@ impl Engine {
                     }
                     commands
                 };
-                lua.app_data_mut::<Frame>()
-                    .expect("Frame is set")
-                    .commands
-                    .extend(commands);
+                // Later gets in the same frame see the new values
+                let mut frame = lua.app_data_mut::<Frame>().expect("Frame is set");
+                for command in &commands {
+                    if let Command::Set { id, prop } = command {
+                        frame
+                            .states
+                            .entry(*id)
+                            .or_insert(FixtureState::DEFAULT)
+                            .apply(*prop);
+                    }
+                }
+                frame.commands.extend(commands);
                 Ok(())
             })?,
         )?;
@@ -831,27 +931,77 @@ impl Engine {
         })
     }
 
+    /// Stop a running script, cancel its tweens and put back what it changed when restoring
+    fn stop(
+        &mut self,
+        name: &str,
+        restore: bool,
+        state: &mut DmxState,
+        broadcasts: &mut Vec<IpcMessage>,
+    ) {
+        self.running.remove(name);
+        if restore {
+            // Clients only get the end of a tween, so they get the value a cancelled tween reached
+            self.tweens.retain(|tween| {
+                if tween.script != name {
+                    return true;
+                }
+                broadcasts.push(IpcMessage::SetFixtureProp {
+                    fixtures: vec![tween.id],
+                    prop: tween.field.prop(tween.field.get(&state.fixture(tween.id))),
+                });
+                false
+            });
+        }
+        for (id, prop) in self.changes.release(name, restore, &state.fixtures) {
+            state
+                .fixtures
+                .entry(id)
+                .or_insert(FixtureState::DEFAULT)
+                .apply(prop);
+            broadcasts.push(IpcMessage::SetFixtureProp {
+                fixtures: vec![id],
+                prop,
+            });
+        }
+    }
+
     /// Run the scripts that are due at this beat and apply what they did to the DMX state
     pub(crate) fn update(&mut self, beat: f64, tempo: Tempo, stage: &Stage) {
         let mut errors = Vec::new();
         let mut finished = Vec::new();
+        let mut broadcasts = Vec::new();
 
         // Restart running scripts when the sources changed, start and stop scripts like requested
-        {
+        let reload = {
             let scripts = SCRIPTS.lock().expect("Failed to lock scripts");
-            if scripts.version != self.version {
+            let reload = scripts.version != self.version;
+            if reload {
                 self.version = scripts.version;
                 self.sources = scripts.sources.clone();
+            }
+            reload
+        };
+        let (wanted, states) = {
+            let mut state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            if state.stage_generation != self.stage_generation {
+                // The fixtures of another stage have nothing to put back
+                self.stage_generation = state.stage_generation;
                 self.running.clear();
                 self.tweens.clear();
+                self.changes = Changes::default();
             }
-        }
-        let (wanted, states) = {
-            let state = DMX_STATE.lock().expect("Failed to lock DMX state");
+            let stopped = self
+                .running
+                .keys()
+                .filter(|name| reload || !state.running_scripts.contains(*name))
+                .cloned()
+                .collect::<Vec<_>>();
+            for name in stopped {
+                self.stop(&name, true, &mut state, &mut broadcasts);
+            }
             (state.running_scripts.clone(), state.fixtures.clone())
         };
-        self.running.retain(|name, _| wanted.contains(name));
-        self.tweens.retain(|tween| wanted.contains(&tween.script));
         for name in &wanted {
             if !self.running.contains_key(name) {
                 match self.start(name, beat) {
@@ -933,6 +1083,10 @@ impl Engine {
                     Some("sync") if beats > 0.0 => {
                         ((running.cursor / beats + 1e-9).floor() + 1.0) * beats
                     }
+                    Some("sync") => {
+                        errors.push((name.clone(), "Use sync(beats) with beats above 0".into()));
+                        break;
+                    }
                     _ => {
                         errors.push((
                             name.clone(),
@@ -942,7 +1096,7 @@ impl Engine {
                     }
                 };
             }
-            let pending = std::mem::take(
+            let pending = mem::take(
                 &mut self
                     .lua
                     .app_data_mut::<Frame>()
@@ -954,7 +1108,6 @@ impl Engine {
         self.lua.remove_app_data::<Frame>();
 
         // Apply the commands and tweens
-        let mut broadcasts = Vec::new();
         let mut state = DMX_STATE.lock().expect("Failed to lock DMX state");
         for (script, command) in commands {
             match command {
@@ -962,6 +1115,7 @@ impl Engine {
                     let field = TweenField::of(prop).map(|(field, _)| field);
                     self.tweens
                         .retain(|tween| !(tween.id == id && Some(tween.field) == field));
+                    self.changes.record(&script, id, prop, &state.fixture(id));
                     state
                         .fixtures
                         .entry(id)
@@ -1005,6 +1159,11 @@ impl Engine {
                 1.0
             };
             let prop = tween.field.prop(tween.from.lerp(tween.to, t as f32));
+            // Tweens of scripts that ended run on, their values are kept
+            if self.running.contains_key(&tween.script) {
+                self.changes
+                    .record(&tween.script, tween.id, prop, &state.fixture(tween.id));
+            }
             state
                 .fixtures
                 .entry(tween.id)
@@ -1019,15 +1178,15 @@ impl Engine {
             t < 1.0
         });
 
-        // Scripts that ended or failed are no longer running
+        // Failed scripts put back what they changed, scripts that ended keep it
         let stopped = !errors.is_empty() || !finished.is_empty();
         for (name, _) in &errors {
             state.running_scripts.remove(name);
-            self.running.remove(name);
+            self.stop(name, true, &mut state, &mut broadcasts);
         }
         for name in &finished {
             state.running_scripts.remove(name);
-            self.running.remove(name);
+            self.stop(name, false, &mut state, &mut broadcasts);
         }
         drop(state);
         if !errors.is_empty() {
@@ -1220,7 +1379,7 @@ mod tests {
     }
 
     #[test]
-    fn stopping_a_layer_cancels_only_its_tweens() {
+    fn stopping_a_layer_cancels_only_its_tweens_and_restores_its_fixtures() {
         let _guard = TEST_LOCK.lock().unwrap();
         let stage = Stage {
             fixtures: (1..=2)
@@ -1261,7 +1420,8 @@ mod tests {
         engine.update(2.0, tempo, &stage);
         {
             let mut state = DMX_STATE.lock().unwrap();
-            assert_eq!(state.fixture(1).intensity, 0.25);
+            assert_eq!(state.fixture(1).intensity, 1.0);
+            assert_eq!(state.fixture(1).color, Color::BLACK);
             assert_eq!(state.fixture(2).intensity, 0.5);
             state.fixtures.get_mut(&1).unwrap().intensity = 0.8;
         }
@@ -1269,5 +1429,94 @@ mod tests {
         let state = DMX_STATE.lock().unwrap();
         assert_eq!(state.fixture(1).intensity, 0.8);
         assert_eq!(state.fixture(2).intensity, 0.75);
+    }
+
+    #[test]
+    fn stopping_scripts_restores_what_they_changed() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let stage = Stage {
+            fixtures: vec![Fixture {
+                id: 1,
+                name: "Par".to_string(),
+                r#type: FixtureType::AmericanDJP56Led,
+                addr: 1,
+                x: 0,
+                y: 0,
+                switches: None,
+            }],
+            ..Stage::default()
+        };
+        let tempo = Tempo {
+            bpm: 120.0,
+            downbeat: None,
+        };
+        set_sources(BTreeMap::from([
+            ("a".into(), "fixture(1):set({ color = 'red' }); wait(100)".into()),
+            (
+                "b".into(),
+                "fixture(1):set({ color = 'blue', intensity = 0.5 }); wait(100)".into(),
+            ),
+            ("scene".into(), "fixture(1):set({ toggle_speed = 1 })".into()),
+            (
+                "get".into(),
+                "fixture(1):set({ color = 'white' }); assert(fixture(1):get('color') == 0xffffff); wait(100)".into(),
+            ),
+        ]));
+        let set_running = |names: &[&str]| {
+            DMX_STATE.lock().unwrap().running_scripts =
+                names.iter().map(|name| name.to_string()).collect();
+        };
+        let state = || DMX_STATE.lock().unwrap().fixture(1);
+        {
+            let mut state = DMX_STATE.lock().unwrap();
+            state.fixtures.clear();
+            state
+                .fixtures
+                .entry(1)
+                .or_insert(FixtureState::DEFAULT)
+                .apply(FixtureProp::Color(Color::from_u32(0x00ff00)));
+        }
+        let mut engine = Engine::new().unwrap();
+
+        // A later layer inherits the original of the earlier one it overrides
+        set_running(&["a"]);
+        engine.update(0.0, tempo, &stage);
+        assert_eq!(state().color, Color::from_u32(0xff0000));
+        set_running(&["a", "b"]);
+        engine.update(1.0, tempo, &stage);
+        assert_eq!(state().color, Color::from_u32(0x0000ff));
+        set_running(&["b"]);
+        engine.update(2.0, tempo, &stage);
+        assert_eq!(state().color, Color::from_u32(0x0000ff));
+        set_running(&[]);
+        engine.update(3.0, tempo, &stage);
+        assert_eq!(state().color, Color::from_u32(0x00ff00));
+        assert_eq!(state().intensity, 1.0);
+
+        // Values the user changed while the script ran are kept
+        set_running(&["a"]);
+        engine.update(4.0, tempo, &stage);
+        DMX_STATE
+            .lock()
+            .unwrap()
+            .fixtures
+            .get_mut(&1)
+            .unwrap()
+            .apply(FixtureProp::Color(Color::from_u32(0xffff00)));
+        set_running(&[]);
+        engine.update(5.0, tempo, &stage);
+        assert_eq!(state().color, Color::from_u32(0xffff00));
+
+        // A script that ends keeps its values
+        set_running(&["scene"]);
+        engine.update(6.0, tempo, &stage);
+        assert!(DMX_STATE.lock().unwrap().running_scripts.is_empty());
+        assert_eq!(state().toggle_speed, Some(1.0));
+
+        // Gets see the sets of the same frame
+        set_running(&["get"]);
+        engine.update(7.0, tempo, &stage);
+        assert!(DMX_STATE.lock().unwrap().running_scripts.contains("get"));
+        assert!(!SCRIPTS.lock().unwrap().errors.contains_key("get"));
     }
 }
