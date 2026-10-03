@@ -96,7 +96,8 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `color`, `toggle_color` | color | rgb, movingHead |
 | `intensity` | 0 to 1 | rgb, movingHead |
 | `toggle_tween` | `"direct"`, `"linear"` or `"ease"` | rgb, movingHead |
-| `toggle_speed`, `strobe_speed` | beats, or `false` for off | rgb, movingHead |
+| `toggle_speed` | beats, or `false` for off | rgb, movingHead |
+| `strobe_speed` | beats, or `false` for continuous output | rgb, movingHead, strobe |
 | `preset` | preset name or number, `false` for the own color | fixtures with presets |
 | `preset_speed` | 0 to 1 | fixtures with presets |
 | `gobo` | gobo name or number, `false` for open | movingHead |
@@ -109,7 +110,7 @@ Props are set with a table like `{ color = "red", intensity = 0.5 }`, a prop a f
 | `flash_intensity`, `flash_speed` | 0 to 1 | strobe |
 | `haze_on` | boolean; hazers run in every mode and switch off after 1 minute | haze |
 | `haze_volume`, `fan_speed` | 0 to 1 | haze |
-| `blackout` | boolean; off like in black mode while keeping the other props, hazers keep running | all |
+| `blackout` | boolean; off like in black mode while keeping the other props, moving heads keep moving and hazers keep running | all |
 
 Colors are a name (`black`, `white`, `red`, `green`, `blue`, `yellow`, `magenta`, `cyan`, `orange`, `purple`,
 `pink`), a `"#rrggbb"` string or a number like `0xff8000`. Moving heads use the closest color of their color wheel.

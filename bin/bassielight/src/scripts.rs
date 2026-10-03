@@ -384,7 +384,7 @@ fn parse_prop(
         "intensity" if colored => P::Intensity(fraction(value)?),
         "toggle_tween" if colored => P::ToggleTween(from_name(value)?),
         "toggle_speed" if colored => P::ToggleSpeed(speed(value)?),
-        "strobe_speed" if colored => P::StrobeSpeed(speed(value)?),
+        "strobe_speed" if colored || strobe => P::StrobeSpeed(speed(value)?),
         "preset" => match presets {
             Some(presets) => {
                 P::Preset(index(value, presets.list.iter().map(|preset| preset.name))?)
@@ -1233,6 +1233,19 @@ mod tests {
         fn drop(&mut self) {
             let _ = std::fs::remove_dir_all(&self.0);
         }
+    }
+
+    #[test]
+    fn strobe_scripts_accept_beat_speed() {
+        let profile = FixtureType::ShowtecTitanStrobe.profile();
+        assert!(matches!(
+            parse_prop(profile, "strobe_speed", &Value::Number(0.25)).unwrap()[..],
+            [FixtureProp::StrobeSpeed(Some(0.25))]
+        ));
+        assert!(matches!(
+            parse_prop(profile, "strobe_speed", &Value::Boolean(false)).unwrap()[..],
+            [FixtureProp::StrobeSpeed(None)]
+        ));
     }
 
     #[test]

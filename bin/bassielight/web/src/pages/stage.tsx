@@ -120,8 +120,8 @@ const DEFAULT_FIXTURE_STATE: FixtureState = {
     movementSpeed: 0.5,
     hazeOn: false,
     hazePress: false,
-    hazeVolume: 0.5,
-    fanSpeed: 0.5,
+    hazeVolume: 1,
+    fanSpeed: 1,
     blackout: false,
 };
 
@@ -348,6 +348,9 @@ function StrobeControls({ state, setProp }: { state: FixtureState; setProp: (pro
 
             <h2 class="title">Flash Speed</h2>
             <Slider value={state.flashSpeed} onChange={(flashSpeed) => setProp({ flashSpeed })} />
+
+            <h2 class="title">Strobe Speed</h2>
+            <SpeedButtons speed={state.strobeSpeed} onChange={(strobeSpeed) => setProp({ strobeSpeed })} />
         </>
     );
 }

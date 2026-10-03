@@ -159,8 +159,8 @@ impl FixtureState {
         movement_speed: 0.5,
         haze_on: false,
         haze_press: false,
-        haze_volume: 0.5,
-        fan_speed: 0.5,
+        haze_volume: 1.0,
+        fan_speed: 1.0,
         blackout: false,
     };
 
@@ -398,15 +398,19 @@ struct Clock {
 }
 
 impl Clock {
-    fn color(&self, state: &FixtureState) -> Color {
-        // One flash per strobe period, rounded to whole frames so every flash is equally long
-        if let Some(beats) = state.strobe_speed {
-            let period = (self.tempo.seconds(beats) * self.fps).round().max(2.0) as u64;
-            if self.frame % period >= period / 2 {
-                return Color::BLACK;
-            }
-        }
+    fn strobe_on(&self, speed: Option<f32>) -> bool {
+        // Round to whole frames so every flash is equally long
+        let Some(beats) = speed else {
+            return true;
+        };
+        let period = (self.tempo.seconds(beats) * self.fps).round().max(2.0) as u64;
+        self.frame % period < period / 2
+    }
 
+    fn color(&self, state: &FixtureState) -> Color {
+        if !self.strobe_on(state.strobe_speed) {
+            return Color::BLACK;
+        }
         self.toggle_color(state)
     }
 
@@ -559,7 +563,8 @@ fn render_fixtures(
             }
             FixtureKind::Strobe => {
                 // A strobe has no music program, so it keeps flashing in auto mode
-                let is_on = state.flash_on || state.flash_press;
+                let is_on =
+                    (state.flash_on || state.flash_press) && clock.strobe_on(state.strobe_speed);
                 let (intensity, speed) = if mode == Mode::Black || !is_on {
                     (0.0, 0.0)
                 } else {
@@ -661,7 +666,12 @@ fn render_fixtures(
                         (Channel::ColorWheel, Mode::Manual) => wheel.map_or(0, |wheel| wheel.value),
                         (Channel::Gobo, Mode::Manual) => gobo.map_or(0, |gobo| gobo.value),
                         (Channel::Focus, _) => (state.focus * 255.0) as u8,
-                        (Channel::Movement, Mode::Manual) => movement,
+                        // A blacked out head keeps moving, so it is in place when it comes back
+                        (Channel::Movement, _) => match dmx_state.mode {
+                            Mode::Manual => movement,
+                            Mode::Auto => head.map_or(0, |head| head.auto_movement),
+                            Mode::Black => 0,
+                        },
                         // The fixture moves fast to slow, the slider slow to fast
                         (Channel::MovementSpeed, _) => ((1.0 - state.movement_speed) * 255.0) as u8,
                         (Channel::Shutter, Mode::Manual) if is_open => SHUTTER_OPEN,
@@ -669,9 +679,6 @@ fn render_fixtures(
                         // Moving heads cycle colors and gobos and move to the sound
                         (Channel::ColorWheel, Mode::Auto) => head.map_or(0, |head| head.auto_color),
                         (Channel::Gobo, Mode::Auto) => head.map_or(0, |head| head.auto_gobo),
-                        (Channel::Movement, Mode::Auto) => {
-                            head.map_or(0, |head| head.auto_movement)
-                        }
                         (Channel::Shutter, Mode::Auto) => SHUTTER_OPEN,
                         (Channel::Dimmer, Mode::Auto) => 255,
                         // Without a movement macro moving heads point to the center
@@ -1173,6 +1180,52 @@ mod tests {
     }
 
     #[test]
+    fn blacked_out_moving_head_keeps_its_movement() {
+        let channels = FixtureType::ChauvetIntimidatorBeam140SR.profile().channels;
+        let movement = channels
+            .iter()
+            .position(|channel| *channel == Channel::Movement)
+            .unwrap();
+        let shutter = channels
+            .iter()
+            .position(|channel| *channel == Channel::Shutter)
+            .unwrap();
+        let state = FixtureState {
+            color: RED,
+            movement: Some(2),
+            movement_speed: 0.8,
+            ..FixtureState::DEFAULT
+        };
+        for mode in [Mode::Manual, Mode::Auto] {
+            let (on, _) = render_fixture(
+                FixtureType::ChauvetIntimidatorBeam140SR,
+                mode,
+                state,
+                clock(0.0, 0),
+            );
+            let (blackout, output) = render_fixture(
+                FixtureType::ChauvetIntimidatorBeam140SR,
+                mode,
+                FixtureState {
+                    blackout: true,
+                    ..state
+                },
+                clock(0.0, 0),
+            );
+            assert_ne!(on[movement], 0);
+            assert_eq!(blackout[movement], on[movement]);
+            assert_eq!(blackout[shutter], 0);
+            assert!(matches!(
+                output,
+                FixtureOutput::MovingHead {
+                    color: Some(Color::BLACK),
+                    ..
+                }
+            ));
+        }
+    }
+
+    #[test]
     fn hazer_cuts_off_after_timeout() {
         let start = Instant::now();
         let mut state = DmxState {
@@ -1238,6 +1291,69 @@ mod tests {
                 true, true, true, false, false, false, true, true, true, false, false, false
             ]
         );
+    }
+
+    #[test]
+    fn titan_strobe_follows_beat_flashes_and_blackout() {
+        let state = FixtureState {
+            flash_on: true,
+            flash_intensity: 1.0,
+            flash_speed: 1.0,
+            strobe_speed: Some(0.25),
+            ..FixtureState::DEFAULT
+        };
+        for mode in [Mode::Manual, Mode::Auto] {
+            for frame in 0..12 {
+                let on = frame % 6 < 3;
+                let (channels, output) = render_fixture(
+                    FixtureType::ShowtecTitanStrobe,
+                    mode,
+                    state,
+                    clock(0.0, frame),
+                );
+                assert_eq!(channels, if on { [255, 255] } else { [0, 0] });
+                assert_eq!(
+                    output,
+                    FixtureOutput::Strobe {
+                        intensity: if on { 1.0 } else { 0.0 },
+                        speed: if on { 1.0 } else { 0.0 },
+                    }
+                );
+            }
+        }
+        for (mode, state) in [
+            (Mode::Black, state),
+            (
+                Mode::Manual,
+                FixtureState {
+                    blackout: true,
+                    ..state
+                },
+            ),
+            (
+                Mode::Manual,
+                FixtureState {
+                    flash_on: false,
+                    ..state
+                },
+            ),
+        ] {
+            let (channels, _) =
+                render_fixture(FixtureType::ShowtecTitanStrobe, mode, state, clock(0.0, 0));
+            assert_eq!(channels, [0, 0]);
+        }
+        let (channels, _) = render_fixture(
+            FixtureType::ShowtecTitanStrobe,
+            Mode::Manual,
+            FixtureState {
+                flash_on: false,
+                flash_press: true,
+                strobe_speed: None,
+                ..state
+            },
+            clock(0.0, 3),
+        );
+        assert_eq!(channels, [255, 255]);
     }
 
     #[test]
