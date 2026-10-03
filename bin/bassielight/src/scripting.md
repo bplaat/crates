@@ -28,6 +28,8 @@ show up when there are no unsaved editor changes. On the stage tab the setup is 
 ```
 
 - Sizes and positions are in centimeters, `x` and `y` of fixtures and buttons are their centers.
+- A group with `"max_intensity": 0.3` scales every intensity scripts give its fixtures to at most 0.3, so a script
+  setting `intensity = 1` gives 0.3 and `0.5` gives 0.15. `fixture:get("intensity")` returns the scaled value.
 - `addr` is the DMX start address, fixtures must fit in the 512 DMX channels. Ids must be unique.
 - A button has a list of `targets`, each `{ "type": "fixture", "id": 1 }`, `{ "type": "group", "id": 1 }` or
   `{ "type": "script", "name": "chase" }`. Pressing it starts its scripts, or stops them when they all run. Its

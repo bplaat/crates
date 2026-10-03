@@ -487,6 +487,9 @@ pub(crate) struct Group {
     /// Don't draw the bounding rect, the group is then selected with a button
     #[serde(default)]
     pub hide_outline: bool,
+    /// Highest intensity scripts give the fixtures, from 0 to 1, their intensities are scaled to it
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub max_intensity: Option<f32>,
 }
 
 /// Rect in the room that selects or blacks out its fixtures and groups and toggles its scripts
@@ -724,6 +727,16 @@ impl Stage {
         }
     }
 
+    /// Scale of the intensities scripts give a fixture, the lowest max intensity of its groups
+    pub(crate) fn script_intensity_scale(&self, id: u32) -> f32 {
+        self.groups
+            .iter()
+            .filter(|group| group.fixtures.contains(&id))
+            .filter_map(|group| group.max_intensity)
+            .fold(1.0, f32::min)
+            .clamp(0.0, 1.0)
+    }
+
     pub(crate) fn validate(&self, dmx_length: usize) -> Result<(), String> {
         let mut ids = HashSet::new();
         for fixture in &self.fixtures {
@@ -799,6 +812,20 @@ mod tests {
     }
 
     #[test]
+    fn scales_script_intensity_by_the_lowest_group_max() {
+        let stage: Stage = serde_json::from_str(
+            r#"{"groups":[{"id":1,"name":"DJ","fixtures":[1,2],"max_intensity":0.3},
+            {"id":2,"name":"Left","fixtures":[2,3],"max_intensity":0.5},{"id":3,"name":"All","fixtures":[1,2,3,4]}]}"#,
+        )
+        .expect("Failed to parse stage");
+        assert_eq!(stage.script_intensity_scale(1), 0.3);
+        assert_eq!(stage.script_intensity_scale(2), 0.3);
+        assert_eq!(stage.script_intensity_scale(3), 0.5);
+        assert_eq!(stage.script_intensity_scale(4), 1.0);
+        assert!(stage.to_json().contains(r#""max_intensity": 0.3"#));
+    }
+
+    #[test]
     fn parses_buttons_and_hidden_outlines() {
         let stage: Stage = serde_json::from_str(
             r#"{"groups":[{"id":1,"name":"Odd","fixtures":[1],"hide_outline":true}],
@@ -811,6 +838,7 @@ mod tests {
         )
         .expect("Failed to parse stage");
         assert!(stage.groups[0].hide_outline);
+        assert_eq!(stage.groups[0].max_intensity, None);
         assert_eq!(stage.buttons[0].action, ButtonAction::Select);
         assert!(matches!(
             stage.buttons[0].targets[..],

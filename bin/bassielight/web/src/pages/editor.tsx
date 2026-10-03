@@ -496,6 +496,15 @@ export function EditorPage() {
                             />
                             Show outline
                         </label>
+                        <NumberField
+                            label="Max script intensity (%)"
+                            value={Math.round((group.max_intensity ?? 1) * 100)}
+                            min={0}
+                            max={100}
+                            onChange={(percent) =>
+                                updateGroup(group.id, { max_intensity: percent === 100 ? undefined : percent / 100 })
+                            }
+                        />
 
                         <h2 class="title">Fixtures</h2>
                         {stage.fixtures.length === 0 && <p class="block">No fixtures yet</p>}

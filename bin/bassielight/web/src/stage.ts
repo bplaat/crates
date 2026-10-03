@@ -86,6 +86,8 @@ export interface Group {
     name: string;
     fixtures: number[];
     hide_outline?: boolean;
+    /// Highest intensity scripts give the fixtures, from 0 to 1
+    max_intensity?: number;
 }
 
 /// Rect in the room that selects or blacks out its fixtures and groups and toggles its scripts when

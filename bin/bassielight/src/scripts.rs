@@ -17,7 +17,7 @@ use serde::Serialize;
 
 use crate::dmx::{Color, DMX_STATE, DmxState, FixtureProp, FixtureState, Mode, Tempo};
 use crate::ipc::{self, IpcMessage};
-use crate::stage::{FixtureKind, FixtureProfile, SCRIPTS_DIR, Stage};
+use crate::stage::{Fixture, FixtureKind, FixtureProfile, SCRIPTS_DIR, Stage};
 
 // MARK: Script files
 /// Scripts of the opened stage folder, the version changes when any source changes
@@ -444,6 +444,18 @@ fn parse_props(profile: &FixtureProfile, props: &Table) -> mlua::Result<Vec<Fixt
     Ok(result)
 }
 
+/// Props a script gives a fixture, intensities scaled to the max intensity of its groups
+fn script_props(stage: &Stage, fixture: &Fixture, props: &Table) -> mlua::Result<Vec<FixtureProp>> {
+    let scale = stage.script_intensity_scale(fixture.id);
+    Ok(parse_props(fixture.r#type.profile(), props)?
+        .into_iter()
+        .map(|prop| match prop {
+            FixtureProp::Intensity(value) => FixtureProp::Intensity(value * scale),
+            prop => prop,
+        })
+        .collect())
+}
+
 /// Prop of a fixture state for scripts, numbered items count from 1
 fn get_prop(lua: &Lua, state: &FixtureState, key: &str) -> mlua::Result<Value> {
     let json = serde_json::to_value(state).expect("Failed to serialize fixture state");
@@ -810,7 +822,7 @@ impl Engine {
                     let frame = frame(lua)?;
                     let mut commands = Vec::new();
                     for fixture in frame.stage.fixtures.iter().filter(|f| ids.contains(&f.id)) {
-                        for prop in parse_props(fixture.r#type.profile(), &props)? {
+                        for prop in script_props(&frame.stage, fixture, &props)? {
                             commands.push(Command::Set {
                                 id: fixture.id,
                                 prop,
@@ -841,7 +853,7 @@ impl Engine {
                     let frame = frame(lua)?;
                     let mut commands = Vec::new();
                     for fixture in frame.stage.fixtures.iter().filter(|f| ids.contains(&f.id)) {
-                        for prop in parse_props(fixture.r#type.profile(), &props)? {
+                        for prop in script_props(&frame.stage, fixture, &props)? {
                             let (field, to) = TweenField::of(prop).ok_or_else(|| {
                                 error("Only colors and props from 0 to 1 can be tweened")
                             })?;
@@ -1208,7 +1220,7 @@ impl Engine {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::stage::{Fixture, FixtureType};
+    use crate::stage::{FixtureType, Group};
 
     static TEST_LOCK: Mutex<()> = Mutex::new(());
 
@@ -1389,6 +1401,60 @@ mod tests {
         assert!(!DMX_STATE.lock().unwrap().running_scripts.contains("blink"));
         let errors = SCRIPTS.lock().unwrap().errors.clone();
         assert!(errors["blink"].contains("Unknown prop glow"), "{errors:?}");
+    }
+
+    #[test]
+    fn scales_script_intensity_to_the_group_max() {
+        let _guard = TEST_LOCK.lock().unwrap();
+        let stage = Stage {
+            fixtures: vec![Fixture {
+                id: 1,
+                name: "Par".to_string(),
+                r#type: FixtureType::AmericanDJP56Led,
+                addr: 1,
+                x: 0,
+                y: 0,
+                switches: None,
+            }],
+            groups: vec![Group {
+                id: 1,
+                name: "DJ".to_string(),
+                fixtures: vec![1],
+                hide_outline: false,
+                max_intensity: Some(0.3),
+            }],
+            ..Stage::default()
+        };
+        let tempo = Tempo {
+            bpm: 120.0,
+            downbeat: None,
+        };
+        let intensity = || DMX_STATE.lock().unwrap().fixture(1).intensity;
+
+        let mut engine = Engine::new().expect("Failed to start engine");
+        set_sources(BTreeMap::from([(
+            "dim".to_string(),
+            r#"
+                local par = fixture("Par")
+                par:set({ intensity = 1 })
+                wait(1)
+                par:tween({ intensity = 0.5 }, 1)
+                wait(4)
+                "#
+            .to_string(),
+        )]));
+        DMX_STATE
+            .lock()
+            .unwrap()
+            .running_scripts
+            .insert("dim".to_string());
+
+        engine.update(0.0, tempo, &stage);
+        assert!((intensity() - 0.3).abs() < 0.001);
+        engine.update(2.0, tempo, &stage);
+        assert!((intensity() - 0.15).abs() < 0.001);
+        DMX_STATE.lock().unwrap().running_scripts.clear();
+        engine.update(3.0, tempo, &stage);
     }
 
     #[test]
