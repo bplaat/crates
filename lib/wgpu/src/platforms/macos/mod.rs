@@ -334,7 +334,7 @@ pub(super) struct Pipeline {
 }
 
 impl Context {
-    pub(super) fn new(_: &Surface) -> Result<Rc<Self>> {
+    pub(super) fn new(_: Option<&Surface>) -> Result<Rc<Self>> {
         Self::headless()
     }
 

@@ -243,7 +243,7 @@ pub(crate) struct Context {
 }
 
 impl Context {
-    pub(super) fn new(_: &Surface) -> Result<Rc<Self>> {
+    pub(super) fn new(_: Option<&Surface>) -> Result<Rc<Self>> {
         match Self::with_driver(false) {
             Ok(context) => Ok(context),
             Err(error) if !error.fallback => Err(error.error),

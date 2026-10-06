@@ -118,6 +118,51 @@ const fn from_format(value: u32) -> Option<TextureFormat> {
     }
 }
 
+impl Instance {
+    fn new(platform: Option<&CStr>) -> Result<Rc<Self>> {
+        unsafe {
+            let library = dlopen(c"libvulkan.so.1".as_ptr(), 2);
+            if library.is_null() {
+                return Err(Error("Cannot load libvulkan.so.1".into()));
+            }
+            let get = dlsym(library, c"vkGetInstanceProcAddr".as_ptr());
+            if get.is_null() {
+                dlclose(library);
+                return Err(Error("Missing vkGetInstanceProcAddr".into()));
+            }
+            let get: GetProc = std::mem::transmute(get);
+            let create: vk::CreateInstance =
+                std::mem::transmute(get(ptr::null_mut(), c"vkCreateInstance".as_ptr()));
+            let extensions = platform.map_or(Vec::new(), |platform| {
+                vec![c"VK_KHR_surface".as_ptr(), platform.as_ptr()]
+            });
+            let application = vk::ApplicationInfo {
+                s_type: 0,
+                api_version: (1 << 22) | (1 << 12),
+                ..Default::default()
+            };
+            let info = vk::InstanceCreateInfo {
+                s_type: 1,
+                p_application_info: &application,
+                enabled_extension_count: extensions.len() as u32,
+                pp_enabled_extension_names: extensions.as_ptr(),
+                ..Default::default()
+            };
+            let mut handle = ptr::null_mut();
+            if let Err(error) = check(create(&info, ptr::null(), &mut handle)) {
+                dlclose(library);
+                return Err(error);
+            }
+            Ok(Rc::new(Self {
+                library,
+                handle,
+                get,
+                functions: RefCell::new(HashMap::new()),
+            }))
+        }
+    }
+}
+
 impl Drop for Instance {
     fn drop(&mut self) {
         unsafe {
@@ -297,42 +342,7 @@ impl Surface {
             let instance = if let Some(instance) = factory {
                 instance.clone()
             } else {
-                let library = dlopen(c"libvulkan.so.1".as_ptr(), 2);
-                if library.is_null() {
-                    return Err(Error("Cannot load libvulkan.so.1".into()));
-                }
-                let get = dlsym(library, c"vkGetInstanceProcAddr".as_ptr());
-                if get.is_null() {
-                    dlclose(library);
-                    return Err(Error("Missing vkGetInstanceProcAddr".into()));
-                }
-                let get: GetProc = std::mem::transmute(get);
-                let create: vk::CreateInstance =
-                    std::mem::transmute(get(ptr::null_mut(), c"vkCreateInstance".as_ptr()));
-                let extensions = [c"VK_KHR_surface".as_ptr(), platform.as_ptr()];
-                let application = vk::ApplicationInfo {
-                    s_type: 0,
-                    api_version: (1 << 22) | (1 << 12),
-                    ..Default::default()
-                };
-                let info = vk::InstanceCreateInfo {
-                    s_type: 1,
-                    p_application_info: &application,
-                    enabled_extension_count: 2,
-                    pp_enabled_extension_names: extensions.as_ptr(),
-                    ..Default::default()
-                };
-                let mut handle = ptr::null_mut();
-                if let Err(error) = check(create(&info, ptr::null(), &mut handle)) {
-                    dlclose(library);
-                    return Err(error);
-                }
-                let instance = Rc::new(Instance {
-                    library,
-                    handle,
-                    get,
-                    functions: RefCell::new(HashMap::new()),
-                });
+                let instance = Instance::new(Some(platform))?;
                 *factory = Some(instance.clone());
                 instance
             };
@@ -828,9 +838,12 @@ pub(super) struct Context {
 }
 
 impl Context {
-    pub(super) fn new(surface: &Surface) -> Result<Rc<Self>> {
+    pub(super) fn new(surface: Option<&Surface>) -> Result<Rc<Self>> {
         unsafe {
-            let instance = &surface.instance;
+            let instance = &match surface {
+                Some(surface) => surface.instance.clone(),
+                None => Instance::new(None)?,
+            };
             let mut count = 0;
             check(call!(
                 instance,
@@ -866,15 +879,17 @@ impl Context {
                     families.as_mut_ptr()
                 );
                 for (family, properties) in families.iter().enumerate() {
-                    let mut supported = 0;
-                    check(call!(
-                        instance,
-                        GetPhysicalDeviceSurfaceSupportKHR,
-                        physical,
-                        family as u32,
-                        surface.handle,
-                        &mut supported
-                    ))?;
+                    let mut supported = 1;
+                    if let Some(surface) = surface {
+                        check(call!(
+                            instance,
+                            GetPhysicalDeviceSurfaceSupportKHR,
+                            physical,
+                            family as u32,
+                            surface.handle,
+                            &mut supported
+                        ))?;
+                    }
                     if properties.queue_flags & 1 != 0 && supported != 0 {
                         selected = Some((physical, family as u32));
                         break;
@@ -885,7 +900,7 @@ impl Context {
                 }
             }
             let (physical, family) =
-                selected.ok_or_else(|| Error("No Vulkan graphics/present queue".into()))?;
+                selected.ok_or_else(|| Error("No suitable Vulkan graphics queue".into()))?;
             let priority = 1f32;
             let queue_info = vk::DeviceQueueCreateInfo {
                 s_type: 2,
@@ -899,7 +914,7 @@ impl Context {
                 s_type: 3,
                 queue_create_info_count: 1,
                 p_queue_create_infos: &queue_info,
-                enabled_extension_count: 1,
+                enabled_extension_count: u32::from(surface.is_some()),
                 pp_enabled_extension_names: extensions.as_ptr(),
                 ..Default::default()
             };

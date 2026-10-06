@@ -118,11 +118,13 @@ impl Instance {
     }
 
     pub fn request_adapter(&self, options: &RequestAdapterOptions<'_>) -> Result<Adapter> {
-        let surface = options
-            .compatible_surface
-            .ok_or_else(|| Error("A compatible surface is required".into()))?;
-        let native = platform::Context::new(&surface.native)?;
-        let formats = native.formats(&surface.native)?;
+        let native =
+            platform::Context::new(options.compatible_surface.map(|surface| &*surface.native))?;
+        let formats = if let Some(surface) = options.compatible_surface {
+            native.formats(&surface.native)?
+        } else {
+            Vec::new()
+        };
         Ok(Adapter {
             shared: Rc::new(Shared {
                 native,
