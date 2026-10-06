@@ -46,11 +46,14 @@ thread, and surface creation must happen on the main thread on macOS.
 cargo run -p example-wgpu-triangle
 cargo run -p example-wgpu-cube
 cargo run -p example-wgpu-blocks
+cargo run -p example-wgpu-headless
 ```
 
 See [wgpu-triangle](../../examples/wgpu-triangle),
-[wgpu-cube](../../examples/wgpu-cube), and
-[wgpu-blocks](../../examples/wgpu-blocks).
+[wgpu-cube](../../examples/wgpu-cube),
+[wgpu-blocks](../../examples/wgpu-blocks), and
+[wgpu-headless](../../examples/wgpu-headless). The headless example writes
+`frame.png` in the current directory.
 
 ## License
 

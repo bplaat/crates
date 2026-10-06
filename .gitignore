@@ -14,3 +14,4 @@ test-results/
 config.json
 *.mmdb
 !GeoLite2-City-Test.mmdb
+frame.png
