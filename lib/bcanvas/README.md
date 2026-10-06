@@ -58,7 +58,8 @@ Set the cursor over the canvas with `canvas.set_cursor(CursorIcon::Pointer)`.
 ## Offscreen drawing
 
 `OffscreenCanvas` draws without a window into straight-alpha RGBA8 pixels, for
-example to upload with `wgpu::Queue::write_texture`:
+example to upload with `wgpu::Queue::write_texture` or encode with the
+[image](../image) crate:
 
 ```rust
 use bcanvas::{Color, OffscreenCanvas};
@@ -70,6 +71,8 @@ canvas.draw(|ctx| {
 });
 let rgba = canvas.pixels();
 assert_eq!(rgba.len(), 128 * 32 * 4);
+let bitmap = canvas.to_bitmap().expect("create bitmap");
+assert_eq!(bitmap.width(), 128);
 ```
 
 ## License

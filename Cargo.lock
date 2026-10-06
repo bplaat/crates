@@ -83,6 +83,7 @@ name = "bcanvas"
 version = "0.1.0"
 dependencies = [
  "bwindow",
+ "image",
  "objc2",
 ]
 
