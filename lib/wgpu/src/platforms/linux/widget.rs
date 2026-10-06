@@ -291,20 +291,22 @@ mod tests {
         unsafe {
             let child = surface.native.widget;
             assert_ne!(gtk_widget_get_window(child), gtk_widget_get_window(parent));
-            let parent_handle = super::super::platform_window(NativeWindowHandle::Gtk(parent))
-                .expect("parent handle");
-            let child_handle = super::super::platform_window(NativeWindowHandle::Gtk(child))
-                .expect("child handle");
+            let parent_handle =
+                super::super::surface::platform_window(NativeWindowHandle::Gtk(parent))
+                    .expect("parent handle");
+            let child_handle =
+                super::super::surface::platform_window(NativeWindowHandle::Gtk(child))
+                    .expect("child handle");
             match (parent_handle, child_handle) {
                 (
-                    super::super::PlatformWindow::Xlib { window: parent, .. },
-                    super::super::PlatformWindow::Xlib { window: child, .. },
+                    super::super::surface::PlatformWindow::Xlib { window: parent, .. },
+                    super::super::surface::PlatformWindow::Xlib { window: child, .. },
                 ) => assert_ne!(parent, child),
                 (
-                    super::super::PlatformWindow::Wayland {
+                    super::super::surface::PlatformWindow::Wayland {
                         surface: parent, ..
                     },
-                    super::super::PlatformWindow::Wayland { surface: child, .. },
+                    super::super::surface::PlatformWindow::Wayland { surface: child, .. },
                 ) => assert_ne!(parent, child),
                 _ => panic!("mixed backends"),
             }

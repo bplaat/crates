@@ -14,7 +14,9 @@ use objc2::runtime::AnyObject;
 use objc2::{Encode, Encoding};
 
 pub(super) type Object = Retained<AnyObject>;
+#[cfg(feature = "window")]
 pub(super) type CVDisplayLinkRef = *mut c_void;
+#[cfg(feature = "window")]
 pub(super) type CVDisplayLinkOutputCallback = unsafe extern "C" fn(
     CVDisplayLinkRef,
     *const c_void,
@@ -24,6 +26,7 @@ pub(super) type CVDisplayLinkOutputCallback = unsafe extern "C" fn(
     *mut c_void,
 ) -> i32;
 
+#[cfg(feature = "window")]
 #[link(name = "CoreVideo", kind = "framework")]
 unsafe extern "C" {
     pub(super) fn CVDisplayLinkCreateWithActiveCGDisplays(
@@ -56,6 +59,7 @@ unsafe extern "C" {
         destructor: *mut c_void,
     ) -> *mut AnyObject;
 }
+#[cfg(feature = "window")]
 #[link(name = "QuartzCore", kind = "framework")]
 unsafe extern "C" {}
 
@@ -65,8 +69,11 @@ macro_rules! structure {
         unsafe impl Encode for $name { const ENCODING: Encoding = Encoding::Struct($encoding, &[$(<$ty>::ENCODING),+]); }
     };
 }
+#[cfg(feature = "window")]
 structure!(Size, "CGSize", width: f64, height: f64);
+#[cfg(feature = "window")]
 structure!(Point, "CGPoint", x: f64, y: f64);
+#[cfg(feature = "window")]
 structure!(Rect, "CGRect", origin: Point, size: Size);
 structure!(MSize, "?", width: usize, height: usize, depth: usize);
 structure!(MOrigin, "?", x: usize, y: usize, z: usize);

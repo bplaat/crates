@@ -1837,6 +1837,7 @@ unsafe extern "C" {
     pub(super) fn dlclose(library: *mut c_void) -> i32;
 }
 
+#[cfg(feature = "window")]
 unsafe extern "C" {
     pub(super) fn gtk_widget_get_window(widget: *mut c_void) -> *mut c_void;
     pub(super) fn gtk_widget_get_scale_factor(widget: *mut c_void) -> i32;
@@ -1885,6 +1886,7 @@ pub(super) struct WindowAttributes {
     pub type_hint: i32,
 }
 
+#[cfg(feature = "window")]
 unsafe extern "C" {
     pub(super) fn gtk_drawing_area_new() -> *mut c_void;
     pub(super) fn g_object_ref_sink(object: *mut c_void) -> *mut c_void;
@@ -1914,6 +1916,7 @@ unsafe extern "C" {
     pub(super) fn g_type_check_instance_is_a(instance: *mut c_void, type_: usize) -> i32;
 }
 
+#[cfg(feature = "window")]
 unsafe extern "C" {
     pub(super) fn g_object_get_data(object: *mut c_void, key: *const c_char) -> *mut c_void;
     pub(super) fn g_object_set_data(object: *mut c_void, key: *const c_char, data: *mut c_void);
@@ -1924,6 +1927,7 @@ unsafe extern "C" {
     pub(super) fn gdk_window_get_update_area(window: *mut c_void) -> *mut c_void;
 }
 
+#[cfg(feature = "window")]
 #[link(name = "libcairo.so.2", kind = "dylib", modifiers = "+verbatim")]
 unsafe extern "C" {
     pub(super) fn cairo_region_subtract(region: *mut c_void, other: *mut c_void) -> i32;

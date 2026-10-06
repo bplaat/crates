@@ -12,10 +12,15 @@ use std::ffi::c_void;
 use std::ptr;
 use std::rc::Rc;
 
+#[cfg(feature = "window")]
+pub(crate) use surface::{Factory, Surface};
+
 use crate::platform::headers::*;
 use crate::*;
 
 mod headers;
+#[cfg(feature = "window")]
+mod surface;
 
 struct InitError {
     error: Error,
@@ -72,6 +77,7 @@ impl Com {
         owned.ok_or_else(|| Error("COM returned null".into()))
     }
 
+    #[cfg(feature = "window")]
     fn query(&self, iid: &GUID) -> Result<Self> {
         Self::create(|out| unsafe { (self.unknown().QueryInterface)(self.0, iid, out) })
     }
@@ -111,62 +117,6 @@ const fn format(value: TextureFormat) -> i32 {
         TextureFormat::Bgra8Unorm => 87,
         TextureFormat::Bgra8UnormSrgb => 91,
         TextureFormat::Depth32Float => 40,
-    }
-}
-
-pub(super) type Factory = ();
-
-pub(super) struct Surface {
-    window: HWND,
-    swap: RefCell<Option<Swapchain>>,
-    sender: bwindow::WindowEventSender,
-}
-
-struct Swapchain {
-    object: Com,
-    buffers: Vec<Com>,
-    format: TextureFormat,
-    width: u32,
-    height: u32,
-}
-
-impl Surface {
-    pub(super) fn new(
-        window: bwindow::NativeWindowHandle,
-        sender: bwindow::WindowEventSender,
-        _: &mut Option<Factory>,
-    ) -> Result<Self> {
-        let bwindow::NativeWindowHandle::Win32(window) = window else {
-            return Err(Error("D3D12 requires a Win32 window".into()));
-        };
-        Ok(Self {
-            window,
-            swap: RefCell::new(None),
-            sender,
-        })
-    }
-
-    pub(super) fn request_redraw(&self) {
-        self.sender.send(bwindow::WindowEvent::RedrawRequested);
-    }
-
-    pub(super) fn request_animation_frame(&self) {
-        // Yield through the native message queue before the next synchronized present.
-        // This keeps input, resize, and close messages responsive during animation.
-        if !self.sender.post_redraw() {
-            self.sender.send(bwindow::WindowEvent::RedrawRequested);
-        }
-    }
-
-    pub(super) fn size(&self) -> (u32, u32) {
-        let mut rect = RECT::default();
-        if unsafe { GetClientRect(self.window, &mut rect) } == 0 {
-            return (0, 0);
-        }
-        (
-            (rect.right - rect.left).max(0) as u32,
-            (rect.bottom - rect.top).max(0) as u32,
-        )
     }
 }
 
@@ -231,6 +181,7 @@ struct Frame {
 pub(crate) struct Context {
     device: Com,
     queue: Com,
+    #[cfg(feature = "window")]
     factory: Com,
     fence: Com,
     event: Event,
@@ -239,11 +190,12 @@ pub(crate) struct Context {
     frames: RefCell<Vec<Frame>>,
     slot: Cell<usize>,
     serial: Cell<u64>,
+    #[cfg(feature = "window")]
     acquired: Cell<bool>,
 }
 
 impl Context {
-    pub(super) fn new(_: Option<&Surface>) -> Result<Rc<Self>> {
+    pub(super) fn new() -> Result<Rc<Self>> {
         match Self::with_driver(false) {
             Ok(context) => Ok(context),
             Err(error) if !error.fallback => Err(error.error),
@@ -296,6 +248,7 @@ impl Context {
                 let context = Rc::new(Self {
                     device,
                     queue,
+                    #[cfg(feature = "window")]
                     factory,
                     fence,
                     event,
@@ -304,6 +257,7 @@ impl Context {
                     frames: RefCell::new(Vec::new()),
                     slot: Cell::new(0),
                     serial: Cell::new(0),
+                    #[cfg(feature = "window")]
                     acquired: Cell::new(false),
                 });
                 for _ in 0..2 {
@@ -592,117 +546,6 @@ impl Context {
             check(CommandQueue_Signal(self.queue.0, self.fence.0, value))?;
         }
         Ok(value)
-    }
-
-    pub(super) fn formats(&self, _: &Surface) -> Result<Vec<TextureFormat>> {
-        Ok(vec![
-            TextureFormat::Bgra8UnormSrgb,
-            TextureFormat::Bgra8Unorm,
-        ])
-    }
-
-    pub(super) fn configure(&self, surface: &Surface, config: &SurfaceConfiguration) -> Result<()> {
-        for frame in self.frames.borrow_mut().iter_mut() {
-            self.wait(frame)?;
-        }
-        self.wait_value(self.signal()?)?;
-        let mut current = surface.swap.borrow_mut();
-        unsafe {
-            if let Some(swap) = current.as_mut() {
-                swap.buffers.clear();
-                check(SwapChain3_ResizeBuffers(
-                    swap.object.0,
-                    3,
-                    config.width,
-                    config.height,
-                    87,
-                    0,
-                ))?;
-                swap.format = config.format;
-                swap.width = config.width;
-                swap.height = config.height;
-            } else {
-                let desc = DXGI_SWAP_CHAIN_DESC1 {
-                    Width: config.width,
-                    Height: config.height,
-                    Format: 87,
-                    SampleDesc: DXGI_SAMPLE_DESC {
-                        Count: 1,
-                        Quality: 0,
-                    },
-                    BufferUsage: 32,
-                    BufferCount: 3,
-                    SwapEffect: 4,
-                    ..Default::default()
-                };
-                let swap = Com::create(|out| {
-                    Factory4_CreateSwapChainForHwnd(
-                        self.factory.0,
-                        self.queue.0,
-                        surface.window,
-                        &desc,
-                        ptr::null(),
-                        ptr::null_mut(),
-                        out,
-                    )
-                })?;
-                check(Factory4_MakeWindowAssociation(
-                    self.factory.0,
-                    surface.window,
-                    2,
-                ))?;
-                *current = Some(Swapchain {
-                    object: swap.query(&IDXGISwapChain3)?,
-                    buffers: Vec::new(),
-                    format: config.format,
-                    width: config.width,
-                    height: config.height,
-                });
-            }
-            let swap = current.as_mut().expect("swap chain configured");
-            for index in 0..3 {
-                swap.buffers.push(Com::create(|out| {
-                    SwapChain3_GetBuffer(swap.object.0, index, &ID3D12Resource, out)
-                })?);
-            }
-        }
-        self.acquired.set(false);
-        Ok(())
-    }
-
-    pub(super) fn acquire(
-        &self,
-        surface: &Surface,
-    ) -> std::result::Result<(Texture, bool), CurrentSurfaceTexture> {
-        if self.acquired.get() {
-            return Err(CurrentSurfaceTexture::Validation);
-        }
-        self.wait(&mut self.frames.borrow_mut()[self.slot.get()])
-            .map_err(|_| CurrentSurfaceTexture::Lost)?;
-        let swap = surface.swap.borrow();
-        let swap = swap.as_ref().ok_or(CurrentSurfaceTexture::Validation)?;
-        unsafe {
-            let status = SwapChain3_Present(swap.object.0, 0, 1);
-            if status == 0x087a0001 {
-                return Err(CurrentSurfaceTexture::Occluded);
-            }
-            if status < 0 {
-                return Err(CurrentSurfaceTexture::Lost);
-            }
-            let index = SwapChain3_GetCurrentBackBufferIndex(swap.object.0);
-            self.acquired.set(true);
-            Ok((
-                Texture {
-                    object: swap.buffers[index as usize].clone(),
-                    state: Cell::new(0),
-                    format: swap.format,
-                    mips: 1,
-                    layers: 1,
-                    index: Some(index),
-                },
-                false,
-            ))
-        }
     }
 
     fn buffer_desc(size: u64) -> D3D12_RESOURCE_DESC {
@@ -1334,6 +1177,7 @@ impl Context {
         }
     }
 
+    #[cfg(feature = "image")]
     pub(super) fn read_texture(
         &self,
         texture: &Texture,
@@ -1429,26 +1273,6 @@ impl Context {
             Resource_Unmap(readback.0, 0, ptr::null());
             Ok(bytes)
         }
-    }
-
-    pub(super) fn present(&self, surface: &Surface, texture: &Texture) -> Result<()> {
-        require(
-            self.acquired.replace(false),
-            "No acquired D3D12 surface texture",
-        );
-        let swap = surface.swap.borrow();
-        let swap = swap
-            .as_ref()
-            .ok_or_else(|| Error("Surface not configured".into()))?;
-        unsafe {
-            require(
-                texture.index == Some(SwapChain3_GetCurrentBackBufferIndex(swap.object.0)),
-                "Wrong swapchain buffer",
-            );
-            check(SwapChain3_Present(swap.object.0, 1, 0))?;
-        }
-        self.slot.set((self.slot.get() + 1) % 2);
-        Ok(())
     }
 }
 

@@ -11,8 +11,13 @@ workspace = true
 
 [dependencies]
 bitflags = "2.13"
-bwindow = { path = "../bwindow", default-features = false }
-image = { path = "../image", default-features = false }
+bwindow = { path = "../bwindow", default-features = false, optional = true }
+image = { path = "../image", default-features = false, optional = true }
 
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
+
+[features]
+default = ["image", "window"]
+image = ["dep:image"]
+window = ["dep:bwindow"]

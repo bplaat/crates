@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 image = { path = "../../lib/image", default-features = false, features = ["png"] }
-wgpu = { path = "../../lib/wgpu" }
+wgpu = { path = "../../lib/wgpu", default-features = false, features = ["image"] }
 
 [build-dependencies]
 wgpu-shader-build = { path = "../../lib/wgpu-shader-build" }

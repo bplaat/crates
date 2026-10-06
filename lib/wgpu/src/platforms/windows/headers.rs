@@ -15,7 +15,28 @@
 
 use std::ffi::{c_char, c_void};
 
-pub(super) use bwindow::ffi::*;
+pub(super) type BOOL = i32;
+pub(super) type HANDLE = *mut c_void;
+pub(super) type HWND = HANDLE;
+pub(super) type HRESULT = i32;
+
+#[repr(C)]
+#[derive(PartialEq, Eq)]
+pub(super) struct GUID {
+    pub(super) data1: u32,
+    pub(super) data2: u16,
+    pub(super) data3: u16,
+    pub(super) data4: [u8; 8],
+}
+
+#[repr(C)]
+#[derive(Default, Clone)]
+pub(super) struct RECT {
+    pub(super) left: i32,
+    pub(super) top: i32,
+    pub(super) right: i32,
+    pub(super) bottom: i32,
+}
 
 #[repr(C)]
 pub(super) struct IUnknownVtbl {
@@ -1576,3 +1597,9 @@ pub(super) const IDXGIAdapter: GUID = GUID {
     data3: 0x4ccf,
     data4: [0xbd, 0x14, 0x97, 0x98, 0xe8, 0x53, 0x4d, 0xc0],
 };
+
+#[cfg(feature = "window")]
+#[link(name = "user32")]
+unsafe extern "system" {
+    pub(super) fn GetClientRect(window: HWND, rect: *mut RECT) -> BOOL;
+}

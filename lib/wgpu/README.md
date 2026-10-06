@@ -8,6 +8,16 @@ not API-compatible with it and is not a replacement. It currently supports the
 features needed by this repository, including surfaces, buffers, textures, bind
 groups, shaders, pipelines, render passes, and bitmap readback.
 
+## Features
+
+- `window` (default): presentation surfaces for [bwindow](../bwindow) windows
+- `image` (default): offscreen render targets read back as
+  [image](../image) bitmaps
+
+At least one feature must be enabled. Disable default features and enable only
+`image` for headless rendering without any GTK, AppKit view, or Win32 window
+code.
+
 ## Backends
 
 | Operating system | Backends               | Fallback                                              |

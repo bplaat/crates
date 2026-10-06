@@ -4,17 +4,19 @@
  * SPDX-License-Identifier: MIT
  */
 
-#![doc = include_str!("../README.md")]
+// The README examples need the default `window` feature.
+#![cfg_attr(feature = "window", doc = include_str!("../README.md"))]
 #![allow(missing_docs)]
 #![allow(unsafe_code)]
 #![allow(clippy::undocumented_unsafe_blocks)]
 #![cfg_attr(test, allow(clippy::unwrap_used))]
 
 use std::cell::{Cell, RefCell, RefMut};
-use std::marker::PhantomData;
 use std::ops::{Bound, Range, RangeBounds};
 use std::rc::{Rc, Weak};
 
+#[cfg(feature = "window")]
+pub use crate::surface::*;
 pub use crate::types::*;
 
 #[cfg(any(target_os = "linux", test))]
@@ -28,10 +30,15 @@ mod platform;
 #[cfg(target_os = "windows")]
 #[path = "platforms/windows/mod.rs"]
 mod platform;
+#[cfg(feature = "window")]
+mod surface;
 mod types;
 
 #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
 compile_error!("This crate supports macOS, Linux, and Windows only");
+
+#[cfg(not(any(feature = "image", feature = "window")))]
+compile_error!("Enable the `image` feature, the `window` feature, or both");
 
 #[derive(Debug)]
 pub struct Error(pub(crate) String);
@@ -52,19 +59,13 @@ fn require(value: bool, message: &str) {
 
 #[derive(Default)]
 pub struct Instance {
+    #[cfg(feature = "window")]
     factory: RefCell<Option<platform::Factory>>,
-}
-
-pub struct Surface<'a> {
-    native: Rc<platform::Surface>,
-    owner: Rc<dyn std::any::Any>,
-    shared: RefCell<Option<Rc<Shared>>>,
-    config: RefCell<Option<SurfaceConfiguration>>,
-    _lifetime: PhantomData<&'a ()>,
 }
 
 pub struct Adapter {
     shared: Rc<Shared>,
+    #[cfg(feature = "window")]
     formats: Vec<TextureFormat>,
 }
 
@@ -82,60 +83,34 @@ pub struct Queue {
 }
 
 impl Instance {
-    /// Create a presentation surface from an exclusive bwindow content attachment.
-    pub fn create_surface(
-        &self,
-        attachment: bwindow::WindowAttachment,
-    ) -> Result<Surface<'static>> {
-        let handle = unsafe { attachment.native_handle() }
-            .ok_or_else(|| Error("The bwindow window is closed".into()))?;
-        let sender = attachment.event_sender();
-        let native = Rc::new(platform::Surface::new(
-            handle,
-            sender,
-            &mut self.factory.borrow_mut(),
-        )?);
-        let redraw = Rc::downgrade(&native);
-        attachment.on_redraw(move || {
-            if let Some(surface) = redraw.upgrade() {
-                surface.request_redraw();
-            }
-        });
-        let animation_frame = Rc::downgrade(&native);
-        attachment.on_animation_frame(move || {
-            if let Some(surface) = animation_frame.upgrade() {
-                surface.request_animation_frame();
-            }
-        });
-        // The surface retains the attachment for the lifetime of all native presentation objects.
-        Ok(Surface {
-            native,
-            owner: Rc::new(attachment),
-            shared: RefCell::new(None),
-            config: RefCell::new(None),
-            _lifetime: PhantomData,
-        })
-    }
-
     pub fn request_adapter(&self, options: &RequestAdapterOptions<'_>) -> Result<Adapter> {
-        let native =
-            platform::Context::new(options.compatible_surface.map(|surface| &*surface.native))?;
-        let formats = if let Some(surface) = options.compatible_surface {
-            native.formats(&surface.native)?
-        } else {
-            Vec::new()
-        };
-        Ok(Adapter {
-            shared: Rc::new(Shared {
-                native,
-                uploads: RefCell::new(Vec::new()),
-            }),
-            formats,
-        })
+        #[cfg(feature = "window")]
+        if let Some(surface) = options.compatible_surface {
+            let native = platform::Context::with_surface(&surface.native)?;
+            let formats = native.formats(&surface.native)?;
+            return Ok(Adapter {
+                formats,
+                ..Adapter::new(native)
+            });
+        }
+        #[cfg(not(feature = "window"))]
+        let _ = options;
+        Ok(Adapter::new(platform::Context::new()?))
     }
 }
 
 impl Adapter {
+    fn new(native: Rc<platform::Context>) -> Self {
+        Self {
+            shared: Rc::new(Shared {
+                native,
+                uploads: RefCell::new(Vec::new()),
+            }),
+            #[cfg(feature = "window")]
+            formats: Vec::new(),
+        }
+    }
+
     pub fn request_device(&self, _: &DeviceDescriptor) -> Result<(Device, Queue)> {
         Ok((
             Device {
@@ -146,102 +121,6 @@ impl Adapter {
             },
         ))
     }
-}
-
-impl Surface<'_> {
-    /// Return the current drawable size in physical pixels.
-    pub fn size(&self) -> (u32, u32) {
-        self.native.size()
-    }
-
-    pub fn get_capabilities(&self, adapter: &Adapter) -> SurfaceCapabilities {
-        SurfaceCapabilities {
-            formats: adapter.formats.clone(),
-        }
-    }
-
-    pub fn get_default_config(
-        &self,
-        adapter: &Adapter,
-        width: u32,
-        height: u32,
-    ) -> Option<SurfaceConfiguration> {
-        Some(SurfaceConfiguration {
-            format: *adapter.formats.first()?,
-            width,
-            height,
-            present_mode: PresentMode::AutoVsync,
-        })
-    }
-
-    pub fn configure(&self, device: &Device, config: &SurfaceConfiguration) {
-        require(
-            config.width > 0 && config.height > 0,
-            "Surface extent must be nonzero",
-        );
-        device
-            .shared
-            .native
-            .configure(&self.native, config)
-            .expect("Configure surface");
-        *self.shared.borrow_mut() = Some(device.shared.clone());
-        *self.config.borrow_mut() = Some(config.clone());
-    }
-
-    pub fn get_current_texture(&self) -> CurrentSurfaceTexture {
-        let shared = self.shared.borrow();
-        let Some(shared) = shared.as_ref() else {
-            return CurrentSurfaceTexture::Validation;
-        };
-        let config = self.config.borrow();
-        let config = config.as_ref().expect("surface configuration");
-        match shared.native.acquire(&self.native) {
-            Ok((native, suboptimal)) => {
-                let texture = Texture {
-                    inner: Rc::new(TextureInner {
-                        native,
-                        owner: Rc::downgrade(shared),
-                        size: Extent3d {
-                            width: config.width,
-                            height: config.height,
-                            depth_or_array_layers: 1,
-                        },
-                        mips: 1,
-                        format: config.format,
-                        usage: TextureUsages::RENDER_ATTACHMENT,
-                        _window: Some(self.owner.clone()),
-                    }),
-                };
-                let frame = SurfaceTexture {
-                    texture,
-                    surface: self.native.clone(),
-                    _owner: self.owner.clone(),
-                };
-                if suboptimal {
-                    CurrentSurfaceTexture::Suboptimal(frame)
-                } else {
-                    CurrentSurfaceTexture::Success(frame)
-                }
-            }
-            Err(status) => status,
-        }
-    }
-}
-
-pub enum CurrentSurfaceTexture {
-    Success(SurfaceTexture),
-    Suboptimal(SurfaceTexture),
-    Outdated,
-    Lost,
-    Timeout,
-    Occluded,
-    Validation,
-}
-
-pub struct SurfaceTexture {
-    pub texture: Texture,
-    surface: Rc<platform::Surface>,
-    _owner: Rc<dyn std::any::Any>,
 }
 
 #[derive(Clone)]
@@ -375,10 +254,12 @@ pub struct TextureView {
 }
 
 /// A render target whose pixels can be read into an image bitmap.
+#[cfg(feature = "image")]
 pub struct BitmapTarget {
     texture: Texture,
 }
 
+#[cfg(feature = "image")]
 impl BitmapTarget {
     pub fn create_view(&self) -> TextureView {
         self.texture.create_view(&TextureViewDescriptor::default())
@@ -512,6 +393,7 @@ pub struct RenderPipeline {
 
 impl Device {
     /// Create an offscreen RGBA8 render target for bitmap export.
+    #[cfg(feature = "image")]
     pub fn create_bitmap_target(&self, width: u32, height: u32) -> BitmapTarget {
         BitmapTarget {
             texture: self.create_texture(&TextureDescriptor {
@@ -934,14 +816,6 @@ impl Queue {
             .submit(uploads, passes)
             .expect("Submit graphics commands");
     }
-
-    pub fn present(&self, frame: SurfaceTexture) {
-        self.shared.check(&frame.texture.inner.owner);
-        self.shared
-            .native
-            .present(&frame.surface, &frame.texture.inner.native)
-            .expect("Present frame");
-    }
 }
 
 fn pack_texture(data: &[u8], layout: &TexelCopyBufferLayout, size: Extent3d) -> Vec<u8> {
@@ -1299,7 +1173,7 @@ macro_rules! vertex_attr_array {
 mod tests {
     use super::*;
 
-    #[cfg(target_os = "macos")]
+    #[cfg(all(target_os = "macos", feature = "image"))]
     #[test]
     fn headless_bitmap_readback() {
         let instance = Instance::default();

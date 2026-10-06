@@ -55,12 +55,6 @@ impl TextureFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum PresentMode {
-    #[default]
-    AutoVsync,
-}
-
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum TextureDimension {
     D2,
@@ -156,21 +150,12 @@ pub struct Origin3d {
     pub z: u32,
 }
 
-#[derive(Clone, Debug)]
-pub struct SurfaceConfiguration {
-    pub format: TextureFormat,
-    pub width: u32,
-    pub height: u32,
-    pub present_mode: PresentMode,
-}
-
-pub struct SurfaceCapabilities {
-    pub formats: Vec<TextureFormat>,
-}
-
 #[derive(Default)]
 pub struct RequestAdapterOptions<'a> {
+    #[cfg(feature = "window")]
     pub compatible_surface: Option<&'a Surface<'a>>,
+    #[cfg(not(feature = "window"))]
+    _lifetime: std::marker::PhantomData<&'a ()>,
 }
 
 #[derive(Default)]
