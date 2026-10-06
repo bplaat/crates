@@ -374,6 +374,29 @@ pub struct TextureView {
     dimension: TextureViewDimension,
 }
 
+/// A render target whose pixels can be read into an image bitmap.
+pub struct BitmapTarget {
+    texture: Texture,
+}
+
+impl BitmapTarget {
+    pub fn create_view(&self) -> TextureView {
+        self.texture.create_view(&TextureViewDescriptor::default())
+    }
+
+    /// Wait for submitted rendering and return tightly packed RGBA8 pixels.
+    pub fn read(&self, queue: &Queue) -> Result<image::Bitmap> {
+        queue.shared.check(&self.texture.inner.owner);
+        let size = self.texture.inner.size;
+        let bytes = queue.shared.native.read_texture(
+            &self.texture.inner.native,
+            size.width,
+            size.height,
+        )?;
+        image::Bitmap::new(size.width, size.height, bytes).map_err(|error| Error(error.to_string()))
+    }
+}
+
 impl Texture {
     pub fn create_view(&self, desc: &TextureViewDescriptor) -> TextureView {
         let dimension = desc
@@ -488,6 +511,26 @@ pub struct RenderPipeline {
 }
 
 impl Device {
+    /// Create an offscreen RGBA8 render target for bitmap export.
+    pub fn create_bitmap_target(&self, width: u32, height: u32) -> BitmapTarget {
+        BitmapTarget {
+            texture: self.create_texture(&TextureDescriptor {
+                label: None,
+                size: Extent3d {
+                    width,
+                    height,
+                    depth_or_array_layers: 1,
+                },
+                mip_level_count: 1,
+                sample_count: 1,
+                dimension: TextureDimension::D2,
+                format: TextureFormat::Rgba8Unorm,
+                usage: TextureUsages::RENDER_ATTACHMENT | TextureUsages::COPY_SRC,
+                view_formats: &[],
+            }),
+        }
+    }
+
     pub fn create_buffer(&self, desc: &BufferDescriptor<'_>) -> Buffer {
         require(desc.size <= usize::MAX as u64, "Buffer is too large");
         require(
@@ -1255,6 +1298,40 @@ macro_rules! vertex_attr_array {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[cfg(target_os = "macos")]
+    #[test]
+    fn headless_bitmap_readback() {
+        let instance = Instance::default();
+        let adapter = instance.request_adapter(&Default::default()).unwrap();
+        let (device, queue) = adapter.request_device(&Default::default()).unwrap();
+        let target = device.create_bitmap_target(2, 2);
+        let view = target.create_view();
+        let mut encoder = device.create_command_encoder(&Default::default());
+        {
+            let _pass = encoder.begin_render_pass(&RenderPassDescriptor {
+                label: None,
+                color_attachments: &[Some(RenderPassColorAttachment {
+                    view: &view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: Operations {
+                        load: LoadOp::Clear(Color {
+                            r: 1.0,
+                            g: 0.0,
+                            b: 0.0,
+                            a: 1.0,
+                        }),
+                        store: StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+            });
+        }
+        queue.submit([encoder.finish()]);
+        let bitmap = target.read(&queue).unwrap();
+        assert_eq!(bitmap.data(), [255, 0, 0, 255].repeat(4));
+    }
 
     #[test]
     fn native_shader_binaries_are_selected_by_entry_point() {

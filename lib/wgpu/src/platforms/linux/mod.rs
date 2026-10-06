@@ -611,7 +611,7 @@ impl NativeDevice {
             let info = vk::BufferCreateInfo {
                 s_type: 12,
                 size,
-                usage: if staging { 1 } else { 2 | 16 | 32 | 128 },
+                usage: if staging { 1 | 2 } else { 2 | 16 | 32 | 128 },
                 ..Default::default()
             };
             let mut handle = 0;
@@ -1384,6 +1384,10 @@ impl Context {
             let depth = desc.format == TextureFormat::Depth32Float;
             let usage = if desc.usage.contains(TextureUsages::COPY_DST) {
                 2
+            } else {
+                0
+            } | if desc.usage.contains(TextureUsages::COPY_SRC) {
+                1
             } else {
                 0
             } | if desc.usage.contains(TextureUsages::TEXTURE_BINDING) {
@@ -2313,6 +2317,113 @@ impl Context {
             frame.uploads = uploads;
             frame.passes = passes;
             Ok(())
+        }
+    }
+
+    pub(super) fn read_texture(
+        &self,
+        texture: &Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>> {
+        unsafe {
+            let d = &self.device;
+            let length = u64::from(width) * u64::from(height) * 4;
+            let buffer = d.buffer(length, true)?;
+            let mut frames = self.frames.borrow_mut();
+            let frame = &mut frames[self.slot.get()];
+            self.wait(frame, u64::MAX)?;
+            let begin = vk::CommandBufferBeginInfo {
+                s_type: 42,
+                flags: 1,
+                ..Default::default()
+            };
+            check(call!(d.instance, BeginCommandBuffer, frame.command, &begin))?;
+            self.transition(frame.command, texture, 6); // VK_IMAGE_LAYOUT_TRANSFER_SRC_OPTIMAL
+            let region = vk::BufferImageCopy {
+                image_subresource: vk::ImageSubresourceLayers {
+                    aspect_mask: 1,
+                    layer_count: 1,
+                    ..Default::default()
+                },
+                image_extent: vk::Extent3D {
+                    width,
+                    height,
+                    depth: 1,
+                },
+                ..Default::default()
+            };
+            call!(
+                d.instance,
+                CmdCopyImageToBuffer,
+                frame.command,
+                texture.image,
+                6,
+                buffer.handle,
+                1,
+                &region
+            );
+            // Make the transfer write visible to the host mapping below.
+            let host = vk::MemoryBarrier {
+                s_type: 46,
+                src_access_mask: 0x1000, // VK_ACCESS_TRANSFER_WRITE_BIT
+                dst_access_mask: 0x2000, // VK_ACCESS_HOST_READ_BIT
+                ..Default::default()
+            };
+            call!(
+                d.instance,
+                CmdPipelineBarrier,
+                frame.command,
+                0x1000, // VK_PIPELINE_STAGE_TRANSFER_BIT
+                0x4000, // VK_PIPELINE_STAGE_HOST_BIT
+                0,
+                1,
+                &host,
+                0,
+                ptr::null(),
+                0,
+                ptr::null()
+            );
+            check(call!(d.instance, EndCommandBuffer, frame.command))?;
+            check(call!(d.instance, ResetFences, d.handle, 1, &frame.fence))?;
+            let submit = vk::SubmitInfo {
+                s_type: 4,
+                command_buffer_count: 1,
+                p_command_buffers: &frame.command,
+                ..Default::default()
+            };
+            check(call!(
+                d.instance,
+                QueueSubmit,
+                d.queue,
+                1,
+                &submit,
+                frame.fence
+            ))?;
+            frame.busy = true;
+            check(call!(
+                d.instance,
+                WaitForFences,
+                d.handle,
+                1,
+                &frame.fence,
+                1,
+                u64::MAX
+            ))?;
+            let mut mapped = ptr::null_mut();
+            check(call!(
+                d.instance,
+                MapMemory,
+                d.handle,
+                buffer.memory.handle,
+                buffer.offset,
+                length,
+                0,
+                &mut mapped
+            ))?;
+            let bytes = std::slice::from_raw_parts(mapped.cast::<u8>(), length as usize).to_vec();
+            call!(d.instance, UnmapMemory, d.handle, buffer.memory.handle);
+            Ok(bytes)
         }
     }
 

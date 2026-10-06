@@ -738,6 +738,33 @@ impl Context {
             Ok(())
         })
     }
+
+    pub(super) fn read_texture(
+        &self,
+        texture: &Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>> {
+        self.wait(self.slot.get())?;
+        autoreleasepool(|_| unsafe {
+            let length = usize::try_from(u64::from(width) * u64::from(height) * 4)
+                .map_err(|_| Error("Bitmap is too large".into()))?;
+            let buffer =
+                owned(msg_send![&*self.device, newBufferWithLength: length, options: 0usize])?;
+            let command = retained(msg_send![&*self.queue, commandBuffer])?;
+            let blit = retained(msg_send![&*command, blitCommandEncoder])?;
+            let _: () = msg_send![&*blit, copyFromTexture: &*texture.object, sourceSlice: 0usize, sourceLevel: 0usize, sourceOrigin: MOrigin { x: 0, y: 0, z: 0 }, sourceSize: MSize { width: width as usize, height: height as usize, depth: 1 }, toBuffer: &*buffer, destinationOffset: 0usize, destinationBytesPerRow: width as usize * 4, destinationBytesPerImage: length];
+            let _: () = msg_send![&*blit, endEncoding];
+            let _: () = msg_send![&*command, commit];
+            let _: () = msg_send![&*command, waitUntilCompleted];
+            let status: usize = msg_send![&*command, status];
+            if status == 5 {
+                return Err(error(msg_send![&*command, error]));
+            }
+            let data: *const c_void = msg_send![&*buffer, contents];
+            Ok(std::slice::from_raw_parts(data.cast::<u8>(), length).to_vec())
+        })
+    }
 }
 
 impl Drop for Context {

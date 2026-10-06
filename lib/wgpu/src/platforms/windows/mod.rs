@@ -1334,6 +1334,103 @@ impl Context {
         }
     }
 
+    pub(super) fn read_texture(
+        &self,
+        texture: &Texture,
+        width: u32,
+        height: u32,
+    ) -> Result<Vec<u8>> {
+        unsafe {
+            let pitch = width
+                .checked_mul(4)
+                .ok_or_else(|| Error("Bitmap row is too wide".into()))?
+                .div_ceil(256)
+                * 256;
+            let length = u64::from(pitch) * u64::from(height);
+            let heap = D3D12_HEAP_PROPERTIES {
+                Type: 3, // D3D12_HEAP_TYPE_READBACK
+                CreationNodeMask: 1,
+                VisibleNodeMask: 1,
+                ..Default::default()
+            };
+            let readback = Com::create(|out| {
+                Device_CreateCommittedResource(
+                    self.device.0,
+                    &heap,
+                    0,
+                    &Self::buffer_desc(length),
+                    1024,
+                    ptr::null(),
+                    &ID3D12Resource,
+                    out,
+                )
+            })?;
+            let mut frames = self.frames.borrow_mut();
+            let frame = &mut frames[self.slot.get()];
+            self.wait(frame)?;
+            check(CommandAllocator_Reset(frame.allocator.0))?;
+            check(GraphicsCommandList_Reset(
+                frame.list.0,
+                frame.allocator.0,
+                ptr::null_mut(),
+            ))?;
+            Self::transition(&frame.list, &texture.object, &texture.state, 2048);
+            let source = D3D12_TEXTURE_COPY_LOCATION {
+                pResource: texture.object.0,
+                Type: 0,
+                Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
+                    SubresourceIndex: 0,
+                },
+            };
+            let destination = D3D12_TEXTURE_COPY_LOCATION {
+                pResource: readback.0,
+                Type: 1,
+                Anonymous: D3D12_TEXTURE_COPY_LOCATION_0 {
+                    PlacedFootprint: D3D12_PLACED_SUBRESOURCE_FOOTPRINT {
+                        Offset: 0,
+                        Footprint: D3D12_SUBRESOURCE_FOOTPRINT {
+                            Format: format(texture.format),
+                            Width: width,
+                            Height: height,
+                            Depth: 1,
+                            RowPitch: pitch,
+                        },
+                    },
+                },
+            };
+            GraphicsCommandList_CopyTextureRegion(
+                frame.list.0,
+                &destination,
+                0,
+                0,
+                0,
+                &source,
+                ptr::null(),
+            );
+            check(GraphicsCommandList_Close(frame.list.0))?;
+            CommandQueue_ExecuteCommandLists(self.queue.0, 1, &frame.list.0);
+            frame.fence = self.signal()?;
+            self.wait_value(frame.fence)?;
+            let mut mapped = ptr::null_mut();
+            check(Resource_Map(
+                readback.0,
+                0,
+                &D3D12_RANGE {
+                    Begin: 0,
+                    End: length as usize,
+                },
+                &mut mapped,
+            ))?;
+            let mut bytes = Vec::with_capacity(width as usize * height as usize * 4);
+            for row in 0..height as usize {
+                let start = mapped.cast::<u8>().add(row * pitch as usize);
+                bytes.extend_from_slice(std::slice::from_raw_parts(start, width as usize * 4));
+            }
+            Resource_Unmap(readback.0, 0, ptr::null());
+            Ok(bytes)
+        }
+    }
+
     pub(super) fn present(&self, surface: &Surface, texture: &Texture) -> Result<()> {
         require(
             self.acquired.replace(false),

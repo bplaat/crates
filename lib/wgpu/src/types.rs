@@ -22,6 +22,7 @@ bitflags::bitflags! {
         const COPY_DST = 1;
         const TEXTURE_BINDING = 2;
         const RENDER_ATTACHMENT = 4;
+        const COPY_SRC = 8;
     }
 
     /// Shader-stage visibility.

@@ -1,12 +1,12 @@
 # wgpu Rust library
 
-A native GPU rendering library for [bwindow](../bwindow), backed by Metal on
-macOS, Vulkan on Linux, and Direct3D 12 on Windows.
+A native GPU rendering library for [bwindow](../bwindow) and offscreen bitmaps,
+backed by Metal on macOS, Vulkan on Linux, and Direct3D 12 on Windows.
 
 Despite sharing its name and part of its API with upstream `wgpu`, this crate is
 not API-compatible with it and is not a replacement. It currently supports the
 features needed by this repository, including surfaces, buffers, textures, bind
-groups, shaders, pipelines, and render passes.
+groups, shaders, pipelines, render passes, and bitmap readback.
 
 ## Backends
 
@@ -28,6 +28,12 @@ let surface = instance
     .expect("create surface");
 let (width, height) = surface.size();
 ```
+
+For headless rendering, request an adapter without a surface, then create a
+bitmap target with `device.create_bitmap_target(width, height)`. Render into
+`target.create_view()`, submit the commands, and call `target.read(&queue)` to
+obtain an `image::Bitmap`. The read waits for the GPU to finish. Encode it with
+`image::encode(&bitmap, image::Format::Png)` or another supported format.
 
 WGSL shaders are compiled at build time with
 [wgpu-shader-build](../wgpu-shader-build) and embedded as Metal libraries,

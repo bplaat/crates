@@ -1762,6 +1762,14 @@ pub type CmdCopyBufferToImage = unsafe extern "system" fn(
     region_count: u32,
     p_regions: *const BufferImageCopy,
 );
+pub type CmdCopyImageToBuffer = unsafe extern "system" fn(
+    command_buffer: CommandBuffer,
+    src_image: Image,
+    src_image_layout: ImageLayout,
+    dst_buffer: Buffer,
+    region_count: u32,
+    p_regions: *const BufferImageCopy,
+);
 pub type CmdPipelineBarrier = unsafe extern "system" fn(
     command_buffer: CommandBuffer,
     src_stage_mask: PipelineStageFlags,
