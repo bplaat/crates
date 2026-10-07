@@ -28,16 +28,17 @@ time looking for a smaller file. Set `EncodeOptions::style` to `MaxCompression`
 and use `encode_with_options` or `encode_animation_with_options`. It keeps the
 smallest result it tries.
 
-| Format   | Normal compression                                                                                                                                               | Max compression                                                                        |
-| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------- |
-| BMP      | Chooses 24-bit, 32-bit, packed palette, or RLE8 pixels with literal runs.                                                                                        | Same as normal.                                                                        |
-| GIF      | Uses an exact palette when possible, otherwise reduces colors, then applies LZW. Opaque animation frames store only changed areas.                               | Same as normal.                                                                        |
-| PNG/APNG | Uses a palette or color key when possible, and keeps the smaller of unfiltered and adaptive row filters with zlib level 6. APNG frames store only changed areas. | Also tries every pixel layout, more filters, zlib levels, and full APNG frames.        |
-| JPEG     | Uses grayscale or 4:2:0 color with standard coding tables.                                                                                                       | Compares 4:2:0, 4:2:2, 4:4:0, and 4:4:4 color, and builds coding tables for the image. |
-| QOI      | Uses run, index, difference, and luma operations.                                                                                                                | Same as normal.                                                                        |
+| Format   | Normal compression                                                                                                                                               | Max compression                                                                                                               |
+| -------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------- |
+| BMP      | Chooses 24-bit, 32-bit, packed palette, or RLE8 pixels with literal runs.                                                                                        | Same as normal.                                                                                                               |
+| GIF      | Uses an exact palette when possible, otherwise reduces colors, then applies LZW. Opaque animation frames store only changed areas.                               | Same as normal.                                                                                                               |
+| PNG/APNG | Uses a palette or color key when possible, and keeps the smaller of unfiltered and adaptive row filters with zlib level 6. APNG frames store only changed areas. | Also tries every pixel layout, brute-force row filters, higher zlib levels, cleared transparent colors, and full APNG frames. |
+| JPEG     | Uses grayscale or 4:2:0 color with standard coding tables.                                                                                                       | Compares 4:2:0, 4:2:2, 4:4:0, and 4:4:4 color, and builds coding tables for the image.                                        |
+| QOI      | Uses run, index, difference, and luma operations.                                                                                                                | Same as normal.                                                                                                               |
 
 JPEG's color sampling can change how the image looks between compression styles.
-BMP, PNG/APNG, and QOI preserve RGBA pixels.
+BMP, PNG/APNG, and QOI preserve RGBA pixels, except that max compression may
+replace the color of fully transparent PNG/APNG pixels.
 
 ## Reading
 

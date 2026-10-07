@@ -1101,6 +1101,29 @@ fn png_best_filter(row: &[u8], previous: &[u8], bpp: usize) -> u8 {
         .0 as u8
 }
 
+fn png_brute_filter(
+    row: &[u8],
+    previous: &[u8],
+    bpp: usize,
+    output: &[u8],
+    scratch: &mut Vec<u8>,
+    trial: &mut Vec<u8>,
+) -> u8 {
+    // Deflating each candidate after a window of earlier output lets matches against
+    // previous rows count, which per-row byte statistics cannot see.
+    const WINDOW: usize = 16 * 1024;
+    let context = &output[output.len().saturating_sub(WINDOW)..];
+    (0..5)
+        .min_by_key(|&filter| {
+            png_filter(row, previous, bpp, filter, scratch);
+            trial.clear();
+            trial.extend_from_slice(context);
+            trial.extend_from_slice(scratch);
+            miniz_oxide::deflate::compress_to_vec(trial, 3).len()
+        })
+        .expect("PNG has filters")
+}
+
 fn png_filtered(
     raw: &[u8],
     row_len: usize,
@@ -1220,16 +1243,16 @@ fn compressed_frame(
         return Ok(best.expect("PNG has a candidate"));
     }
     // Level 10 usually wins, but level 6 occasionally parses the likeliest candidates better.
-    consider(&raw, 6);
     consider(&raw, 10);
-    if color.depth() == 8 && !matches!(color, PngColor::Indexed(_)) {
-        let filtered = png_filtered(&raw, row_len, bpp, msad)?;
-        consider(&filtered, 6);
-        consider(&filtered, 10);
-        for filter in 1..=4 {
-            consider(&png_filtered(&raw, row_len, bpp, |_, _, _| filter)?, 10);
-        }
-    }
+    let filtered = png_filtered(&raw, row_len, bpp, msad)?;
+    consider(&filtered, 6);
+    consider(&filtered, 10);
+    let mut scratch = Vec::with_capacity(row_len + 1);
+    let mut trial = Vec::new();
+    let brute = png_filtered(&raw, row_len, bpp, |row, previous, output| {
+        png_brute_filter(row, previous, bpp, output, &mut scratch, &mut trial)
+    })?;
+    consider(&brute, 10);
     Ok(best.expect("PNG has a candidate"))
 }
 
@@ -1243,6 +1266,66 @@ const fn png_palette_depth(len: usize) -> u8 {
 }
 
 pub(super) fn encode(
+    bitmap: &Bitmap,
+    animation: Option<(LoopCount, &[Frame])>,
+    style: EncodingStyle,
+) -> std::result::Result<Vec<u8>, EncodeError> {
+    let best = encode_layouts(bitmap, animation, style)?;
+    if style == EncodingStyle::NormalCompression {
+        return Ok(best);
+    }
+    let cleared = match animation {
+        Some((loop_count, frames)) => {
+            let cleared: Vec<_> = frames
+                .iter()
+                .map(|frame| clear_transparent(&frame.bitmap))
+                .collect();
+            if cleared.iter().all(Option::is_none) {
+                return Ok(best);
+            }
+            let frames: Vec<_> = frames
+                .iter()
+                .zip(cleared)
+                .map(|(frame, cleared)| {
+                    Frame::new(
+                        cleared.unwrap_or_else(|| Bitmap {
+                            data: frame.bitmap.data.clone(),
+                            ..frame.bitmap
+                        }),
+                        frame.delay,
+                    )
+                })
+                .collect();
+            encode_layouts(&frames[0].bitmap, Some((loop_count, &frames)), style)?
+        }
+        None => match clear_transparent(bitmap) {
+            Some(cleared) => encode_layouts(&cleared, None, style)?,
+            None => return Ok(best),
+        },
+    };
+    Ok(if cleared.len() < best.len() {
+        cleared
+    } else {
+        best
+    })
+}
+
+// Fully transparent pixels look the same in any color, and uniform ones compress best.
+fn clear_transparent(bitmap: &Bitmap) -> Option<Bitmap> {
+    let hidden = |pixel: &[u8; 4]| pixel[3] == 0 && *pixel != [0; 4];
+    if !bitmap.data.as_chunks::<4>().0.iter().any(hidden) {
+        return None;
+    }
+    let mut data = bitmap.data.clone();
+    for pixel in data.as_chunks_mut::<4>().0 {
+        if pixel[3] == 0 {
+            *pixel = [0; 4];
+        }
+    }
+    Some(Bitmap { data, ..*bitmap })
+}
+
+fn encode_layouts(
     bitmap: &Bitmap,
     animation: Option<(LoopCount, &[Frame])>,
     style: EncodingStyle,
@@ -2039,6 +2122,35 @@ mod tests {
             let encoded = encode_with_options(&bitmap, Format::Png, options).unwrap();
             assert_eq!(encoded[25], 3);
             assert_eq!(crate::decode(&encoded).unwrap().pixels(), bitmap.data());
+        }
+    }
+
+    #[cfg(feature = "png")]
+    #[test]
+    fn max_png_clears_hidden_colors() {
+        let mut pixels = Vec::new();
+        for i in 0..64 * 64u32 {
+            let noise = i.wrapping_mul(2_654_435_761).to_le_bytes();
+            pixels.extend_from_slice(&if i % 64 < 32 {
+                [noise[1], noise[2], noise[3], 0]
+            } else {
+                [10, 20, 30, 255]
+            });
+        }
+        let bitmap = Bitmap::new(64, 64, pixels).unwrap();
+        let normal = encode(&bitmap, Format::Png).unwrap();
+        assert_eq!(crate::decode(&normal).unwrap().pixels(), bitmap.data());
+        let small = encode_with_options(&bitmap, Format::Png, smallest()).unwrap();
+        assert!(small.len() * 4 < normal.len());
+        for (actual, expected) in crate::decode(&small)
+            .unwrap()
+            .pixels()
+            .as_chunks::<4>()
+            .0
+            .iter()
+            .zip(bitmap.data().as_chunks::<4>().0)
+        {
+            assert_eq!(*actual, if expected[3] == 0 { [0; 4] } else { *expected });
         }
     }
 
