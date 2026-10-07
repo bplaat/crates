@@ -1101,23 +1101,27 @@ fn png_best_filter(row: &[u8], previous: &[u8], bpp: usize) -> u8 {
         .0 as u8
 }
 
-fn png_fixed_filter(
+fn png_filtered(
     raw: &[u8],
     row_len: usize,
     bpp: usize,
-    filter: u8,
-    output: &mut Vec<u8>,
-    row_output: &mut Vec<u8>,
-    zero: &[u8],
-) {
-    output.clear();
-    let mut previous = zero;
+    mut choose: impl FnMut(&[u8], &[u8], &[u8]) -> u8,
+) -> std::result::Result<Vec<u8>, EncodeError> {
+    let mut output = Vec::new();
+    output
+        .try_reserve_exact(raw.len())
+        .map_err(|_| EncodeError::ImageTooLarge)?;
+    let zero = vec![0; row_len];
+    let mut previous: &[u8] = &zero;
+    let mut filtered_row = Vec::with_capacity(row_len + 1);
     for scanline in raw.chunks_exact(row_len + 1) {
         let row = &scanline[1..];
-        png_filter(row, previous, bpp, filter, row_output);
-        output.extend_from_slice(row_output);
+        let filter = choose(row, previous, &output);
+        png_filter(row, previous, bpp, filter, &mut filtered_row);
+        output.extend_from_slice(&filtered_row);
         previous = row;
     }
+    Ok(output)
 }
 
 fn png_palette_index(pixel: &[u8; 4], lookup: &[u64; 512]) -> u8 {
@@ -1181,46 +1185,20 @@ fn compressed_frame(
         .checked_add(1)
         .and_then(|n| n.checked_mul(bitmap.height as usize))
         .ok_or(EncodeError::ImageTooLarge)?;
-    let max = style == EncodingStyle::MaxCompression;
-    // Palette and packed samples rarely benefit from prediction, so they skip filter selection.
-    let adaptive = color.depth() == 8 && !matches!(color, PngColor::Indexed(_));
+    let mut raw = Vec::new();
+    raw.try_reserve_exact(len)
+        .map_err(|_| EncodeError::ImageTooLarge)?;
+    let mut row = Vec::with_capacity(row_len);
+    for source in bitmap.data.chunks_exact(source_stride) {
+        png_row(source, color, palette_lookup, row_len, &mut row);
+        raw.push(0);
+        raw.extend_from_slice(&row);
+    }
     let bpp = if color.depth() < 8 {
         1
     } else {
         color.channels()
     };
-    let keep_raw = max || !adaptive;
-    let mut raw = Vec::new();
-    if keep_raw {
-        raw.try_reserve_exact(len)
-            .map_err(|_| EncodeError::ImageTooLarge)?;
-    }
-    let mut filtered = Vec::new();
-    if adaptive {
-        filtered
-            .try_reserve_exact(len)
-            .map_err(|_| EncodeError::ImageTooLarge)?;
-    }
-    let mut previous = vec![0; row_len];
-    let mut row = Vec::with_capacity(row_len);
-    let mut filtered_row = Vec::with_capacity(row_len + 1);
-    for source in bitmap.data.chunks_exact(source_stride) {
-        png_row(source, color, palette_lookup, row_len, &mut row);
-        if keep_raw {
-            raw.push(0);
-            raw.extend_from_slice(&row);
-        }
-        if adaptive {
-            let filter = png_best_filter(&row, &previous, bpp);
-            png_filter(&row, &previous, bpp, filter, &mut filtered_row);
-            filtered.extend_from_slice(&filtered_row);
-            std::mem::swap(&mut previous, &mut row);
-        }
-    }
-    if !max {
-        let data = if adaptive { &filtered } else { &raw };
-        return Ok(miniz_oxide::deflate::compress_to_vec_zlib(data, 6));
-    }
     let mut best: Option<Vec<u8>> = None;
     let mut consider = |data: &[u8], level| {
         let candidate = miniz_oxide::deflate::compress_to_vec_zlib(data, level);
@@ -1231,30 +1209,37 @@ fn compressed_frame(
             best = Some(candidate);
         }
     };
-    // Level 10 usually wins, but level 6 occasionally parses the likeliest candidates better.
-    for data in [&raw, &filtered] {
-        if !data.is_empty() {
-            consider(data, 6);
-            consider(data, 10);
+    let msad = |row: &[u8], previous: &[u8], _: &[u8]| png_best_filter(row, previous, bpp);
+    if style == EncodingStyle::NormalCompression {
+        consider(&raw, 6);
+        // Palette and packed samples rarely benefit from prediction. Unfiltered rows
+        // also often win on screenshots, whose repeated content deflate matches directly.
+        if color.depth() == 8 && !matches!(color, PngColor::Indexed(_)) {
+            consider(&png_filtered(&raw, row_len, bpp, msad)?, 6);
         }
+        return Ok(best.expect("PNG has a candidate"));
     }
-    if adaptive {
-        let zero = vec![0; row_len];
-        let mut fixed = filtered;
+    // Level 10 usually wins, but level 6 occasionally parses the likeliest candidates better.
+    consider(&raw, 6);
+    consider(&raw, 10);
+    if color.depth() == 8 && !matches!(color, PngColor::Indexed(_)) {
+        let filtered = png_filtered(&raw, row_len, bpp, msad)?;
+        consider(&filtered, 6);
+        consider(&filtered, 10);
         for filter in 1..=4 {
-            png_fixed_filter(
-                &raw,
-                row_len,
-                bpp,
-                filter,
-                &mut fixed,
-                &mut filtered_row,
-                &zero,
-            );
-            consider(&fixed, 10);
+            consider(&png_filtered(&raw, row_len, bpp, |_, _, _| filter)?, 10);
         }
     }
     Ok(best.expect("PNG has a candidate"))
+}
+
+const fn png_palette_depth(len: usize) -> u8 {
+    match len {
+        0..=2 => 1,
+        3..=4 => 2,
+        5..=16 => 4,
+        _ => 8,
+    }
 }
 
 pub(super) fn encode(
@@ -1262,21 +1247,34 @@ pub(super) fn encode(
     animation: Option<(LoopCount, &[Frame])>,
     style: EncodingStyle,
 ) -> std::result::Result<Vec<u8>, EncodeError> {
-    let mut best = encode_png_variant(bitmap, animation, style, None, None)?;
-    if style == EncodingStyle::MaxCompression {
-        let bitmaps: Vec<_> = match animation {
-            Some((_, frames)) => frames.iter().map(|frame| &frame.bitmap).collect(),
-            None => vec![bitmap],
+    let bitmaps: Vec<_> = match animation {
+        Some((_, frames)) => frames.iter().map(|frame| &frame.bitmap).collect(),
+        None => vec![bitmap],
+    };
+    let palette = png_palette(bitmaps.iter().copied());
+    let key = png_transparent_key(bitmaps.iter().copied());
+    if style == EncodingStyle::NormalCompression {
+        // Pick the layout that is usually smallest instead of compressing each one:
+        // a palette unless packed grayscale is as small, then a color key over alpha.
+        let gray_depth = match png_color(bitmaps.iter().copied(), false) {
+            PngColor::Gray(depth) => Some(depth),
+            _ => None,
         };
-        let candidates = [
-            png_palette(bitmaps.iter().copied()).map(|palette| (Some(palette), None)),
-            png_transparent_key(bitmaps.iter().copied()).map(|key| (None, Some(key))),
-        ];
-        for (palette, key) in candidates.into_iter().flatten() {
-            let candidate = encode_png_variant(bitmap, animation, style, palette.as_deref(), key)?;
-            if candidate.len() < best.len() {
-                best = candidate;
-            }
+        let palette = palette.filter(|palette| {
+            gray_depth.is_none_or(|depth| png_palette_depth(palette.len()) < depth)
+        });
+        let key = key.filter(|_| palette.is_none());
+        return encode_png_variant(bitmap, animation, style, palette.as_deref(), key);
+    }
+    let mut best = encode_png_variant(bitmap, animation, style, None, None)?;
+    let candidates = [
+        palette.map(|palette| (Some(palette), None)),
+        key.map(|key| (None, Some(key))),
+    ];
+    for (palette, key) in candidates.into_iter().flatten() {
+        let candidate = encode_png_variant(bitmap, animation, style, palette.as_deref(), key)?;
+        if candidate.len() < best.len() {
+            best = candidate;
         }
     }
     Ok(best)
@@ -1290,15 +1288,7 @@ fn encode_png_variant(
     transparent_key: Option<[u8; 3]>,
 ) -> std::result::Result<Vec<u8>, EncodeError> {
     let color = if let Some(palette) = palette {
-        PngColor::Indexed(if palette.len() <= 2 {
-            1
-        } else if palette.len() <= 4 {
-            2
-        } else if palette.len() <= 16 {
-            4
-        } else {
-            8
-        })
+        PngColor::Indexed(png_palette_depth(palette.len()))
     } else if let Some((_, frames)) = animation {
         png_color(
             frames.iter().map(|frame| &frame.bitmap),
@@ -2014,19 +2004,8 @@ mod tests {
             scanlines.push(0);
             scanlines.extend_from_slice(row);
         }
-        let mut filtered = Vec::with_capacity(scanlines.len());
-        let mut row_output = Vec::with_capacity(row_len + 1);
-        let zero = vec![0; row_len];
         for filter in 1..=4 {
-            png_fixed_filter(
-                &scanlines,
-                row_len,
-                4,
-                filter,
-                &mut filtered,
-                &mut row_output,
-                &zero,
-            );
+            let filtered = png_filtered(&scanlines, row_len, 4, |_, _, _| filter).unwrap();
             let mut png = b"\x89PNG\r\n\x1a\n".to_vec();
             write_chunk(&mut png, b"IHDR", &[0, 0, 0, 8, 0, 0, 0, 8, 8, 6, 0, 0, 0]).unwrap();
             write_chunk(
@@ -2056,9 +2035,11 @@ mod tests {
             }
         }
         let bitmap = Bitmap::new(64, 64, pixels).unwrap();
-        let small = encode_with_options(&bitmap, Format::Png, smallest()).unwrap();
-        assert_eq!(small[25], 3);
-        assert_eq!(crate::decode(&small).unwrap().pixels(), bitmap.data());
+        for options in [EncodeOptions::default(), smallest()] {
+            let encoded = encode_with_options(&bitmap, Format::Png, options).unwrap();
+            assert_eq!(encoded[25], 3);
+            assert_eq!(crate::decode(&encoded).unwrap().pixels(), bitmap.data());
+        }
     }
 
     #[cfg(feature = "png")]
