@@ -8,8 +8,8 @@ use std::mem;
 use std::time::Duration;
 
 use super::{
-    Area, Bitmap, Budget, ColorSpace, DecodeError, EncodeError, Format, Frame, Image, LoopCount,
-    Reader, Result, pixel_len,
+    Area, Bitmap, Budget, ColorSpace, DecodeError, EncodeError, EncodingStyle, Format, Frame,
+    Image, LoopCount, Reader, Result, pixel_len,
 };
 
 // MARK: Decoder
@@ -443,20 +443,25 @@ impl<'a> GifFrames<'a> {
     }
 }
 
-pub(super) fn encode_bitmap(bitmap: &Bitmap) -> std::result::Result<Vec<u8>, EncodeError> {
-    encode_frames(GifFrames::Still(bitmap), LoopCount::Finite(1))
+pub(super) fn encode_bitmap(
+    bitmap: &Bitmap,
+    style: EncodingStyle,
+) -> std::result::Result<Vec<u8>, EncodeError> {
+    encode_frames(GifFrames::Still(bitmap), LoopCount::Finite(1), style)
 }
 
 pub(super) fn encode(
     frames: &[Frame],
     loop_count: LoopCount,
+    style: EncodingStyle,
 ) -> std::result::Result<Vec<u8>, EncodeError> {
-    encode_frames(GifFrames::Animated(frames), loop_count)
+    encode_frames(GifFrames::Animated(frames), loop_count, style)
 }
 
 fn encode_frames(
     frames: GifFrames<'_>,
     loop_count: LoopCount,
+    style: EncodingStyle,
 ) -> std::result::Result<Vec<u8>, EncodeError> {
     let first = frames.get(0).bitmap;
     let width = u16::try_from(first.width).map_err(|_| EncodeError::InvalidDimensions)?;
@@ -503,7 +508,7 @@ fn encode_frames(
         let (x, y, bitmap) = region
             .as_ref()
             .map_or((0, 0, frame.bitmap), |(x, y, bitmap)| (*x, *y, bitmap));
-        let (palette, indices, transparency) = gif_palette(&bitmap.data);
+        let (palette, candidates, transparency) = gif_palette(bitmap, style);
         let bits = (palette.len().max(2).next_power_of_two().trailing_zeros() as u8).max(1);
         let min_code_size = bits.max(2);
         let disposal = if cropped.get(index + 1) == Some(&true) {
@@ -532,7 +537,11 @@ fn encode_frames(
             out.extend_from_slice(&[0, 0, 0]);
         }
         out.push(min_code_size);
-        let data = gif_lzw(&indices, min_code_size);
+        let data = candidates
+            .iter()
+            .map(|indices| gif_lzw(indices, min_code_size))
+            .min_by_key(Vec::len)
+            .expect("GIF has indices");
         for block in data.chunks(255) {
             out.push(block.len() as u8);
             out.extend_from_slice(block);
@@ -543,7 +552,8 @@ fn encode_frames(
     Ok(out)
 }
 
-fn gif_palette(pixels: &[u8]) -> (Vec<[u8; 3]>, Vec<u8>, Option<u8>) {
+fn gif_palette(bitmap: &Bitmap, style: EncodingStyle) -> (Vec<[u8; 3]>, Vec<Vec<u8>>, Option<u8>) {
+    let pixels = &bitmap.data;
     let transparent = pixels.as_chunks::<4>().0.iter().any(|pixel| pixel[3] < 128);
     let mut colors = Vec::<[u8; 3]>::with_capacity(256);
     let mut lookup = [0u64; 512];
@@ -581,37 +591,226 @@ fn gif_palette(pixels: &[u8]) -> (Vec<[u8; 3]>, Vec<u8>, Option<u8>) {
         indices.push(index);
     }
     if colors.is_empty() {
-        let mut lookup = [0u16; 256];
-        indices.clear();
-        if transparent {
-            colors.push([0, 0, 0]);
-            lookup[0] = 1;
-        }
-        for pixel in pixels.as_chunks::<4>().0 {
-            let key = if pixel[3] < 128 {
-                0
-            } else if transparent {
-                1 + ((pixel[0] >> 5) << 4) + ((pixel[1] >> 5) << 1) + (pixel[2] >> 7)
-            } else {
-                ((pixel[0] >> 5) << 5) | ((pixel[1] >> 5) << 2) | (pixel[2] >> 6)
-            };
-            let index = if lookup[key as usize] != 0 {
-                (lookup[key as usize] - 1) as u8
-            } else {
-                let index = colors.len() as u8;
-                let color = if pixel[3] < 128 {
-                    [0, 0, 0]
-                } else {
-                    [pixel[0], pixel[1], pixel[2]]
-                };
-                colors.push(color);
-                lookup[key as usize] = u16::from(index) + 1;
-                index
-            };
-            indices.push(index);
+        let (colors, candidates) = gif_quantize(bitmap, transparent, style);
+        return (colors, candidates, transparent.then_some(0));
+    }
+    (colors, vec![indices], transparent.then_some(0))
+}
+
+// One histogram cell: the pixel count and mean color of a 5-bit-per-channel cube.
+#[derive(Clone, Copy)]
+struct GifCell {
+    count: f64,
+    color: [f64; 3],
+}
+
+fn gif_distance(a: [f64; 3], b: [f64; 3]) -> f64 {
+    (0..3)
+        .map(|channel| (a[channel] - b[channel]).powi(2))
+        .sum()
+}
+
+fn gif_nearest(palette: &[[f64; 3]], color: [f64; 3]) -> usize {
+    (0..palette.len())
+        .min_by(|&a, &b| {
+            gif_distance(palette[a], color).total_cmp(&gif_distance(palette[b], color))
+        })
+        .expect("palette has colors")
+}
+
+// Sum of squared distances from the cells to their weighted mean.
+fn gif_error(cells: &[GifCell]) -> f64 {
+    let (mut count, mut sum, mut squares) = (0.0, [0.0; 3], 0.0);
+    for cell in cells {
+        count += cell.count;
+        for (sum, value) in sum.iter_mut().zip(cell.color) {
+            *sum += cell.count * value;
+            squares += cell.count * value * value;
         }
     }
-    (colors, indices, transparent.then_some(0))
+    squares - sum.iter().map(|sum| sum * sum).sum::<f64>() / count
+}
+
+fn gif_mean(cells: &[GifCell]) -> [f64; 3] {
+    let count: f64 = cells.iter().map(|cell| cell.count).sum();
+    std::array::from_fn(|channel| {
+        cells
+            .iter()
+            .map(|cell| cell.count * cell.color[channel])
+            .sum::<f64>()
+            / count
+    })
+}
+
+// Reduces the colors with variance-based median cut over a histogram, refines the palette
+// with k-means, and maps pixels with serpentine Floyd-Steinberg error diffusion. Max
+// compression also tries exact nearest colors and lighter diffusion.
+fn gif_quantize(
+    bitmap: &Bitmap,
+    transparent: bool,
+    style: EncodingStyle,
+) -> (Vec<[u8; 3]>, Vec<Vec<u8>>) {
+    let pixels = bitmap.data.as_chunks::<4>().0;
+    let mut histogram = vec![(0u32, [0u64; 3]); 1 << 15];
+    for pixel in pixels.iter().filter(|pixel| pixel[3] >= 128) {
+        let cell = &mut histogram[usize::from(pixel[0] >> 3) << 10
+            | usize::from(pixel[1] >> 3) << 5
+            | usize::from(pixel[2] >> 3)];
+        cell.0 += 1;
+        for (sum, &value) in cell.1.iter_mut().zip(pixel) {
+            *sum += u64::from(value);
+        }
+    }
+    let mut cells: Vec<_> = histogram
+        .iter()
+        .filter(|cell| cell.0 != 0)
+        .map(|&(count, sum)| GifCell {
+            count: f64::from(count),
+            color: sum.map(|sum| sum as f64 / f64::from(count)),
+        })
+        .collect();
+    let reserved = usize::from(transparent);
+    let target = 256 - reserved;
+
+    // Split the box with the largest error at the point that minimizes the two halves' error.
+    let mut boxes = vec![(0, cells.len(), gif_error(&cells))];
+    while boxes.len() < target {
+        let Some((index, _)) = boxes
+            .iter()
+            .enumerate()
+            .filter(|(_, (start, end, _))| end - start > 1)
+            .max_by(|a, b| a.1.2.total_cmp(&b.1.2))
+        else {
+            break;
+        };
+        let (start, end, _) = boxes.swap_remove(index);
+        let slice = &mut cells[start..end];
+        let mean = gif_mean(slice);
+        let channel = (0..3)
+            .max_by(|&a, &b| {
+                let spread = |channel: usize| {
+                    slice
+                        .iter()
+                        .map(|cell| cell.count * (cell.color[channel] - mean[channel]).powi(2))
+                        .sum::<f64>()
+                };
+                spread(a).total_cmp(&spread(b))
+            })
+            .expect("colors have channels");
+        slice.sort_by(|a, b| a.color[channel].total_cmp(&b.color[channel]));
+        let (mut count, mut sum, mut squares) = (0.0, 0.0, 0.0);
+        let total: (f64, f64, f64) = slice.iter().fold((0.0, 0.0, 0.0), |acc, cell| {
+            let value = cell.color[channel];
+            (
+                acc.0 + cell.count,
+                acc.1 + cell.count * value,
+                acc.2 + cell.count * value * value,
+            )
+        });
+        let mut split = (f64::MAX, 1);
+        for (offset, cell) in slice[..slice.len() - 1].iter().enumerate() {
+            let value = cell.color[channel];
+            count += cell.count;
+            sum += cell.count * value;
+            squares += cell.count * value * value;
+            let rest = (total.0 - count, total.1 - sum, total.2 - squares);
+            let error = squares - sum * sum / count + rest.2 - rest.1 * rest.1 / rest.0;
+            if error < split.0 {
+                split = (error, offset + 1);
+            }
+        }
+        let middle = start + split.1;
+        boxes.push((start, middle, gif_error(&cells[start..middle])));
+        boxes.push((middle, end, gif_error(&cells[middle..end])));
+    }
+    let mut palette: Vec<_> = boxes
+        .iter()
+        .map(|&(start, end, _)| gif_mean(&cells[start..end]))
+        .collect();
+
+    // Move each palette color to the mean of the cells nearest to it.
+    for _ in 0..4 {
+        let mut sums = vec![(0.0, [0.0; 3]); palette.len()];
+        for cell in &cells {
+            let sum = &mut sums[gif_nearest(&palette, cell.color)];
+            sum.0 += cell.count;
+            for (sum, value) in sum.1.iter_mut().zip(cell.color) {
+                *sum += cell.count * value;
+            }
+        }
+        for (color, (count, sum)) in palette.iter_mut().zip(sums) {
+            if count > 0.0 {
+                *color = sum.map(|sum| sum / count);
+            }
+        }
+    }
+    let mut colors: Vec<[u8; 3]> = vec![[0; 3]; reserved];
+    colors.extend(
+        palette
+            .iter()
+            .map(|color| color.map(|value| value.round().clamp(0.0, 255.0) as u8)),
+    );
+    let palette: Vec<_> = colors.iter().map(|color| color.map(f64::from)).collect();
+    let opaque = &palette[reserved..];
+    let width = bitmap.width as usize;
+
+    // Nearest colors are cached per 6-bit cell center; diffusion corrects the difference.
+    let mut cache = vec![0u16; 1 << 18];
+    let mut candidates = vec![gif_diffuse(pixels, width, &palette, 0.25, |color| {
+        let cell = color.map(|value| value as usize >> 2);
+        let key = cell[0] << 12 | cell[1] << 6 | cell[2];
+        if cache[key] == 0 {
+            let center = cell.map(|value| (value << 2 | 2) as f64);
+            cache[key] = (reserved + gif_nearest(opaque, center)) as u16 + 1;
+        }
+        usize::from(cache[key] - 1)
+    })];
+    if style == EncodingStyle::MaxCompression {
+        candidates.push(gif_diffuse(pixels, width, &palette, 0.125, |color| {
+            reserved + gif_nearest(opaque, color.map(f64::from))
+        }));
+    }
+    (colors, candidates)
+}
+
+fn gif_diffuse(
+    pixels: &[[u8; 4]],
+    width: usize,
+    palette: &[[f64; 3]],
+    strength: f32,
+    mut lookup: impl FnMut([f32; 3]) -> usize,
+) -> Vec<u8> {
+    let mut indices = vec![0; pixels.len()];
+    let mut current = vec![[0f32; 3]; width + 2];
+    let mut next = vec![[0f32; 3]; width + 2];
+    for (y, row) in pixels.chunks_exact(width).enumerate() {
+        let reverse = y % 2 == 1;
+        for step in 0..width {
+            let x = if reverse { width - 1 - step } else { step };
+            let pixel = row[x];
+            if pixel[3] < 128 {
+                continue;
+            }
+            let wanted: [f32; 3] = std::array::from_fn(|channel| {
+                (f32::from(pixel[channel]) + current[x + 1][channel]).clamp(0.0, 255.0)
+            });
+            let index = lookup(wanted);
+            indices[y * width + x] = index as u8;
+            let error: [f32; 3] = std::array::from_fn(|channel| {
+                (wanted[channel] - palette[index][channel] as f32).clamp(-64.0, 64.0) * strength
+            });
+            let (ahead, behind) = if reverse { (x, x + 2) } else { (x + 2, x) };
+            for channel in 0..3 {
+                current[ahead][channel] += error[channel] * 7.0 / 16.0;
+                next[behind][channel] += error[channel] * 3.0 / 16.0;
+                next[x + 1][channel] += error[channel] * 5.0 / 16.0;
+                next[ahead][channel] += error[channel] / 16.0;
+            }
+        }
+        mem::swap(&mut current, &mut next);
+        next.fill([0.0; 3]);
+    }
+    indices
 }
 
 fn gif_lzw(indices: &[u8], min_code_size: u8) -> Vec<u8> {
@@ -861,6 +1060,56 @@ mod tests {
         let decoded = crate::decode(&encode(&bitmap, Format::Gif).unwrap()).unwrap();
         assert_eq!(decoded.pixels()[..4], [255, 0, 0, 255]);
         assert_eq!(decoded.pixels()[7], 0);
+    }
+
+    #[test]
+    fn gif_quantized_gradient_preserves_transparency_and_color() {
+        let mut pixels = Vec::new();
+        for y in 0..64u8 {
+            for x in 0..64u8 {
+                pixels.extend_from_slice(&[
+                    x * 4,
+                    y * 4,
+                    x.wrapping_mul(3).wrapping_add(y.wrapping_mul(5)),
+                    if x < 8 { 0 } else { 255 },
+                ]);
+            }
+        }
+        let bitmap = Bitmap::new(64, 64, pixels).unwrap();
+        for style in [
+            EncodingStyle::NormalCompression,
+            EncodingStyle::MaxCompression,
+        ] {
+            let encoded = crate::encode_with_options(
+                &bitmap,
+                Format::Gif,
+                EncodeOptions {
+                    style,
+                    ..EncodeOptions::default()
+                },
+            )
+            .unwrap();
+            let decoded = crate::decode(&encoded).unwrap();
+            let mut squared_error = 0u64;
+            let mut count = 0u64;
+            for (source, result) in bitmap
+                .data()
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .zip(decoded.pixels().as_chunks::<4>().0)
+            {
+                assert_eq!(result[3], source[3]);
+                if source[3] == 255 {
+                    for channel in 0..3 {
+                        let error = i32::from(source[channel]) - i32::from(result[channel]);
+                        squared_error += error.unsigned_abs().pow(2) as u64;
+                        count += 1;
+                    }
+                }
+            }
+            assert!(squared_error / count < 150, "{style:?}");
+        }
     }
 
     #[cfg(feature = "gif")]

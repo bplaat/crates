@@ -109,7 +109,7 @@ pub fn encode_with_options(
         #[cfg(feature = "bmp")]
         Format::Bmp => super::bmp::encode(bitmap),
         #[cfg(feature = "gif")]
-        Format::Gif => super::gif::encode_bitmap(bitmap),
+        Format::Gif => super::gif::encode_bitmap(bitmap, options.style),
         #[cfg(feature = "png")]
         Format::Png => super::png::encode(bitmap, None, options.style),
         #[cfg(feature = "jpeg")]
@@ -153,7 +153,7 @@ pub fn encode_animation_with_options(
     }
     match format {
         #[cfg(feature = "gif")]
-        Format::Gif => super::gif::encode(frames, _loop_count),
+        Format::Gif => super::gif::encode(frames, _loop_count, options.style),
         #[cfg(feature = "png")]
         Format::Png => super::png::encode_animation(frames, _loop_count, options.style),
         #[allow(unreachable_patterns)]
@@ -232,6 +232,7 @@ mod tests {
         feature = "qoi"
     ))]
     #[test]
+    #[allow(clippy::single_element_loop)] // A single codec feature leaves one format.
     fn normal_style_encodes_supported_formats() {
         let bitmap = Bitmap::new(4, 4, [64, 128, 192, 255].repeat(16)).unwrap();
         for format in [
@@ -260,6 +261,7 @@ mod tests {
         feature = "qoi"
     ))]
     #[test]
+    #[allow(clippy::single_element_loop)] // A single codec feature leaves one format.
     fn max_style_does_not_exceed_normal_size() {
         let mut pixels = Vec::new();
         for y in 0..32u8 {
@@ -320,6 +322,7 @@ mod tests {
 
     #[cfg(any(feature = "gif", feature = "png"))]
     #[test]
+    #[allow(clippy::single_element_loop)] // A single codec feature leaves one format.
     fn animation_round_trip() {
         let frames = [
             Frame::new(
