@@ -133,6 +133,11 @@ float exp2f(float x) {
     float y =
         1.0f + f * (1.0f + f * (1.0f / 2.0f +
                                 f * (1.0f / 6.0f + f * (1.0f / 24.0f + f * (1.0f / 120.0f + f * (1.0f / 720.0f))))));
+    // x rounds up to 128 above 127.5, 2^128 doesn't fit in a float so y gets that last factor 2
+    if (i > 127.0f) {
+        i = 127.0f;
+        y *= 2.0f;
+    }
     union {
         uint32_t i;
         float f;
@@ -175,10 +180,5 @@ float powf(float x, float y) {
         float result = powf(-x, y);
         return fabsf(fmodf(y, 2.0f)) == 1.0f ? -result : result;
     }
-    float exponent = y * log2f(x);
-    if (exponent > 127.0f)
-        return __builtin_inff();
-    if (exponent < -126.0f)
-        return 0.0f;
-    return exp2f(exponent);
+    return exp2f(y * log2f(x));
 }

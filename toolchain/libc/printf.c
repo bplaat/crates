@@ -1,5 +1,5 @@
-// Minimal vsnprintf: supports %d %i %u %x %X %p %s %c %% with '-', '0', width and the l, ll and z
-// lengths, there are no floats.
+// Minimal vsnprintf: supports %d %i %u %x %X %p %s %c %% with '-', '0', width, precision and the
+// l, ll and z lengths, there are no floats.
 
 #include <stdbool.h>
 #include <stdint.h>
@@ -49,6 +49,13 @@ int vsnprintf(char* restrict buffer, size_t size, const char* restrict format, v
         int width = 0;
         for (; *c >= '0' && *c <= '9'; c++)
             width = width * 10 + (*c - '0');
+        // Minimum digits for integers, maximum characters for strings
+        int precision = -1;
+        if (*c == '.') {
+            precision = 0;
+            for (c++; *c >= '0' && *c <= '9'; c++)
+                precision = precision * 10 + (*c - '0');
+        }
         // long and size_t are 32 bits, long long is 64 bits
         int longs = 0;
         for (; *c == 'l' || *c == 'z'; c++)
@@ -78,10 +85,15 @@ int vsnprintf(char* restrict buffer, size_t size, const char* restrict format, v
                 }
                 uint32_t base = *c == 'd' || *c == 'i' || *c == 'u' ? 10 : 16;
                 const char* hex = *c == 'X' ? "0123456789ABCDEF" : "0123456789abcdef";
-                do {
+                for (; value; value /= base)
                     *--start = hex[value % base];
-                    value /= base;
-                } while (value);
+                // A precision turns off zero padding, at most 20 digits fit in the buffer
+                if (precision >= 0)
+                    pad = ' ';
+                else
+                    precision = 1;
+                while (end - start < precision && end - start < 20)
+                    *--start = '0';
                 if (*c == 'p') {
                     *--start = 'x';
                     *--start = '0';
@@ -102,7 +114,7 @@ int vsnprintf(char* restrict buffer, size_t size, const char* restrict format, v
                 if (!str)
                     str = "(null)";
                 size_t length = 0;
-                while (str[length])
+                while ((precision < 0 || length < (size_t)precision) && str[length])
                     length++;
                 put_padded(&out, str, length, width, left, ' ');
                 break;

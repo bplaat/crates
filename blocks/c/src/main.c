@@ -93,7 +93,10 @@ int main(void) {
         WPAD_ScanPads();
         if (WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME)
             break;
+        // Keep the angle small, so float precision doesn't make the rotation uneven over time
         angle += 0.00267f;
+        if (angle > 2.0f * (float)M_PI)
+            angle -= 2.0f * (float)M_PI;
         guVector eye = {32.0f + sinf(angle) * 88.0f, 79.0f, 32.0f + cosf(angle) * 88.0f};
         guVector target = {32.0f, 21.76f, 32.0f};
         guVector up = {0, 1, 0};

@@ -6,6 +6,7 @@ use crate::materials::Materials;
 use crate::memory::{AlignedBuffer, Framebuffer};
 use crate::mesh::Mesh;
 use crate::world::World;
+use core::f32::consts::TAU;
 use core::ffi::{c_int, c_void};
 use core::panic::PanicInfo;
 use core::ptr;
@@ -165,7 +166,11 @@ impl Demo {
                 if WPAD_ButtonsDown(0) & WPAD_BUTTON_HOME != 0 {
                     break;
                 }
+                // Keep the angle small, so float precision doesn't make the rotation uneven over time
                 self.angle += 0.00267;
+                if self.angle > TAU {
+                    self.angle -= TAU;
+                }
                 let (sin, cos) = (sinf(self.angle), cosf(self.angle));
                 let eye = GuVector {
                     x: 32.0 + sin * 88.0,
