@@ -1,0 +1,58 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Implement nanosleep and usleep without newlib
+
+nanosleep was a newlib system call hook and usleep came from newlib, both
+are now plain functions. The clock and gettimeofday hooks are removed.
+---
+ libogc/timesupp.c | 26 ++++----------------------
+ 1 file changed, 4 insertions(+), 22 deletions(-)
+
+diff --git a/libogc/timesupp.c b/libogc/timesupp.c
+index 8c505e5..20e039d 100644
+--- a/libogc/timesupp.c
++++ b/libogc/timesupp.c
+@@ -1,6 +1,3 @@
+-#include <_ansi.h>
+-#include <_syslist.h>
+-
+ #include "asm.h"
+ #include "processor.h"
+ #include "lwp.h"
+@@ -154,7 +151,7 @@ void udelay(unsigned us)
+ 	}
+ }
+ 
+-int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
++int nanosleep(const struct timespec *tb, struct timespec *rem)
+ {
+ 	u64 timeout;
+ 
+@@ -169,23 +166,8 @@ int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
+ 	return TB_SUCCESSFUL;
+ }
+ 
+-clock_t clock(void) {
+-	return -1;
+-}
+-
+-int __libogc_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz)
++int usleep(unsigned int us)
+ {
+-	u64 now;
+-	if (tp != NULL) {
+-		now = gettime();
+-		tp->tv_sec = ticks_to_secs(now) + 946684800;
+-		tp->tv_usec = tick_microsecs(now);
+-	}
+-	if (tz != NULL) {
+-		tz->tz_minuteswest = 0;
+-		tz->tz_dsttime = 0;
+-
+-	}
+-	return 0;
++	struct timespec tb = { us / 1000000, (us % 1000000) * 1000 };
++	return nanosleep(&tb, NULL);
+ }
+-

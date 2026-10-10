@@ -4,13 +4,34 @@ Wii homebrew example programs written in both C and Rust.
 
 ## Getting Started
 
-Install devkitPro and its pacman package manager, then add the
-[libogc2 package repository](https://github.com/extremscorner/pacman-packages#adding-repository).
-Then install the packages the examples need:
+The examples build with a normal LLVM toolchain (clang, lld and llvm-ar). The [toolchain](toolchain/)
+script clones upstream libogc, devkitPro's tools and LLVM's compiler-rt builtins, patches and builds
+them the first time you build an example. Install LLVM, FreeImage (for the texture converter) and the
+[Dolphin](https://dolphin-emu.org/) emulator:
 
 ```sh
-dkp-pacman -Syu
-dkp-pacman -S devkitPPC libogc2
+# macOS
+brew install llvm lld freeimage
+brew install --cask dolphin
+
+# Debian / Ubuntu
+sudo apt install clang lld llvm make git libfreeimage-dev dolphin-emu
+```
+
+The Rust examples also need [rustup](https://rustup.rs/), it installs the nightly toolchain by itself.
+
+Build and run a C example with make, the program ends up in `target/<name>.dol`:
+
+```sh
+cd triangles/c
+make run
+```
+
+Build and run a Rust example with cargo, `cargo run` also writes `target/wii/release/<name>.dol`:
+
+```sh
+cd triangles/rust
+cargo run --release
 ```
 
 ## Triangles

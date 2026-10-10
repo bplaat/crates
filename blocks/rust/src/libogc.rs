@@ -206,6 +206,12 @@ unsafe extern "C" {
     // System timing
     pub fn gettime() -> u64;
 
+    // C library math
+    pub safe fn floorf(x: f32) -> f32;
+    pub safe fn powf(x: f32, y: f32) -> f32;
+    pub safe fn sinf(x: f32) -> f32;
+    pub safe fn cosf(x: f32) -> f32;
+
     // Wii Remote input and power callbacks
     pub fn WPAD_Init() -> c_int;
     pub fn WPAD_ScanPads() -> c_int;

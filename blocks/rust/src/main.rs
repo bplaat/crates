@@ -166,7 +166,7 @@ impl Demo {
                     break;
                 }
                 self.angle += 0.00267;
-                let (sin, cos) = libm::sincosf(self.angle);
+                let (sin, cos) = (sinf(self.angle), cosf(self.angle));
                 let eye = GuVector {
                     x: 32.0 + sin * 88.0,
                     y: 79.0,

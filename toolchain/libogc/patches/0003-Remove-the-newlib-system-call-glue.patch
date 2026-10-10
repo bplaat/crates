@@ -1,0 +1,173 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Remove the newlib system call glue
+
+libogc is built with a tiny C library instead of newlib, so the reent
+structs, malloc locks and sbrk hooks are gone and __syscall_exit becomes
+a plain exit() that never returns.
+---
+ gc/ogc/lwp_threads.h |  1 -
+ libogc/lwp_threads.c | 19 -------------------
+ libogc/system.c      | 31 ++-----------------------------
+ 3 files changed, 2 insertions(+), 49 deletions(-)
+
+diff --git a/gc/ogc/lwp_threads.h b/gc/ogc/lwp_threads.h
+index 5bd5b83..69211a6 100644
+--- a/gc/ogc/lwp_threads.h
++++ b/gc/ogc/lwp_threads.h
+@@ -54,7 +54,6 @@ typedef struct _lwpcntrl {
+ 	lwp_queue *ready;
+ 	lwp_thrqueue join_list;
+ 	frame_context context;		//16
+-	void *libc_reent;
+ } lwp_cntrl, *lwp_cntrl_t;
+ 
+ extern lwp_cntrl *_thr_main;
+diff --git a/libogc/lwp_threads.c b/libogc/lwp_threads.c
+index 4843bea..81b61e0 100644
+--- a/libogc/lwp_threads.c
++++ b/libogc/lwp_threads.c
+@@ -8,7 +8,6 @@
+ #include <stdlib.h>
+ #include <stdio.h>
+ #include <string.h>
+-#include <sys/iosupport.h>
+ 
+ #include "asm.h"
+ #include "processor.h"
+@@ -84,12 +83,6 @@ void __lwp_dumpcontext_fp(lwp_cntrl *thrA,lwp_cntrl *thrB)
+ }
+ #endif
+ 
+-struct _reent* __SYSCALL(getreent)()
+-{
+-	if ( _thr_executing == NULL || _thr_executing->libc_reent == NULL) return _GLOBAL_REENT;
+-
+-	return _thr_executing->libc_reent;
+-}
+ 
+ /*
+ void __lwp_getthreadlist(lwp_obj **thrs)
+@@ -624,7 +617,6 @@ u32 __lwp_thread_init(lwp_cntrl *thethread,void *stack_area,u32 stack_size,u32 p
+ 	thethread->res_cnt = 0;
+ 	__lwp_thread_setpriority(thethread,prio);
+ 
+-	thethread->libc_reent = NULL;
+ 
+ 	return 1;
+ }
+@@ -653,11 +645,6 @@ void __lwp_thread_close(lwp_cntrl *thethread)
+ 	thethread->budget_algo = LWP_CPU_BUDGET_ALGO_NONE;
+ 	_CPU_ISR_Restore(level);
+ 
+-	struct _reent *ptr = thethread->libc_reent;
+-	_reclaim_reent(ptr);
+-	free(ptr);
+-	thethread->libc_reent = NULL;
+-
+ 	if(__lwp_thread_isallocatedfp(thethread))
+ 		__lwp_thread_deallocatefp();
+ 
+@@ -711,12 +698,6 @@ u32 __lwp_thread_start(lwp_cntrl *thethread,void* (*entry)(void*),void *arg)
+ 		thethread->arg = arg;
+ 		__lwp_thread_loadenv(thethread);
+ 		__lwp_thread_ready(thethread);
+-		struct _reent *ptr= (struct _reent*)calloc(1,sizeof(struct _reent));
+-		if(!ptr) abort();
+-
+-		_REENT_INIT_PTR((ptr));
+-
+-		thethread->libc_reent = ptr;
+ 		return 1;
+ 	}
+ 	return 0;
+diff --git a/libogc/system.c b/libogc/system.c
+index 504625e..d10d823 100644
+--- a/libogc/system.c
++++ b/libogc/system.c
+@@ -32,11 +32,8 @@ distribution.
+ #include <stdlib.h>
+ #include <string.h>
+ #include <stdio.h>
+-#include <unistd.h>
+-#include <reent.h>
+ #include <malloc.h>
+ #include <time.h>
+-#include <sys/iosupport.h>
+ 
+ #include "asm.h"
+ #include "irq.h"
+@@ -187,10 +184,6 @@ extern void __si_init(void);
+ extern void __irq_init(void);
+ extern void __lwp_start_multitasking(void);
+ extern void __timesystem_init(void);
+-extern void __memlock_init(void);
+-
+-extern void __libogc_malloc_lock( struct _reent *ptr );
+-extern void __libogc_malloc_unlock( struct _reent *ptr );
+ 
+ extern void __exception_console(void);
+ extern void __exception_printf(const char *str, ...);
+@@ -210,8 +203,6 @@ extern void __console_init_ex(void *conbuffer,int tgt_xstart,int tgt_ystart,int
+ extern void timespec_subtract(const struct timespec *tp_start,const struct timespec *tp_end,struct timespec *result);
+ 
+ 
+-extern int __libogc_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz);
+-extern int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem);
+ extern u64 gettime(void);
+ extern void settime(u64);
+ 
+@@ -246,8 +237,6 @@ static sys_resetinfo mem_resetinfo = {
+ 	127
+ };
+ 
+-const void *__libogc_sbrk = _sbrk_r;
+-const void *__libogc_lock_init  = __syscall_lock_init;
+ 
+ static const char *__sys_versiondate;
+ static const char *__sys_versionbuild;
+@@ -285,7 +274,7 @@ void __reload(void)
+ 	SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
+ }
+ 
+-void __syscall_exit(int status)
++void exit(int status)
+ {
+ 	if(__stub_found()) {
+ 		SYS_ResetSystem(SYS_SHUTDOWN,0,0);
+@@ -296,25 +285,10 @@ void __syscall_exit(int status)
+ #else
+ 	SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
+ #endif
++	for(;;);
+ }
+ 
+ 
+-void __syscall_malloc_lock(struct _reent *ptr) {
+-	return __libogc_malloc_lock(ptr);
+-}
+-
+-void __syscall_malloc_unlock(struct _reent *ptr) {
+-	return __libogc_malloc_unlock(ptr);
+-}
+-
+-int  __syscall_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz){
+-	return __libogc_gettod_r(ptr,tp,tz);
+-}
+-
+-int __syscall_nanosleep(const struct timespec *req, struct timespec *rem){
+-	return __libogc_nanosleep(req, rem);
+-}
+-
+ static alarm_st* __lwp_syswd_allocate(void)
+ {
+ 	alarm_st *alarm;
+@@ -1078,7 +1052,6 @@ void SYS_Init(void)
+ 	__si_init();
+ 	__lwp_thread_coreinit();
+ 	__lwp_sysinit();
+-	__memlock_init();
+ 	__lwp_mqbox_init();
+ 	__lwp_sema_init();
+ 	__lwp_mutex_init();

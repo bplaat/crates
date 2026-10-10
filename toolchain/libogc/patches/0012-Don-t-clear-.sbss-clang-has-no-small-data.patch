@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Don't clear .sbss, clang has no small data
+
+Clearing an empty .sbss runs the memset loop with a count of zero, which
+wraps around and clears all memory.
+---
+ libogc/ogc_crt0.S | 9 +--------
+ 1 file changed, 1 insertion(+), 8 deletions(-)
+
+diff --git a/libogc/ogc_crt0.S b/libogc/ogc_crt0.S
+index 57f5602..e2b11a4 100644
+--- a/libogc/ogc_crt0.S
++++ b/libogc/ogc_crt0.S
+@@ -48,14 +48,7 @@ startup:
+ 	cmplwi	r3,0
+ 	bne		1f
+ 
+-	# Clear the SBSS section!
+-	lis		r3,__sbss_start@h
+-	ori		r3,r3,__sbss_start@l
+-	li		r4,0
+-	lis		r5,__sbss_end@h
+-	ori		r5,r5,__sbss_end@l
+-	sub		r5,r5,r3
+-	bl		_memset
++	# Clang doesn't use small data, the SBSS section is part of the BSS section
+ 
+ 	# Clear the BSS section!
+ 	lis		r3,__bss_start@h

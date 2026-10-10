@@ -1,3 +1,4 @@
+use crate::libogc::{floorf, powf};
 use alloc::vec::Vec;
 
 pub const SIZE: usize = 64;
@@ -276,7 +277,7 @@ impl World {
     }
 
     fn noise(&self, seed: u32, point: [f32; 3]) -> f32 {
-        let cell = point.map(libm::floorf);
+        let cell = point.map(|value| floorf(value));
         let fraction = core::array::from_fn::<_, 3, _>(|axis| point[axis] - cell[axis]);
         let weight = fraction.map(|value| value * value * (3.0 - 2.0 * value));
         let [x, y, z] = cell.map(|value| value as i32);
@@ -337,7 +338,7 @@ impl World {
                     [x as f32 * 0.045 + 17.0, 17.0, z as f32 * 0.045 + 17.0],
                     3,
                 );
-                let value = continents + libm::powf(mountains, 4.5) * 1.2;
+                let value = continents + powf(mountains, 4.5) * 1.2;
                 raw[Self::height_index(x, z)] = value;
                 lowest = lowest.min(value);
                 highest = highest.max(value);

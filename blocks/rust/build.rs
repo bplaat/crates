@@ -4,11 +4,6 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    let devkitpro =
-        PathBuf::from(env::var_os("DEVKITPRO").expect("DEVKITPRO must point to devkitPro"));
-    let devkitppc =
-        PathBuf::from(env::var_os("DEVKITPPC").expect("DEVKITPPC must point to devkitPPC"));
-    let libogc = devkitpro.join("libogc2/wii/lib");
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let assets = manifest_dir.join("src/assets");
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").unwrap());
@@ -33,7 +28,16 @@ fn main() {
     for &image in &image_names {
         println!("cargo:rerun-if-changed={}", assets.join(image).display());
     }
-    let status = Command::new("gxtexconv")
+    // Build the toolchain, it has gxtexconv and libogc.a
+    let toolchain = manifest_dir.join("../../toolchain");
+    let status = Command::new(toolchain.join("build.sh"))
+        .status()
+        .expect("failed to run build.sh");
+    assert!(status.success(), "failed to build the toolchain");
+    for path in ["build.sh", "libc", "libogc"] {
+        println!("cargo:rerun-if-changed={}", toolchain.join(path).display());
+    }
+    let status = Command::new(toolchain.join("target/gxtexconv"))
         .arg("-s")
         .arg(&script)
         .arg("-d")
@@ -41,7 +45,7 @@ fn main() {
         .arg("-o")
         .arg(&tpl)
         .status()
-        .expect("gxtexconv must be installed by devkitPro");
+        .expect("failed to run gxtexconv");
     assert!(status.success(), "gxtexconv failed to build materials.tpl");
 
     let tpl_data = fs::read(&tpl).expect("failed to read materials.tpl");
@@ -84,23 +88,9 @@ fn main() {
     }
     fs::write(image_data, images).expect("failed to write materials.bin");
 
-    println!("cargo:rerun-if-env-changed=DEVKITPRO");
-    println!("cargo:rerun-if-env-changed=DEVKITPPC");
-    println!("cargo:rustc-link-search=native={}", libogc.display());
-    println!("cargo:rustc-link-lib=wiiuse");
-    println!("cargo:rustc-link-lib=bte");
-    println!("cargo:rustc-link-lib=ogc");
-    println!("cargo:rustc-link-lib=m");
-    println!("cargo:rustc-link-arg=-Wl,--start-group");
-    println!("cargo:rustc-link-arg=-lsysbase");
-    println!("cargo:rustc-link-arg=-lc");
-    println!("cargo:rustc-link-arg=-Wl,--end-group");
-    println!("cargo:rustc-link-arg=-lgcc");
-    println!("cargo:rustc-link-arg=-mrvl");
-    println!("cargo:rustc-link-arg=-mcpu=750");
-    println!("cargo:rustc-link-arg=-meabi");
-    println!("cargo:rustc-link-arg=-mhard-float");
-
-    println!("cargo:rustc-env=DEVKITPPC={}", devkitppc.display());
-    println!("cargo:rustc-env=DEVKITPRO={}", devkitpro.display());
+    println!(
+        "cargo:rustc-link-search=native={}",
+        toolchain.join("target").display()
+    );
+    println!("cargo:rustc-link-lib=static=ogc");
 }

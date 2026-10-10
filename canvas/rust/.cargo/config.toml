@@ -1,9 +1,8 @@
 [build]
-target = ".cargo/wii.json"
+target = "../../toolchain/wii.json"
 
 [target.wii]
-linker = "./.cargo/linker.sh"
-runner = "./.cargo/runner.sh"
+runner = "../../toolchain/run.sh"
 rustflags = ["--extern", "alloc"]
 
 [unstable]

@@ -1,0 +1,43 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:51:11 +0200
+Subject: [PATCH] Do the IR cursor and spotlight math in single precision
+
+Double constants made these float calculations use double precision, which
+is slower on the PowerPC 750 and needs conversions back to float.
+---
+ libogc/gx.c | 2 +-
+ wiiuse/ir.c | 6 +++---
+ 2 files changed, 4 insertions(+), 4 deletions(-)
+
+diff --git a/libogc/gx.c b/libogc/gx.c
+index 8cace00..735e110 100644
+--- a/libogc/gx.c
++++ b/libogc/gx.c
+@@ -4809,7 +4809,7 @@ void GX_InitLightSpot(GXLightObj *lit_obj,f32 cut_off,u8 spotfn)
+ 
+ 	if(cut_off<0.0f ||	cut_off>90.0f) spotfn = GX_SP_OFF;
+ 
+-	r = (cut_off*M_PI)/180.0f;
++	r = (cut_off*(f32)M_PI)/180.0f;
+ 	cr = cosf(r);
+ 
+ 	switch(spotfn) {
+diff --git a/wiiuse/ir.c b/wiiuse/ir.c
+index d9659f5..ef389c8 100644
+--- a/wiiuse/ir.c
++++ b/wiiuse/ir.c
+@@ -711,10 +711,10 @@ void find_sensorbar(struct ir_t* ir, struct orient_t *orient) {
+ 	}
+ 
+ 	ir->raw_valid = 1;
+-	ir->ax = ((sb.rot_dots[0].x + sb.rot_dots[1].x) / 2) * 512.0 + 512.0;
+-	ir->ay = ((sb.rot_dots[0].y + sb.rot_dots[1].y) / 2) * 512.0 + 384.0;
++	ir->ax = ((sb.rot_dots[0].x + sb.rot_dots[1].x) / 2) * 512.0f + 512.0f;
++	ir->ay = ((sb.rot_dots[0].y + sb.rot_dots[1].y) / 2) * 512.0f + 384.0f;
+ 	ir->sensorbar = sb;
+-	ir->distance = (sb.rot_dots[1].x - sb.rot_dots[0].x) * 512.0;
++	ir->distance = (sb.rot_dots[1].x - sb.rot_dots[0].x) * 512.0f;
+ 
+ }
+ 
