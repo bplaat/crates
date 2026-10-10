@@ -109,7 +109,7 @@ pub struct GXFifoObj {
 }
 
 unsafe extern "C" {
-    // Write-gather pipe and the C library heap
+    // Write-gather pipe and the C library
     pub static wgPipe: *mut c_void;
     pub fn memalign(alignment: usize, size: usize) -> *mut c_void;
     pub fn free(pointer: *mut c_void);

@@ -76,7 +76,7 @@ pub type PowerCallback = Option<extern "C" fn()>;
 pub type WpadPowerCallback = Option<extern "C" fn(c_int)>;
 
 unsafe extern "C" {
-    // C library heap
+    // C library
     pub fn memalign(alignment: usize, size: usize) -> *mut c_void;
     pub fn free(pointer: *mut c_void);
 

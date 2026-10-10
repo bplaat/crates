@@ -4,8 +4,16 @@ cargo-features = ["panic-immediate-abort"]
 name = "canvas"
 version = "0.1.0"
 edition = "2024"
+
 [dependencies]
-miniz_oxide = { version = "0.9.1", default-features = false, features = ["with-alloc"] }
+miniz_oxide = { version = "0.9.1", default-features = false, features = [
+    "with-alloc",
+] }
+
+# Unoptimized code is too slow for the Wii
+[profile.dev]
+opt-level = "s"
+panic = "immediate-abort"
 
 [profile.release]
 opt-level = "s"

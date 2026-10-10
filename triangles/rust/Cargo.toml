@@ -5,6 +5,11 @@ name = "triangles"
 version = "0.1.0"
 edition = "2024"
 
+# Unoptimized code is too slow for the Wii
+[profile.dev]
+opt-level = "s"
+panic = "immediate-abort"
+
 [profile.release]
 opt-level = "s"
 panic = "immediate-abort"

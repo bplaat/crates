@@ -3,7 +3,6 @@
 
 use crate::libogc::*;
 use core::ffi::{c_int, c_void};
-use core::panic::PanicInfo;
 use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
@@ -173,11 +172,6 @@ static TRIANGLE_LIST: DisplayList = DisplayList([
     1, 255,     0, 0, 255, 255,
     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0
 ]);
-
-#[panic_handler]
-fn panic(_info: &PanicInfo<'_>) -> ! {
-    loop {}
-}
 
 extern "C" fn poweroff() {
     RUNNING.store(false, Ordering::Relaxed);

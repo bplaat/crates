@@ -8,7 +8,6 @@ use crate::mesh::Mesh;
 use crate::world::World;
 use core::f32::consts::TAU;
 use core::ffi::{c_int, c_void};
-use core::panic::PanicInfo;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -223,11 +222,6 @@ fn configure_pipeline() {
         GX_SetTevOp(GX_TEVSTAGE0, GX_MODULATE);
         GX_SetCullMode(GX_CULL_NONE);
     }
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo<'_>) -> ! {
-    loop {}
 }
 
 extern "C" fn poweroff() {

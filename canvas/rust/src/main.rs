@@ -8,7 +8,6 @@ use crate::render::*;
 use crate::texture::Texture;
 use alloc::format;
 use core::ffi::{c_int, c_void};
-use core::panic::PanicInfo;
 use core::ptr;
 use core::sync::atomic::{AtomicBool, Ordering};
 
@@ -237,11 +236,6 @@ impl CanvasScene {
             GX_Flush();
         }
     }
-}
-
-#[panic_handler]
-fn panic(_info: &PanicInfo<'_>) -> ! {
-    loop {}
 }
 
 extern "C" fn poweroff() {
