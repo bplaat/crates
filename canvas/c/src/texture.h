@@ -10,6 +10,7 @@
 
 #define STBI_ONLY_PNG
 #define STBI_NO_STDIO
+#define STBI_NO_LINEAR
 // Avoid incorrect vertical flips from stb_image's thread-local state on Wii.
 #define STBI_NO_THREAD_LOCALS
 #define STB_IMAGE_IMPLEMENTATION

@@ -22,7 +22,6 @@ pub const GX_VA_CLR0: u8 = 11;
 pub const GX_VA_TEX0: u8 = 13;
 pub const GX_DIRECT: u8 = 1;
 pub const GX_POS_XYZ: u32 = 1;
-pub const GX_F32: u32 = 4;
 pub const GX_U8: u32 = 0;
 pub const GX_CLR_RGBA: u32 = 1;
 pub const GX_RGBA8: u32 = 5;

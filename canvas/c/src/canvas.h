@@ -175,10 +175,11 @@ static void canvas_fill_text(const char* text, float x, float y, float text_size
         GX_LoadPosMtxImm(transformed_matrix, GX_PNMTX0);
 
         // Sample inside the glyph so bilinear filtering cannot read its neighbors.
-        float left = (font_char->x + 0.5f) / 480.f;
-        float top = (font_char->y + 0.5f) / 480.f;
-        float right = (font_char->x + font_char->w - 0.5f) / 480.f;
-        float bottom = (font_char->y + font_char->h - 0.5f) / 480.f;
+        const float texel = 1.0f / 480.0f;
+        float left = (font_char->x + 0.5f) * texel;
+        float top = (font_char->y + 0.5f) * texel;
+        float right = (font_char->x + font_char->w - 0.5f) * texel;
+        float bottom = (font_char->y + font_char->h - 0.5f) * texel;
         uint32_t c = font_char->c ? 0xffffffff : color;
 
         GX_Begin(GX_QUADS, GX_VTXFMT0, 4);

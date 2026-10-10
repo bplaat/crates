@@ -28,7 +28,7 @@ impl Mesh {
             let batches = instances.len() / MAX_FACES_PER_BATCH + 1;
             let capacity = instances
                 .len()
-                .checked_mul(80)?
+                .checked_mul(40)?
                 .checked_add(batches.checked_mul(64)?)?
                 .checked_add(159)?
                 & !31;
@@ -77,14 +77,14 @@ impl Mesh {
 
 fn emit_face(face: &Face, water: bool) {
     let corners = face.side.corners();
-    let light = (0.38 + 0.62 * face.side.light()) * f32::from(face.ambient_occlusion) / 255.0;
-    let shade = (255.0 * light) as u8;
+    let shade = ((0.38 + 0.62 * face.side.light()) * f32::from(face.ambient_occlusion)) as u8;
 
     unsafe {
         for (corner, uv) in corners.iter().zip(UV) {
-            pipe_f32(f32::from(face.position[0]) + f32::from(corner[0]) * 0.5 + 0.5);
-            pipe_f32(f32::from(face.position[1]) + f32::from(corner[1]) * 0.5 + 0.5);
-            pipe_f32(f32::from(face.position[2]) + f32::from(corner[2]) * 0.5 + 0.5);
+            // The world fits in 0..64, so 8-bit integer positions are exact and a quarter of the size of floats
+            for (position, offset) in face.position.iter().zip(corner) {
+                pipe_u8(position + offset);
+            }
             pipe_u8(shade);
             pipe_u8(shade);
             pipe_u8(shade);
@@ -98,9 +98,4 @@ fn emit_face(face: &Face, water: bool) {
 #[inline]
 unsafe fn pipe_u8(value: u8) {
     unsafe { core::ptr::write_volatile(wgPipe.cast::<u8>(), value) }
-}
-
-#[inline]
-unsafe fn pipe_f32(value: f32) {
-    unsafe { core::ptr::write_volatile(wgPipe.cast::<f32>(), value) }
 }

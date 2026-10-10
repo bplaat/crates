@@ -118,10 +118,11 @@ pub unsafe fn draw_text(
             ps_guMtxConcat(&source, transform, &mut matrix);
             GX_LoadPosMtxImm(&matrix, GX_PNMTX0);
             // The glyph atlas uses the same top-to-bottom PNG orientation.
-            let left = (glyph.x as f32 + 0.5) / 480.0;
-            let top = (glyph.y as f32 + 0.5) / 480.0;
-            let right = (glyph.x as f32 + glyph.w as f32 - 0.5) / 480.0;
-            let bottom = (glyph.y as f32 + glyph.h as f32 - 0.5) / 480.0;
+            const TEXEL: f32 = 1.0 / 480.0;
+            let left = (glyph.x as f32 + 0.5) * TEXEL;
+            let top = (glyph.y as f32 + 0.5) * TEXEL;
+            let right = (glyph.x as f32 + glyph.w as f32 - 0.5) * TEXEL;
+            let bottom = (glyph.y as f32 + glyph.h as f32 - 0.5) * TEXEL;
             draw_quad(
                 if glyph.c { u32::MAX } else { color },
                 [[right, top], [right, bottom], [left, bottom], [left, top]],

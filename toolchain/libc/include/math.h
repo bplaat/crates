@@ -18,8 +18,3 @@ float exp2f(float x);
 float log2f(float x);
 float powf(float x, float y);
 
-// Double precision math is not supported, use the float versions
-#define sin(x) sinf(x)
-#define cos(x) cosf(x)
-#define atan2(y, x) atan2f(y, x)
-#define pow(x, y) powf(x, y)
