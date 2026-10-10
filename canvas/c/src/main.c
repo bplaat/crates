@@ -1,4 +1,4 @@
-// A larger example that shows 2D rendering, PNG image loading, font rendering, and cursor rendering.
+// 2D rendering with PNG textures, bitmap font text and Wii Remote cursors.
 
 #include <gccore.h>
 #include <malloc.h>

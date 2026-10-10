@@ -1,5 +1,5 @@
-// A voxel example that generates a 64x64x64 world with caves, trees, cacti, a hut, and water. It draws exposed faces
-// with GX display lists and block textures.
+// Generates a random 64x64x64 voxel world and renders its visible block faces
+// with GX display lists.
 
 #include <gccore.h>
 #include <malloc.h>

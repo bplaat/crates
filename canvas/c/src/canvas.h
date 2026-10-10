@@ -75,7 +75,7 @@ static void canvas_draw_image(GXTexObj* texture, float x, float y, float width, 
     ps_guMtxConcat(matrix, canvas.transform_matrix, transformed_matrix);
     GX_LoadPosMtxImm(transformed_matrix, GX_PNMTX0);
 
-    // PNG top rows map to t=0 for this canvas projection.
+    // Map the PNG's top row to the top vertices of the quad.
     GX_Begin(GX_QUADS, GX_VTXFMT0, 4);
     GX_Position2f32(0.5, -0.5);
     GX_Color1u32(color);

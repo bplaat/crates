@@ -1,4 +1,4 @@
-// A simple Hello World test program that draws some triangles with display lists.
+// A minimal program that draws a few triangles using a display list.
 
 #include <gccore.h>
 #include <malloc.h>

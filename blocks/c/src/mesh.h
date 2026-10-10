@@ -12,7 +12,7 @@ typedef struct {
     uint32_t list_sizes[MaterialLayerCount];
 } Mesh;
 
-// Corner order matches the six face normals in world.h.
+// Face order matches faceOffsets in world.h.
 static const int8_t corners[6][4][3] = {
     {{-1, -1, 1}, {1, -1, 1}, {1, 1, 1}, {-1, 1, 1}}, {{1, -1, -1}, {-1, -1, -1}, {-1, 1, -1}, {1, 1, -1}},
     {{1, -1, 1}, {1, -1, -1}, {1, 1, -1}, {1, 1, 1}}, {{-1, -1, -1}, {-1, -1, 1}, {-1, 1, 1}, {-1, 1, -1}},
