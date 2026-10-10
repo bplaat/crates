@@ -43,9 +43,24 @@ float floorf(float x) {
     return bits.f;
 }
 
+// Exact like the standard asks: subtracts y doubled as often as fits, from big to small. Each
+// subtraction is exact because the remainder is always less than twice what is subtracted.
 float fmodf(float x, float y) {
-    float quotient = x / y;
-    return x - y * (quotient < 0.0f ? -floorf(-quotient) : floorf(quotient));
+    if (isnan(x) || isnan(y) || isinf(x) || y == 0.0f)
+        return __builtin_nanf("");
+    float remainder = fabsf(x), step = fabsf(y);
+    if (remainder < step)
+        return x;
+    while (step + step <= remainder)
+        step += step;
+    for (;;) {
+        if (remainder >= step)
+            remainder -= step;
+        if (step == fabsf(y))
+            break;
+        step *= 0.5f;
+    }
+    return x < 0.0f ? -remainder : remainder;
 }
 
 float fabsf(float x) {
@@ -65,12 +80,33 @@ float sqrtf(float x) {
 }
 
 float hypotf(float x, float y) {
-    return sqrtf(x * x + y * y);
+    // Infinite even when the other side is NaN
+    if (isinf(x) || isinf(y))
+        return __builtin_inff();
+    // Divide by the biggest side, so squaring doesn't overflow or underflow
+    x = fabsf(x);
+    y = fabsf(y);
+    if (x < y) {
+        float swap = x;
+        x = y;
+        y = swap;
+    }
+    if (x == 0.0f)
+        return x;
+    float ratio = y / x;
+    return x * sqrtf(1.0f + ratio * ratio);
 }
 
-float sinf(float x) {
-    // Reduce to [-pi, pi], then fold into [-pi/2, pi/2]
-    x -= 2.0f * PI * floorf(x * (0.5f / PI) + 0.5f);
+// Reduces x to [-pi, pi]. 2 pi is split in a part with few bits, so turns * 2 pi is exact
+// without double precision, this keeps the result accurate up to about |x| < 400000.
+static float reduce_angle(float x) {
+    float turns = floorf(x * (0.5f / PI) + 0.5f);
+    return (x - turns * 6.28125f) - turns * 1.9353071795864769e-3f;
+}
+
+// sin(x) for x in [-3 pi / 2, 3 pi / 2]
+static float sin_reduced(float x) {
+    // Fold into [-pi/2, pi/2]
     if (x > PI / 2.0f)
         x = PI - x;
     else if (x < -PI / 2.0f)
@@ -82,8 +118,12 @@ float sinf(float x) {
                                    x2 * (-1.0f / 5040.0f + x2 * (1.0f / 362880.0f + x2 * (-1.0f / 39916800.0f))))));
 }
 
+float sinf(float x) {
+    return sin_reduced(reduce_angle(x));
+}
+
 float cosf(float x) {
-    return sinf(x + PI / 2.0f);
+    return sin_reduced(reduce_angle(x) + PI / 2.0f);
 }
 
 float tanf(float x) {
@@ -109,15 +149,17 @@ float atanf(float x) {
 }
 
 float atan2f(float y, float x) {
+    if (isnan(x) || isnan(y))
+        return x + y;
+    // The sign of y picks the half, also for -0
+    float pi = __builtin_signbit(y) ? -PI : PI;
     if (x > 0.0f)
         return atanf(y / x);
     if (x < 0.0f)
-        return atanf(y / x) + (y >= 0.0f ? PI : -PI);
-    if (y > 0.0f)
-        return PI / 2.0f;
-    if (y < 0.0f)
-        return -PI / 2.0f;
-    return 0.0f;
+        return atanf(y / x) + pi;
+    if (y != 0.0f)
+        return pi / 2.0f;
+    return __builtin_signbit(x) ? pi : y;
 }
 
 // 2^x as 2^i * e^(f * ln 2), the fraction is done with a Taylor series of e^x
@@ -151,11 +193,17 @@ float log2f(float x) {
         return x == 0.0f ? -__builtin_inff() : __builtin_nanf("");
     if (isinf(x))
         return x;
+    // Scale subnormals up by 2^23 so they get an exponent
+    int32_t e = -127;
+    if (x < 1.17549435e-38f) {
+        x *= 8388608.0f;
+        e -= 23;
+    }
     union {
         float f;
         uint32_t i;
     } bits = {x};
-    int32_t e = (int32_t)((bits.i >> 23) & 255) - 127;
+    e += (int32_t)((bits.i >> 23) & 255);
     bits.i = (bits.i & 0x007fffff) | 0x3f800000;
     float m = bits.f;
     if (m > 1.41421356f) {

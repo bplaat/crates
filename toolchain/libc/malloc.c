@@ -1,9 +1,9 @@
 // A simple first-fit heap that grows into the libogc MEM1 and MEM2 arenas
 #include <malloc.h>
-#include <ogc/irq.h>
-#include <ogc/system.h>
 #include <stdint.h>
 #include <string.h>
+
+#include "libogc.h"
 
 #define GROW_SIZE (256 * 1024)
 
@@ -66,7 +66,7 @@ static bool grow(size_t size) {
 
 static void* allocate(size_t alignment, size_t size) {
     // Bigger than all memory, also keeps the size calculations below from overflowing
-    if (size > 0x10000000 || alignment > 0x10000000)
+    if (size > 0x10000000 || alignment > 0x10000000 || (alignment & (alignment - 1)) != 0)
         return NULL;
     if (alignment < 16)
         alignment = 16;

@@ -23,20 +23,22 @@ CFLAGS := --target=powerpc-none-eabi -mcpu=750 -ffreestanding -nostdlibinc \
 	-I$(LIBOGC)/gc/bte -I$(LIBOGC)/gc/wiiuse
 
 OBJECTS := $(patsubst src/%.c,target/%.o,$(wildcard src/*.c))
+LIBRARIES := $(addprefix $(TOOLCHAIN)/target/,libogc.a libc.a libcompiler-rt.a)
 
 target/$(NAME).dol: target/$(NAME).elf
 	$(ELF2DOL) $< $@
 
-target/$(NAME).elf: $(OBJECTS) $(TOOLCHAIN)/target/libogc.a
-	$(LD) -T $(TOOLCHAIN)/wii.ld --gc-sections $^ $(TOOLCHAIN)/target/libcompiler-rt.a -o $@
+target/$(NAME).elf: $(OBJECTS) $(LIBRARIES)
+	$(LD) -T $(TOOLCHAIN)/wii.ld --gc-sections $^ -o $@
 
 target/%.o: src/%.c | $(TOOLCHAIN)/target/libogc.a
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
-# The toolchain script knows itself when it needs to rebuild
+# The toolchain script knows itself when it needs to rebuild, one run builds all libraries
 $(TOOLCHAIN)/target/libogc.a: FORCE
 	@$(TOOLCHAIN)/build.sh
+$(TOOLCHAIN)/target/libc.a $(TOOLCHAIN)/target/libcompiler-rt.a: $(TOOLCHAIN)/target/libogc.a ;
 
 run: target/$(NAME).elf
 	$(TOOLCHAIN)/run.sh $<

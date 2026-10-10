@@ -28,7 +28,7 @@ fn main() {
     for &image in &image_names {
         println!("cargo:rerun-if-changed={}", assets.join(image).display());
     }
-    // Build the toolchain, it has gxtexconv and libogc.a
+    // Build the toolchain, it has gxtexconv, libogc.a and libc.a
     let toolchain = manifest_dir.join("../../toolchain");
     let status = Command::new(toolchain.join("build.sh"))
         .status()
@@ -93,4 +93,5 @@ fn main() {
         toolchain.join("target").display()
     );
     println!("cargo:rustc-link-lib=static=ogc");
+    println!("cargo:rustc-link-lib=static=c");
 }

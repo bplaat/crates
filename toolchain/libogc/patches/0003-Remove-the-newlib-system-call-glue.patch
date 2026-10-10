@@ -4,13 +4,14 @@ Date: Sat, 10 Oct 2026 12:35:54 +0200
 Subject: [PATCH] Remove the newlib system call glue
 
 libogc is built with a tiny C library instead of newlib, so the reent
-structs, malloc locks and sbrk hooks are gone and __syscall_exit becomes
-a plain exit() that never returns.
+structs, malloc locks, sbrk hook and gettimeofday hook are gone. The C
+library calls the __syscall_exit and __syscall_nanosleep hooks that stay,
+like newlib does.
 ---
  gc/ogc/lwp_threads.h |  1 -
  libogc/lwp_threads.c | 19 -------------------
- libogc/system.c      | 31 ++-----------------------------
- 3 files changed, 2 insertions(+), 49 deletions(-)
+ libogc/system.c      | 26 --------------------------
+ 3 files changed, 46 deletions(-)
 
 diff --git a/gc/ogc/lwp_threads.h b/gc/ogc/lwp_threads.h
 index 5bd5b83..69211a6 100644
@@ -83,7 +84,7 @@ index 4843bea..81b61e0 100644
  	}
  	return 0;
 diff --git a/libogc/system.c b/libogc/system.c
-index 504625e..d10d823 100644
+index 504625e..3822125 100644
 --- a/libogc/system.c
 +++ b/libogc/system.c
 @@ -32,11 +32,8 @@ distribution.
@@ -109,41 +110,30 @@ index 504625e..d10d823 100644
  
  extern void __exception_console(void);
  extern void __exception_printf(const char *str, ...);
-@@ -210,8 +203,6 @@ extern void __console_init_ex(void *conbuffer,int tgt_xstart,int tgt_ystart,int
+@@ -209,8 +202,6 @@ extern void __console_init_ex(void *conbuffer,int tgt_xstart,int tgt_ystart,int
+ 
  extern void timespec_subtract(const struct timespec *tp_start,const struct timespec *tp_end,struct timespec *result);
  
- 
+-
 -extern int __libogc_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz);
--extern int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem);
+ extern int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem);
  extern u64 gettime(void);
  extern void settime(u64);
- 
-@@ -246,8 +237,6 @@ static sys_resetinfo mem_resetinfo = {
+@@ -246,9 +237,6 @@ static sys_resetinfo mem_resetinfo = {
  	127
  };
  
 -const void *__libogc_sbrk = _sbrk_r;
 -const void *__libogc_lock_init  = __syscall_lock_init;
- 
+-
  static const char *__sys_versiondate;
  static const char *__sys_versionbuild;
-@@ -285,7 +274,7 @@ void __reload(void)
- 	SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
- }
  
--void __syscall_exit(int status)
-+void exit(int status)
- {
- 	if(__stub_found()) {
- 		SYS_ResetSystem(SYS_SHUTDOWN,0,0);
-@@ -296,25 +285,10 @@ void __syscall_exit(int status)
- #else
- 	SYS_ResetSystem(SYS_RETURNTOMENU, 0, 0);
+@@ -298,19 +286,6 @@ void __syscall_exit(int status)
  #endif
-+	for(;;);
  }
  
- 
+-
 -void __syscall_malloc_lock(struct _reent *ptr) {
 -	return __libogc_malloc_lock(ptr);
 -}
@@ -156,14 +146,10 @@ index 504625e..d10d823 100644
 -	return __libogc_gettod_r(ptr,tp,tz);
 -}
 -
--int __syscall_nanosleep(const struct timespec *req, struct timespec *rem){
--	return __libogc_nanosleep(req, rem);
--}
--
- static alarm_st* __lwp_syswd_allocate(void)
- {
- 	alarm_st *alarm;
-@@ -1078,7 +1052,6 @@ void SYS_Init(void)
+ int __syscall_nanosleep(const struct timespec *req, struct timespec *rem){
+ 	return __libogc_nanosleep(req, rem);
+ }
+@@ -1078,7 +1053,6 @@ void SYS_Init(void)
  	__si_init();
  	__lwp_thread_coreinit();
  	__lwp_sysinit();

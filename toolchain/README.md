@@ -5,8 +5,9 @@ Everything the examples share to build Wii programs with plain clang and lld, wi
 you:
 
 - Clones upstream [libogc](https://github.com/devkitPro/libogc) v2.11.0 and applies
-  `libogc/patches/` as commits, then builds the parts we use (listed in `build.sh`) together
-  with our tiny libc to `target/libogc.a`
+  `libogc/patches/` as commits, then builds the parts we use (listed in `build.sh`) to
+  `target/libogc.a`
+- Builds our tiny C library in `libc/` to `target/libc.a`
 - Clones devkitPro's [gamecube-tools](https://github.com/devkitPro/gamecube-tools) v1.0.7 and
   builds `elf2dol` (`.elf` to `.dol`) and `gxtexconv` (images to `.tpl` textures, needs FreeImage)
 - Checks out only the builtins of LLVM's [compiler-rt](https://github.com/llvm/llvm-project/tree/main/compiler-rt/lib/builtins)
@@ -28,17 +29,20 @@ loops on plain variables, which LTO can optimize into endless loops.
 
 - `libc/` is a tiny C library that replaces newlib: word-sized `memcpy`/`memmove`/`memset` (zero
   fills use `dcbz` on cached memory), a first-fit `malloc` over the MEM1 and MEM2 arenas, float
-  math accurate to about 1e-6, and a `printf` family without floats
+  math accurate to about 1e-6, a `printf` family without floats and the startup code that calls
+  `main`
 - `wii.mk` has the make rules for the C examples, `wii.ld` is the linker script
-- `wii.json` is the Rust target, each Rust example's `build.rs` links `target/libogc.a`
+- `wii.json` is the Rust target, each Rust example's `build.rs` links `target/libogc.a` and
+  `target/libc.a`
 - `run.sh` converts a program to a `.dol` and starts it in Dolphin
 
 ## Patches
 
 libogc needs newlib and GNU as, the patches make it build with our libc and LLVM:
 
-- `0001` to `0008` remove the newlib glue: reent structs, devoptab, malloc locks, crtmain
-- `0009` to `0011` add assembler macros for the Gekko / Broadway paired single instructions,
+- `0001` to `0007` remove the newlib glue: reent structs, devoptab, malloc locks, time hooks,
+  the text console and the network cleanup
+- `0008` to `0010` add assembler macros for the Gekko / Broadway paired single instructions,
   which LLVM doesn't know, so the fast paired single matrix code keeps working
-- `0012` and `0013` stop using small data sections, which clang doesn't support
-- `0014` does the float math of the IR cursor and spotlights in single precision
+- `0011` and `0012` stop using small data sections, which clang doesn't support
+- `0013` does the float math of the IR cursor and spotlights in single precision

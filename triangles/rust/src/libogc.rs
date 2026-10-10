@@ -48,11 +48,11 @@ pub struct GXRModeObj {
     pub vi_width: u16,
     pub vi_height: u16,
     pub xfb_mode: u32,
+    pub rgb: u8,
     pub field_rendering: u8,
     pub aa: u8,
     pub sample_pattern: [[u8; 2]; 12],
     pub vfilter: [u8; 7],
-    pub copy_interlaced: u8,
 }
 
 #[repr(C)]
@@ -76,7 +76,7 @@ pub type PowerCallback = Option<extern "C" fn()>;
 pub type WpadPowerCallback = Option<extern "C" fn(c_int)>;
 
 unsafe extern "C" {
-    // libogc heap
+    // C library heap
     pub fn memalign(alignment: usize, size: usize) -> *mut c_void;
     pub fn free(pointer: *mut c_void);
 

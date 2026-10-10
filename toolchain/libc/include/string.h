@@ -1,4 +1,5 @@
 #pragma once
+
 #include <stddef.h>
 
 void* memcpy(void* restrict dst, const void* restrict src, size_t size);
@@ -8,7 +9,5 @@ int memcmp(const void* a, const void* b, size_t size);
 size_t strlen(const char* str);
 size_t strnlen(const char* str, size_t max);
 int strcmp(const char* a, const char* b);
-int strncmp(const char* a, const char* b, size_t max);
 char* strcpy(char* restrict dst, const char* restrict src);
-char* strcat(char* restrict dst, const char* restrict src);
 char* strchr(const char* str, int c);

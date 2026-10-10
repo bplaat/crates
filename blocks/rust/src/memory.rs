@@ -71,9 +71,9 @@ impl Drop for HeapBuffer {
     }
 }
 
-pub struct LibogcAllocator;
+pub struct CHeapAllocator;
 
-unsafe impl GlobalAlloc for LibogcAllocator {
+unsafe impl GlobalAlloc for CHeapAllocator {
     unsafe fn alloc(&self, layout: Layout) -> *mut u8 {
         unsafe { memalign(layout.align().max(32), layout.size().max(1)).cast() }
     }
@@ -84,4 +84,4 @@ unsafe impl GlobalAlloc for LibogcAllocator {
 }
 
 #[global_allocator]
-static ALLOCATOR: LibogcAllocator = LibogcAllocator;
+static ALLOCATOR: CHeapAllocator = CHeapAllocator;

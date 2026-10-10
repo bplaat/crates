@@ -1,6 +1,3 @@
-#pragma once
-#include <stddef.h>
-#include <stdint.h>
+// libogc includes this header, but needs nothing from it
 
-typedef int32_t ssize_t;
-typedef int64_t off_t;
+#pragma once

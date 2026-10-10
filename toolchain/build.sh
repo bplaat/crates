@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Builds the Wii toolchain in target/: fetches libogc, gamecube-tools and LLVM's compiler-rt,
-# applies libogc/patches/ and builds libogc.a (with our tiny libc), libcompiler-rt.a, elf2dol
-# and gxtexconv.
+# applies libogc/patches/ and builds libogc.a, libc.a (our tiny libc), libcompiler-rt.a,
+# elf2dol and gxtexconv.
 # The example Makefiles and Rust build.rs files run this before they build.
 #
 # Usage: ./build.sh [command]...
@@ -42,6 +42,7 @@ WII_CFLAGS=(--target=powerpc-none-eabi -mcpu=750 -ffreestanding -nostdlibinc
     -I"$LIBOGC_DIR/gc/ogc/machine" -I"$LIBOGC_DIR/gc/bte" -I"$LIBOGC_DIR/gc/wiiuse")
 LIBOGC_CFLAGS=("${WII_CFLAGS[@]}" -std=gnu17 -fno-strict-aliasing -I"$LIBOGC_DIR/libogc"
     -Wall -Wno-parentheses -Wno-unused)
+LIBC_CFLAGS=("${WII_CFLAGS[@]}" -std=c23 -Wall -Wextra)
 
 # The parts of libogc we build, audio, DVD, memory cards, SD cards, networking and the console
 # are left out because the examples don't use them and most need newlib
@@ -173,9 +174,12 @@ build_archive() {
 build_libraries() {
     # The libogc sources are checked too, so edits in dev mode get built
     if outdated "$BUILD_DIR/libogc.a" "$LIBOGC_DIR/.patched" "$LIBOGC_DIR"/{gc,libogc,lwbt,wiiuse} \
-        "$TOOLCHAIN_DIR/libc" "$TOOLCHAIN_DIR/build.sh"; then
-        build_archive libogc.a "${LIBOGC_CFLAGS[@]}" -- \
-            "${LIBOGC_SOURCES[@]/#/$LIBOGC_DIR/}" "$TOOLCHAIN_DIR"/libc/*.c
+        "$TOOLCHAIN_DIR/libc/include" "$TOOLCHAIN_DIR/build.sh"; then
+        build_archive libogc.a "${LIBOGC_CFLAGS[@]}" -- "${LIBOGC_SOURCES[@]/#/$LIBOGC_DIR/}"
+    fi
+    if outdated "$BUILD_DIR/libc.a" "$LIBOGC_DIR/.patched" "$LIBOGC_DIR/gc" "$TOOLCHAIN_DIR/libc" \
+        "$TOOLCHAIN_DIR/build.sh"; then
+        build_archive libc.a "${LIBC_CFLAGS[@]}" -- "$TOOLCHAIN_DIR"/libc/*.c
     fi
     if outdated "$BUILD_DIR/libcompiler-rt.a" "$TOOLCHAIN_DIR/build.sh"; then
         build_archive libcompiler-rt.a "${WII_CFLAGS[@]}" -std=gnu11 -- \

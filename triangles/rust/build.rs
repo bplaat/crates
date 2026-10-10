@@ -3,7 +3,7 @@ use std::path::PathBuf;
 use std::process::Command;
 
 fn main() {
-    // Build the toolchain and link its libogc.a
+    // Build the toolchain and link its libogc.a and libc.a
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
     let toolchain = manifest_dir.join("../../toolchain");
     let status = Command::new(toolchain.join("build.sh"))
@@ -18,4 +18,5 @@ fn main() {
         toolchain.join("target").display()
     );
     println!("cargo:rustc-link-lib=static=ogc");
+    println!("cargo:rustc-link-lib=static=c");
 }

@@ -1,16 +1,16 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
 From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
 Date: Sat, 10 Oct 2026 12:35:54 +0200
-Subject: [PATCH] Implement nanosleep and usleep without newlib
+Subject: [PATCH] Remove the newlib clock and gettimeofday hooks
 
-nanosleep was a newlib system call hook and usleep came from newlib, both
-are now plain functions. The clock and gettimeofday hooks are removed.
+They need newlib's reent struct and are left to the C library. The
+nanosleep hook stays for the C library's nanosleep.
 ---
- libogc/timesupp.c | 26 ++++----------------------
- 1 file changed, 4 insertions(+), 22 deletions(-)
+ libogc/timesupp.c | 24 ------------------------
+ 1 file changed, 24 deletions(-)
 
 diff --git a/libogc/timesupp.c b/libogc/timesupp.c
-index 8c505e5..20e039d 100644
+index 8c505e5..153b0f2 100644
 --- a/libogc/timesupp.c
 +++ b/libogc/timesupp.c
 @@ -1,6 +1,3 @@
@@ -20,26 +20,17 @@ index 8c505e5..20e039d 100644
  #include "asm.h"
  #include "processor.h"
  #include "lwp.h"
-@@ -154,7 +151,7 @@ void udelay(unsigned us)
- 	}
- }
- 
--int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
-+int nanosleep(const struct timespec *tb, struct timespec *rem)
- {
- 	u64 timeout;
- 
-@@ -169,23 +166,8 @@ int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
+@@ -168,24 +165,3 @@ int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
+ 	__lwp_thread_dispatchenable();
  	return TB_SUCCESSFUL;
  }
- 
+-
 -clock_t clock(void) {
 -	return -1;
 -}
 -
 -int __libogc_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz)
-+int usleep(unsigned int us)
- {
+-{
 -	u64 now;
 -	if (tp != NULL) {
 -		now = gettime();
@@ -52,7 +43,5 @@ index 8c505e5..20e039d 100644
 -
 -	}
 -	return 0;
-+	struct timespec tb = { us / 1000000, (us % 1000000) * 1000 };
-+	return nanosleep(&tb, NULL);
- }
+-}
 -
