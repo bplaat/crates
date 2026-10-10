@@ -16,9 +16,9 @@ you:
 
 ```sh
 ./build.sh                 # fetch, patch and build
-./build.sh dev             # fetch and patch, then edit and commit in target/libogc/
-./build.sh export-patches  # write the commits in target/libogc/ back to libogc/patches/
 ./build.sh clean           # remove target/
+./build.sh export-patches  # write the commits in target/libogc/ back to libogc/patches/
+./build.sh test            # build test/ and run it in Dolphin
 ```
 
 All code is compiled for the PowerPC 750 (`-mcpu=750`) and optimized for size with `-Os`, like
@@ -34,11 +34,23 @@ loops on plain variables, which LTO can optimize into endless loops.
 - `wii.mk` has the make rules for the C examples, `wii.ld` is the linker script
 - `wii.json` is the Rust target, each Rust example's `build.rs` links `target/libogc.a` and
   `target/libc.a`
-- `run.sh` converts a program to a `.dol` and starts it in Dolphin
+- `run.sh` converts a program to a `.dol` and starts it in Dolphin, extra arguments go to Dolphin
+- `test/` is a Wii program that tests the toolchain, see below
+
+## Test
+
+`./build.sh test` builds `test/` like an example and runs it in Dolphin without its user
+interface. It checks the startup code, the C library, compiler-rt, libogc's paired single math,
+threads and timers, and a texture converted by `gxtexconv`. The program writes its results to
+`/tmp/test.txt` on Dolphin's NAND after every group, the script prints them and fails when a check
+failed or the program didn't finish.
 
 ## Patches
 
-libogc needs newlib and GNU as, the patches make it build with our libc and LLVM:
+libogc needs newlib and GNU as, the patches make it build with our libc and LLVM. To change them,
+edit and commit in `target/libogc/`, run `./build.sh` to try it and `./build.sh export-patches` to
+write the commits back. The build stops instead of applying changed patches over commits or edits
+in `target/libogc/` that aren't exported yet.
 
 - `0001` to `0007` remove the newlib glue: reent structs, devoptab, malloc locks, time hooks,
   the text console and the network cleanup

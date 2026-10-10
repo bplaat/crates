@@ -6,8 +6,8 @@
 #
 # Usage: ./build.sh [command]...
 #   (none)          fetch, patch and build
-#   dev             fetch and patch, then edit and commit in target/libogc/
 #   export-patches  write the commits in target/libogc/ back to libogc/patches/
+#   test            build test/ and run it in Dolphin
 #   clean           remove target/
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -114,6 +114,11 @@ fetch() {
 # Applies the patches as commits on top of the upstream tag, again when they changed
 patch() {
     outdated "$LIBOGC_DIR/.patched" "$TOOLCHAIN_DIR"/libogc/patches || return 0
+    # Applying resets target/libogc/, so stop when it has work that isn't exported yet
+    if [ -s "$LIBOGC_DIR/.patched" ] && { [ -n "$(git_libogc status --porcelain --untracked-files=no)" ] ||
+        [ "$(git_libogc rev-parse HEAD)" != "$(cat "$LIBOGC_DIR/.patched")" ]; }; then
+        die "target/libogc/ has changes that aren't in libogc/patches/, run ./build.sh export-patches or remove target/libogc/"
+    fi
     msg "Applying patches"
     # git am keeps the authors of the patches, but needs a committer identity
     if [ -z "$(git_libogc config user.email || true)" ]; then
@@ -125,17 +130,22 @@ patch() {
     # A patch that failed to apply leaves git am half done, start over
     git_libogc am --abort > /dev/null 2>&1 || true
     git_libogc reset -q --hard upstream
-    git_libogc am -q --keep-cr --whitespace=nowarn "$TOOLCHAIN_DIR"/libogc/patches/*.patch
-    touch "$LIBOGC_DIR/.patched"
+    if ! git_libogc am -q --keep-cr --whitespace=nowarn "$TOOLCHAIN_DIR"/libogc/patches/*.patch; then
+        git_libogc am --abort
+        rm -f "$LIBOGC_DIR/.patched"
+        die "Failed to apply the patches"
+    fi
+    # Remembers the applied commit, so the check above sees new work
+    git_libogc rev-parse HEAD > "$LIBOGC_DIR/.patched"
 }
 
 # Writes the commits on top of upstream back to libogc/patches/
 export_patches() {
-    [ -d "$LIBOGC_DIR/.git" ] || die "No patched libogc, run ./build.sh dev first"
+    [ -d "$LIBOGC_DIR/.git" ] || die "No patched libogc, run ./build.sh first"
     rm -f "$TOOLCHAIN_DIR"/libogc/patches/*.patch
     git_libogc format-patch -q --no-numbered --zero-commit --no-signature \
         -o "$TOOLCHAIN_DIR/libogc/patches" upstream..HEAD
-    touch "$LIBOGC_DIR/.patched"
+    git_libogc rev-parse HEAD > "$LIBOGC_DIR/.patched"
     msg "Exported $(git_libogc rev-list --count upstream..HEAD) patches"
 }
 
@@ -205,6 +215,35 @@ build_tools() {
     fi
 }
 
+# Builds test/ with the toolchain and runs it in Dolphin without its user interface, the test
+# writes its results to /tmp/test.txt on Dolphin's NAND. Doesn't lock, make runs the build itself.
+run_test() {
+    local test_dir="$TOOLCHAIN_DIR/test" user="$TOOLCHAIN_DIR/test/target/dolphin" pid
+    local results="$user/Wii/tmp/test.txt"
+    make -C "$test_dir" --no-print-directory
+    msg "Running the test in Dolphin"
+    rm -f "$results"
+    # Without these a new user folder waits on dialogs
+    mkdir -p "$user/Config"
+    printf '[Analytics]\nPermissionAsked = True\n[Interface]\nUsePanicHandlers = False\n' \
+        > "$user/Config/Dolphin.ini"
+    "$TOOLCHAIN_DIR/run.sh" "$test_dir/target/test.elf" --batch --user="$user" \
+        > "$test_dir/target/dolphin.log" 2>&1 &
+    pid=$!
+    # Wait at most a minute for the test to finish
+    for _ in $(seq 120); do
+        grep -qs '^DONE' "$results" && break
+        kill -0 "$pid" 2> /dev/null || break
+        sleep 0.5
+    done
+    # Dolphin ignores the first SIGTERM
+    kill -KILL "$pid" 2> /dev/null || true
+    wait "$pid" 2> /dev/null || true
+    cat "$results" 2> /dev/null || true
+    grep -qs '^DONE 0 failed' "$results" || die "The test failed or didn't finish"
+    msg "All tests passed"
+}
+
 # Only one build at a time, the C and Rust examples can start one at the same time
 locked=false
 lock() {
@@ -222,8 +261,8 @@ lock() {
 for command in "$@"; do
     case "$command" in
         all) lock; fetch; patch; build_libraries; build_tools ;;
-        dev) lock; fetch; patch; msg "Edit and commit in target/libogc/, then run ./build.sh export-patches" ;;
         export-patches) export_patches ;;
+        test) run_test ;;
         clean) rm -rf "$BUILD_DIR" ;;
         *) die "Unknown command: $command" ;;
     esac
