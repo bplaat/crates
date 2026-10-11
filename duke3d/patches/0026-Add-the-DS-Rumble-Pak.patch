@@ -118,10 +118,10 @@ index 89baba2..528313e 100644
      else
      {
 diff --git a/nds/duke3d_nds.c b/nds/duke3d_nds.c
-index abb9465..6f9a9cc 100644
+index 77da380..b90f8f8 100644
 --- a/nds/duke3d_nds.c
 +++ b/nds/duke3d_nds.c
-@@ -391,6 +391,7 @@ int main(int argc, char **argv)
+@@ -396,6 +396,7 @@ int main(int argc, char **argv)
          setCpuClock(true);
  
      NDS_InitVideo();

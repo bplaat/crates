@@ -16,9 +16,9 @@ the size of the GRP, extra command line options can be put in
  Engine/src/cache.c |   2 +-
  Game/src/game.c    | 118 +-----------
  Game/src/global.c  |  11 +-
- nds/duke3d_nds.c   | 440 +++++++++++++++++++++++++++++++++++++++++++++
+ nds/duke3d_nds.c   | 447 +++++++++++++++++++++++++++++++++++++++++++++
  nds/duke3d_nds.h   |  36 ++++
- 5 files changed, 491 insertions(+), 116 deletions(-)
+ 5 files changed, 498 insertions(+), 116 deletions(-)
  create mode 100644 nds/duke3d_nds.c
  create mode 100644 nds/duke3d_nds.h
 
@@ -227,10 +227,10 @@ index fb5766e..36df89b 100644
     //printf("Press any key to continue...\n");
 diff --git a/nds/duke3d_nds.c b/nds/duke3d_nds.c
 new file mode 100644
-index 0000000..abb9465
+index 0000000..77da380
 --- /dev/null
 +++ b/nds/duke3d_nds.c
-@@ -0,0 +1,440 @@
+@@ -0,0 +1,447 @@
 +//
 +// Nintendo DS startup
 +//
@@ -351,7 +351,7 @@ index 0000000..abb9465
 +static void PrintHeader(void)
 +{
 +    consoleClear();
-+    printf("\x1b[33;1m  Duke Nukem 3D\x1b[39;0m for Nintendo %s\n", isDSiMode() ? "DSi" : "DS");
++    printf("\x1b[33;1m  Duke Nukem 3D\x1b[39;0m for %s\n", isDSiMode() ? "NDSi" : "NDS");
 +    printf("\x1b[33m--------------------------------\x1b[39m");
 +}
 +
@@ -419,29 +419,33 @@ index 0000000..abb9465
 +    return FileExists("nitro:/duke3d.grp") ? "nitro:/duke3d.grp" : NULL;
 +}
 +
-+// The version of the game data, named by the size of the official GRPs,
-+// each keeps its settings and savegames in a folder of its own
-+static const char *GameVersion(const char *grp)
++// The version of the game data, known by the size of the official GRPs: its
++// folder, each keeps its settings and savegames in a folder of its own, and
++// its title for the loading screen, which fits the 32 columns
++typedef struct
 +{
-+    static const struct
++    off_t size;
++    const char *name, *title;
++} game_version_t;
++
++static const game_version_t *GameVersion(const char *grp)
++{
++    static const game_version_t versions[] =
 +    {
-+        off_t size;
-+        const char *name;
-+    } versions[] =
-+    {
-+        { 11035779, "shareware" },
-+        { 26524524, "registered" },
-+        { 44348015, "atomic" },
-+        { 44356548, "atomic" },
++        { 11035779, "shareware", "Duke3D Shareware" },
++        { 26524524, "registered", "Duke Nukem 3D" },
++        { 44348015, "atomic", "Duke Nukem 3D Atomic" },
++        { 44356548, "atomic", "Duke Nukem 3D Atomic" },
++        { 0, "other", "Duke Nukem 3D" },
 +    };
 +    struct stat st;
 +    unsigned i;
 +
 +    if (stat(grp, &st) == 0)
-+        for (i = 0; i < sizeof(versions) / sizeof(versions[0]); ++i)
++        for (i = 0; i < sizeof(versions) / sizeof(versions[0]) - 1; ++i)
 +            if (versions[i].size == st.st_size)
-+                return versions[i].name;
-+    return "other";
++                return &versions[i];
++    return &versions[sizeof(versions) / sizeof(versions[0]) - 1];
 +}
 +
 +// ---------------------------------------------------------------------------
@@ -618,6 +622,7 @@ index 0000000..abb9465
 +    static Thread game_thread;
 +    static char version_dir[64];
 +    const char *grp;
++    const game_version_t *version;
 +
 +    // In DSi mode the ARM9 runs at twice the speed of the DS
 +    if (isDSiMode())
@@ -644,6 +649,8 @@ index 0000000..abb9465
 +        return 1;
 +    }
 +
++    version = GameVersion(grp);
++
 +    // Config and savegames go to the version's folder in the data folder on
 +    // the SD card, paths without a device need a current device, the ROM
 +    // without an SD card
@@ -651,7 +658,7 @@ index 0000000..abb9465
 +    {
 +        mkdir("/data", 0777);
 +        mkdir(DATA_DIR, 0777);
-+        snprintf(version_dir, sizeof(version_dir), DATA_DIR "/%s", GameVersion(grp));
++        snprintf(version_dir, sizeof(version_dir), DATA_DIR "/%s", version->name);
 +        mkdir(version_dir, 0777);
 +    }
 +    ReadArgs();
@@ -660,7 +667,7 @@ index 0000000..abb9465
 +        chdir("nitro:/");
 +        printf("\n\x1b[33;1m  %s, saving is off\x1b[39;0m\n", have_fat ? "Can't write the SD card" : "No SD card");
 +    }
-+    printf("\n  Loading\n\n  ");
++    printf("\n  Loading %s\n\n  ", version->title);
 +    fflush(stdout);
 +    ShowTitle(grp);
 +    SetLoadingOutput(true);

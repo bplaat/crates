@@ -41,7 +41,8 @@ when you take damage and when you fire, unless Rumble is turned off, without
 one nothing changes.
 
 While the game loads the top screen shows its title screen, with the Duke
-Nukem 3D logo, and the touch screen the progress.
+Nukem 3D logo, and the touch screen the version it loads, the shareware,
+registered or Atomic Edition, and the progress.
 
 Closing the lid puts the console to sleep. L+R+START+SELECT, or the DSi power
 button, quits.
