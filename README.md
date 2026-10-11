@@ -17,6 +17,12 @@ top, so the upstream code stays untouched in this repository.
     </a>
 </td>
 <td width="100" align="center">
+    <a href="./duke3d">
+        <img src="duke3d/docs/icon.png" alt="Duke Nukem 3D icon" width="48" height="48"/><br/>
+        Duke Nukem 3D
+    </a>
+</td>
+<td width="100" align="center">
     <a href="./quake">
         <img src="quake/docs/icon.png" alt="Quake icon" width="48" height="48"/><br/>
         Quake
@@ -31,9 +37,10 @@ top, so the upstream code stays untouched in this repository.
 </tr>
 </table>
 
-- [DOOM](doom) Based on [doomgeneric](https://github.com/ozkl/doomgeneric) (Chocolate Doom based) - playable
-- [Quake](quake) Based on [id Software's Quake](https://github.com/id-Software/Quake) (WinQuake) - playable
-- [Wolfenstein 3D](wolf3d) Based on [Wolf4SDL](https://github.com/KS-Presto/Wolf4SDL) - playable
+- [DOOM](doom) Based on [doomgeneric](https://github.com/ozkl/doomgeneric) (Chocolate Doom based)
+- [Duke Nukem 3D](duke3d) Based on [Chocolate Duke3D](https://github.com/fabiensanglard/chocolate_duke3D) (BUILD engine)
+- [Quake](quake) Based on [id Software's Quake](https://github.com/id-Software/Quake) (WinQuake)
+- [Wolfenstein 3D](wolf3d) Based on [Wolf4SDL](https://github.com/KS-Presto/Wolf4SDL)
 
 ## Port layout
 
@@ -49,8 +56,9 @@ Every port is a self-contained directory:
 | `assets/`   | Game data embedded in the ROM (gitignored, never commit it) |
 | `target/`   | Sources, work files and the resulting ROM (gitignored)      |
 
-All three ports keep settings and savegames directly in
+All ports keep settings and savegames directly in
 `/data/<port>/<version>/` on the SD card: Doom uses the WAD filename,
+Duke Nukem 3D the GRP version (`shareware`, `registered` or `atomic`),
 Quake the game folder (such as `id1`), and Wolf3D the data extension
 (`wl1`, `wl3` or `wl6`). Shared startup files such as `args.txt` stay in
 `/data/<port>/`.
