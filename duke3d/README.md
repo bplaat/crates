@@ -131,12 +131,12 @@ of main RAM on a 16-bit bus at half its clock.
   assembly drawers kept their state in globals and counted every pixel for a
   debugging feature. They keep it in registers, the wall drawer does two
   columns at a time, a halfword per row, in an assembly loop as its values
-  only just fit in the registers, the masked wall drawer reads the pitch once,
-  and the counter is gone. Twice the
-  frame rate. Ken's reciprocals read the bits of an integer turned into a
-  float, `floatbits` works them out with a count of leading zeros, and the
-  sloped floors keep their depth in an integer: the renderer does no
-  floating point math.
+  only just fit in the registers, the floor drawer two pixels at a time in
+  assembly too, the masked wall drawer reads the pitch once, and the counter
+  is gone. Twice the frame rate. Ken's reciprocals read the bits of an
+  integer turned into a float, `floatbits` works them out with a count of
+  leading zeros, and the sloped floors keep their depth in an integer: the
+  renderer does no floating point math.
 - [0009](patches/0009-Clear-and-copy-buffers-a-word-at-a-time.patch):
   `clearbufbyte` and `copybufbyte` work by words.
 - [0010](patches/0010-Use-the-DS-hardware-divider.patch): `scale` and
