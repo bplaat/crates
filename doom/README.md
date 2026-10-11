@@ -171,61 +171,64 @@ of main RAM on a 16-bit bus at half its clock.
 - [0020](patches/0020-Run-hot-functions-from-ITCM.patch): `HOT_CODE` puts
   single functions in ITCM as ARM code: the automap's line drawing and
   `SlopeDiv`, and in the platform the touch screen's patch drawer and the
-  DMA interrupt. The build puts whole files there (0021).
+  DMA interrupt. The build puts whole files there (0023).
+- [0021](patches/0021-Inline-FixedMul-in-ARM-code.patch): `FixedMul` is
+  inline in the ARM code of the renderer, which multiplies for every column
+  and span.
 
 ### The DS platform
 
-- [0021](patches/0021-Read-response-files.patch): Response files work
+- [0022](patches/0022-Read-response-files.patch): Response files work
   again, for the options in `/data/doom/args.txt`.
-- [0022](patches/0022-Add-a-Nintendo-DS-build.patch): `Makefile.nds` builds
+- [0023](patches/0023-Add-a-Nintendo-DS-build.patch): `Makefile.nds` builds
   a DSi enhanced `.nds` with the [toolchain](../toolchain), without the
   32-bit `DG_ScreenBuffer` and SDL_mixer. The renderer, sight checks and
   fixed point math run from ITCM as ARM code, which is nearly full, the rest
   is Thumb code in main RAM.
-- [0023](patches/0023-Add-the-DS-game-picker.patch): `doomgeneric_nds.c`
+- [0024](patches/0024-Add-the-DS-game-picker.patch): `doomgeneric_nds.c`
   switches the ARM9 to 134 MHz in DSi mode, finds every IWAD and mod in
   NitroFS and on the SD card, shows them in a picker with each game's title
   picture, shows a loading screen and keeps config and saves in
   `/data/doom/<wad name>/`, keeping mods apart from their IWADs. Doom runs
   in a thread with its stack in main RAM, DTCM
   mostly holds the colormaps. Also the doomgeneric timing interface.
-- [0024](patches/0024-Fit-the-system-layer-to-the-DS.patch): The zone
+- [0025](patches/0025-Fit-the-system-layer-to-the-DS.patch): The zone
   takes all free RAM (4 MiB on the DS, 16 MiB on the DSi), `I_Quit` returns to
   the homebrew launcher, `I_Error` shows the message on the touch screen and
   the startup banner fits the 32 column console.
-- [0025](patches/0025-Add-DS-video.patch): `i_ndsvideo.c` page flips two
+- [0026](patches/0026-Add-DS-video.patch): `i_ndsvideo.c` page flips two
   8bpp VRAM backgrounds on vblank. DMA copies each frame there while the game
   runs its next tic, a row at a time chained by interrupts. Scaled frames use
   the affine background hardware, smoothed by a second layer half a pixel
   further that is alpha blended on top. Doom's palette lives in the hardware
   palette, so damage and pickup flashes cost nothing.
-- [0026](patches/0026-Add-DS-buttons.patch): `i_ndsinput.c` maps the
+- [0027](patches/0027-Add-DS-buttons.patch): `i_ndsinput.c` maps the
   buttons to game keys while playing and to menu keys in the menus.
-- [0027](patches/0027-Add-the-DS-touch-screen.patch): `i_ndstouch.c` draws
+- [0028](patches/0028-Add-the-DS-touch-screen.patch): `i_ndstouch.c` draws
   the status bar, automap and weapon cells from the WAD's own graphics, copies
   them to VRAM by DMA and selects a weapon when its cell is tapped. The
   texts over the map are a layer of their own, drawn only when they change.
   It keeps copies of the lumps it draws, Doom makes cached lumps purgeable
   again when it uses them itself.
-- [0028](patches/0028-Add-DS-music.patch): `i_ndsmusic.c` plays MUS and
+- [0029](patches/0029-Add-DS-music.patch): `i_ndsmusic.c` plays MUS and
   MIDI on a wavetable synth on hardware channels 8-15, with waveforms per
   instrument family and synthesized drums, sequenced by a 140 Hz thread.
-- [0029](patches/0029-Add-DS-sound-effects.patch): `i_ndssound.c` plays
+- [0030](patches/0030-Add-DS-sound-effects.patch): `i_ndssound.c` plays
   sound effects on hardware channels 0-7, which do the resampling, volume and
   stereo panning.
-- [0030](patches/0030-Use-single-precision-and-reduce-floating-point-work.patch):
+- [0031](patches/0031-Use-single-precision-and-reduce-floating-point-work.patch):
   The mouse math is single precision, and the music reuses sine samples
   across harmonics and normalizes with one division per wave.
-- [0031](patches/0031-Skip-the-WAD-checksum-only-netgames-use.patch): The
+- [0032](patches/0032-Skip-the-WAD-checksum-only-netgames-use.patch): The
   WAD directory's SHA-1, only used by the network client that isn't built,
   isn't worked out at startup.
-- [0032](patches/0032-Build-the-trig-tables-at-startup.patch): `finesine`,
+- [0033](patches/0033-Build-the-trig-tables-at-startup.patch): `finesine`,
   `finetangent` and `tantoangle` are built at startup from a quarter, a
   half and the shrinking steps, the same to the bit (demos stay in sync),
   51 KiB less ROM for 14 KiB more RAM.
-- [0033](patches/0033-Pack-the-states-into-20-bytes.patch): `state_t`
+- [0034](patches/0034-Pack-the-states-into-20-bytes.patch): `state_t`
   uses shorts for its small fields, 20 bytes a state instead of 28.
-- [0034](patches/0034-Add-the-DS-Rumble-Pak.patch): `i_ndsinput.c`
+- [0035](patches/0035-Add-the-DS-Rumble-Pak.patch): `i_ndsinput.c`
   rumbles a Rumble Pak in the GBA slot through `I_Tactile`, on taking
   damage and firing, switching it at 60 Hz from a tick task. Options gets
   Rumble On/Off, kept as `rumble` in the config. Its label is cut from the
