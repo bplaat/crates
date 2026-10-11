@@ -117,11 +117,16 @@ void* memset(void* dst, int value, size_t size) {
     return dst;
 }
 
+// Equal words are skipped four bytes at a time when both line up, the bytes find the difference
 int memcmp(const void* a, const void* b, size_t size) {
     const uint8_t *x = a, *y = b;
-    for (size_t i = 0; i < size; i++) {
-        if (x[i] != y[i])
-            return x[i] - y[i];
+    if ((((uintptr_t)x | (uintptr_t)y) & 3) == 0) {
+        for (; size >= 4 && *(const word*)x == *(const word*)y; size -= 4)
+            x += 4, y += 4;
+    }
+    for (; size; size--, x++, y++) {
+        if (*x != *y)
+            return *x - *y;
     }
     return 0;
 }

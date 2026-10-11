@@ -28,7 +28,7 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
 
 ## Files
 
-- `libc/` replaces newlib: word copying `memcpy`/`memset` in ITCM (VRAM safe), a first-fit
+- `libc/` replaces newlib: word copying `memcpy`/`memset`/`memcmp` in ITCM (VRAM safe), a first-fit
   `malloc`, buffered `stdio` on the devoptab devices (SD card, NitroFS, console), the `printf` and
   `scanf` families, `strtof`, float math, time and `setjmp`. Floats are single precision
   throughout, `strtod` and `atof` too, nothing does double precision math. `stdin` is always

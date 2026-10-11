@@ -220,6 +220,11 @@ static void test_memory(void) {
         }
     }
     CHECK(ok);
+    // memcmp skips equal words, the first different byte decides
+    memcpy(destination, source, 300);
+    destination[9] = 200;
+    CHECK(memcmp(destination, source, 300) > 0 && memcmp(source, destination, 300) < 0 &&
+          memcmp(destination, source, 9) == 0 && memcmp(destination + 1, source + 1, 20) > 0);
     for (int i = 0; i < 300; i++)
         destination[i] = (uint8_t)i;
     memmove(destination + 3, destination, 200);
