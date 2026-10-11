@@ -7,20 +7,22 @@ Writing the view down the columns of the frame misses the data cache
 with every pixel, which is slow in DS main RAM. The ray caster only
 notes the texture column of each post and ScaleLine queues the sprite
 columns over each column of the view instead. Once the weapon is queued
-the view is put together in strips of 8 columns in DTCM: the ceiling and
-floor filled in words, so the screen isn't cleared first, then the wall
-post and the sprite columns over it, and the strip is copied into the
-frame in doublewords. The texture steps in 16.16 fixed point through a
-copy of its column in DTCM, four pixels per loop, as a branch costs the
-ARM9 three cycles. Posts taller than the view are clipped at once.
+the view is put together in strips of 16 columns in DTCM: the ceiling
+and floor filled in words, only the rows not every post of the strip
+covers, so the screen isn't cleared first, then the wall posts and the
+sprite columns over them, and each row of the strip is copied into the
+frame as one burst of four words. The texture steps in 16.16 fixed
+point, four pixels per loop with their loads first, as a branch costs
+the ARM9 three cycles and a load the one after it. Posts taller than
+the view are clipped at once.
 ---
  wl_def.h   |   8 ++++
- wl_draw.c  | 120 ++++++++++++++++++++++++++++++++---------------------
- wl_scale.c |  79 ++++++++++++++++++++++++++++++++---
- 3 files changed, 155 insertions(+), 52 deletions(-)
+ wl_draw.c  | 132 ++++++++++++++++++++++++++++++++++-------------------
+ wl_scale.c |  79 ++++++++++++++++++++++++++++++--
+ 3 files changed, 166 insertions(+), 53 deletions(-)
 
 diff --git a/wl_def.h b/wl_def.h
-index 3ac7e4e..edde473 100644
+index 02c3902..094ff04 100644
 --- a/wl_def.h
 +++ b/wl_def.h
 @@ -1235,6 +1235,14 @@ typedef struct
@@ -31,7 +33,7 @@ index 3ac7e4e..edde473 100644
 +// The view is put together in strips of VIEWSTRIP columns (wl_draw.c), the
 +// sprite columns over a column of a strip are drawn into it with
 +// DrawSpriteColumns
-+#define VIEWSTRIP 8
++#define VIEWSTRIP 16
 +void DrawSpriteColumns (byte *post, int x);
 +// Set once the frame holds a whole new view, cleared by whoever takes it
 +extern boolean viewdrawn;
@@ -39,7 +41,7 @@ index 3ac7e4e..edde473 100644
  void Transform3DShape (visobj_t *sprite);
  #endif
 diff --git a/wl_draw.c b/wl_draw.c
-index f0cbe74..3b42520 100644
+index f0cbe74..d9fff10 100644
 --- a/wl_draw.c
 +++ b/wl_draw.c
 @@ -296,11 +296,23 @@ int16_t CalcHeight (void)
@@ -69,7 +71,7 @@ index f0cbe74..3b42520 100644
  #ifdef USE_SKYWALLPARALLAX
      if (tilehit == 16)
      {
-@@ -309,59 +321,72 @@ void ScalePost (void)
+@@ -309,59 +321,82 @@ void ScalePost (void)
      }
  #endif
  
@@ -85,60 +87,71 @@ index f0cbe74..3b42520 100644
 -    yoffs = (centery - ywcount) * bufferPitch;
 -    if(yoffs < 0) yoffs = 0;
 -    yoffs += postx;
-+// Fills the strip with the ceiling above the middle of the view and the
-+// floor below it
-+static void FillStrip (void)
++// Draws the wall post of column x into its column of the strip, from row
++// y1 for n rows
++static void DrawPost (byte *post, int x, int y1, int n)
 +{
-+    memset(viewstrip, vgaCeiling[gamestate.episode*10+gamestate.mapon], centery * VIEWSTRIP);
-+    memset(viewstrip + centery * VIEWSTRIP, 0x19, (viewheight - centery) * VIEWSTRIP);
-+}
- 
--    yendoffs = centery + ywcount - 1;
--    yw=TEXTURESIZE-1;
-+// Draws the wall post of column x into its column of the strip
-+static void DrawPost (byte *post, int x)
-+{
-+    // The texture steps in 16.16 fixed point, from the top of the wall,
-+    // through a copy of its column in DTCM
-+    static byte column[TEXTURESIZE] __attribute__((section(".sbss"), aligned(4)));
++    // The texture steps in 16.16 fixed point, from the top of the wall
++    const byte *src = postsources[x];
 +    int height = wallheight[x] >> 3;            // half the height in pixels
-+    int top = centery - height;
-+    int y1 = MAX(top, 0), n = MIN(centery + height, viewheight) - y1;
-+    const byte *src;
-+    fixed step, frac;
++    fixed step = div32((TEXTURESIZE/2) << FRACBITS, height);
++    fixed frac = (y1 - (centery - height)) * step;
 +
-+    if (height <= 0 || n <= 0)
-+        return;
-+    src = memcpy(column, postsources[x], TEXTURESIZE);
-+    step = div32((TEXTURESIZE/2) << FRACBITS, height);
-+    frac = (y1 - top) * step;
 +    post += y1 * VIEWSTRIP;
- 
--    while(yendoffs >= viewheight)
-+    // Four pixels per loop, a branch costs the ARM9 three cycles
++    // Four pixels per loop, a branch costs the ARM9 three cycles, the loads
++    // go first so none waits for the one before
 +    for (; n >= 4; n -= 4, post += 4 * VIEWSTRIP)
-     {
--        ywcount -= TEXTURESIZE/2;
--        while(ywcount <= 0)
--        {
--            ywcount += yd;
--            yw--;
--        }
--        yendoffs--;
-+        post[0] = src[frac >> FRACBITS];
-+        frac += step;
-+        post[VIEWSTRIP] = src[frac >> FRACBITS];
-+        frac += step;
-+        post[2 * VIEWSTRIP] = src[frac >> FRACBITS];
-+        frac += step;
-+        post[3 * VIEWSTRIP] = src[frac >> FRACBITS];
-+        frac += step;
-     }
--    if(yw < 0) return;
++    {
++        byte a = src[frac >> FRACBITS];
++        byte b = src[(frac + step) >> FRACBITS];
++        byte c = src[(frac + 2 * step) >> FRACBITS];
++        byte d = src[(frac + 3 * step) >> FRACBITS];
++        frac += 4 * step;
++        post[0] = a;
++        post[VIEWSTRIP] = b;
++        post[2 * VIEWSTRIP] = c;
++        post[3 * VIEWSTRIP] = d;
++    }
 +    for (; n > 0; n--, post += VIEWSTRIP, frac += step)
 +        *post = src[frac >> FRACBITS];
 +}
  
+-    yendoffs = centery + ywcount - 1;
+-    yw=TEXTURESIZE-1;
++// Puts the view together a strip at a time, into the frame at vbuf
++static void DrawView (void)
++{
++    byte ceiling = vgaCeiling[gamestate.episode*10+gamestate.mapon];
++    int pitch = bufferPitch, height = viewheight;
++    int x, i, y;
+ 
+-    while(yendoffs >= viewheight)
++    for (x = 0; x < viewwidth; x += VIEWSTRIP)
+     {
+-        ywcount -= TEXTURESIZE/2;
+-        while(ywcount <= 0)
++        const uint32_t *src = (const uint32_t *) viewstrip;
++        byte *dest = vbuf + x;
++        int y1[VIEWSTRIP], y2[VIEWSTRIP];
++        int top = 0, bottom = height;
++
++        // The rows of the posts, the ceiling above the lowest top and the
++        // floor below the highest bottom, the rows between are wall in
++        // every column
++        for (i = 0; i < VIEWSTRIP; i++)
+         {
+-            ywcount += yd;
+-            yw--;
++            int h = wallheight[x + i] >> 3;
++            y1[i] = h > 0 ? MAX(centery - h, 0) : centery;
++            y2[i] = h > 0 ? MIN(centery + h, height) : centery;
++            top = MAX(top, y1[i]);
++            bottom = MIN(bottom, y2[i]);
+         }
+-        yendoffs--;
+-    }
+-    if(yw < 0) return;
+-
 -#ifdef USE_SHADING
 -    col = curshades[postsource[yw]];
 -#else
@@ -146,20 +159,12 @@ index f0cbe74..3b42520 100644
 -#endif
 -    yendoffs = yendoffs * bufferPitch + postx;
 -    while(yoffs <= yendoffs)
-+// Puts the view together a strip at a time, into the frame at vbuf
-+static void DrawView (void)
-+{
-+    int x, i, y;
-+
-+    for (x = 0; x < viewwidth; x += VIEWSTRIP)
-     {
+-    {
 -        vbuf[yendoffs] = col;
 -        ywcount -= TEXTURESIZE/2;
 -        if(ywcount <= 0)
-+        const uint64_t *src = (const uint64_t *) viewstrip;
-+        byte *dest = vbuf + x;
-+
-+        FillStrip ();
++        memset(viewstrip, ceiling, top * VIEWSTRIP);
++        memset(viewstrip + bottom * VIEWSTRIP, 0x19, (height - bottom) * VIEWSTRIP);
 +        for (i = 0; i < VIEWSTRIP; i++)
          {
 -            do
@@ -174,18 +179,26 @@ index f0cbe74..3b42520 100644
 -#else
 -            col = postsource[yw];
 -#endif
-+            DrawPost (viewstrip + i, x + i);
++            if (y2[i] > y1[i])
++                DrawPost (viewstrip + i, x + i, y1[i], y2[i] - y1[i]);
 +            DrawSpriteColumns (viewstrip + i, x + i);
++        }
++        // A row of the strip is four words, written as one burst
++        for (y = 0; y < height; y++, dest += pitch, src += 4)
++        {
++            uint32_t a = src[0], b = src[1], c = src[2], d = src[3];
++            ((uint32_t *) dest)[0] = a;
++            ((uint32_t *) dest)[1] = b;
++            ((uint32_t *) dest)[2] = c;
++            ((uint32_t *) dest)[3] = d;
          }
 -        yendoffs -= bufferPitch;
-+        for (y = 0; y < viewheight; y++, dest += bufferPitch)
-+            *(uint64_t *) dest = *src++;
      }
 +    viewdrawn = true;
  }
  
  #ifdef USE_SKYWALLPARALLAX
-@@ -1487,7 +1512,6 @@ void ThreeDRefresh (void)
+@@ -1487,7 +1522,6 @@ void ThreeDRefresh (void)
  //
  // follow the walls from there to the right, drawing as we go
  //
@@ -193,7 +206,7 @@ index f0cbe74..3b42520 100644
  #if defined(USE_FEATUREFLAGS) && defined(USE_STARSKY)
      if(GetFeatureFlags() & FF_STARSKY)
          DrawStarSky();
-@@ -1527,6 +1551,8 @@ void ThreeDRefresh (void)
+@@ -1527,6 +1561,8 @@ void ThreeDRefresh (void)
  
      DrawPlayerWeapon ();    // draw player's hands
  

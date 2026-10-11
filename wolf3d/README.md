@@ -152,10 +152,10 @@ code is written for the DS only, without `__NDS__` checks.
 - [0012](patches/0012-Draw-the-view-through-strips-in-DTCM.patch):
   Writing the view down the columns of the frame misses the data cache with
   every pixel, so the ray caster and the sprites only note their columns and
-  the view is put together in strips of 8 columns in DTCM: the ceiling and
-  floor, the wall posts and the sprite columns over them, then copied into
-  the frame in doublewords. The texture steps in fixed point from a copy of
-  its column in DTCM, four pixels per loop.
+  the view is put together in strips of 16 columns in DTCM: the ceiling and
+  floor where not every wall post covers the row, the wall posts and the
+  sprite columns over them, then copied into the frame a row of four words
+  at a time. The texture steps in fixed point, four pixels per loop.
 
 ### Sound
 
