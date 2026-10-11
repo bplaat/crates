@@ -16,6 +16,14 @@ int atoi(const char* str) {
     return (int)strtol(str, NULL, 10);
 }
 
+long atol(const char* str) {
+    return strtol(str, NULL, 10);
+}
+
+double atof(const char* str) {
+    return strtod(str, NULL);
+}
+
 // Parses the digits after the sign, the base 0 means C notation (0x hex, 0 octal or decimal)
 static unsigned long parse(const char* str, char** end, int base, bool* negative, bool* overflow) {
     const char* s = str;
@@ -71,6 +79,103 @@ unsigned long strtoul(const char* restrict str, char** restrict end, int base) {
         return ULONG_MAX;
     }
     return negative ? -value : value;
+}
+
+// Whether str starts with word, ignoring case
+static bool starts_with(const char* str, const char* word) {
+    for (; *word; str++, word++) {
+        if ((*str | 32) != *word)
+            return false;
+    }
+    return true;
+}
+
+// The first 9 significant digits go into an integer, which is then scaled by the power of ten of
+// the exponent. Up to 2^24 with a power up to 10^10 both are exact floats and the result is
+// rounded right, the usual numbers. Others are scaled by the squares 10^1, 10^2, 10^4 up to 10^32,
+// within 3 units in the last place. Dividing by them for negative exponents rounds better than
+// multiplying by their inverses. All in single precision, the DS has no floating point unit.
+float strtof(const char* restrict str, char** restrict end) {
+    static const float powers[] = {1e1f, 1e2f, 1e4f, 1e8f, 1e16f, 1e32f};
+    const char* s = str;
+    while (isspace((unsigned char)*s))
+        s++;
+    bool negative = *s == '-';
+    if (*s == '-' || *s == '+')
+        s++;
+
+    float value;
+    if (starts_with(s, "inf") || starts_with(s, "nan")) {
+        value = (*s | 32) == 'i' ? __builtin_inff() : __builtin_nanf("");
+        s += (*s | 32) == 'i' && starts_with(s, "infinity") ? 8 : 3;
+    } else {
+        uint32_t mantissa = 0;
+        int digits = 0, exponent = 0;
+        const char* start = s;
+        for (; isdigit((unsigned char)*s); s++) {
+            if (digits < 9) {
+                mantissa = mantissa * 10 + (*s - '0');
+                digits += mantissa != 0;
+            } else {
+                exponent++;
+            }
+        }
+        if (*s == '.') {
+            for (s++; isdigit((unsigned char)*s); s++) {
+                if (digits < 9) {
+                    mantissa = mantissa * 10 + (*s - '0');
+                    digits += mantissa != 0;
+                    exponent--;
+                }
+            }
+        }
+        if (s == start || (s == start + 1 && *start == '.')) {
+            if (end)
+                *end = (char*)str;
+            return 0;
+        }
+        if ((*s | 32) == 'e') {
+            const char* e = s + 1;
+            bool negative_exponent = *e == '-';
+            if (*e == '-' || *e == '+')
+                e++;
+            if (isdigit((unsigned char)*e)) {
+                int power = 0;
+                for (; isdigit((unsigned char)*e); e++) {
+                    if (power < 10000)
+                        power = power * 10 + (*e - '0');
+                }
+                exponent += negative_exponent ? -power : power;
+                s = e;
+            }
+        }
+
+        value = (float)mantissa;
+        unsigned scale = (unsigned)(exponent < 0 ? -exponent : exponent);
+        if (mantissa < 1u << 24 && scale <= 10) {
+            // The digits and the power of ten are exact floats, one rounding is the right one
+            static const float exact[] = {1e0f, 1e1f, 1e2f, 1e3f, 1e4f, 1e5f, 1e6f, 1e7f, 1e8f, 1e9f, 1e10f};
+            value = exponent < 0 ? value / exact[scale] : value * exact[scale];
+            scale = 0;
+        }
+        for (int i = 0; scale && mantissa && i < (int)(sizeof(powers) / sizeof(powers[0])); i++, scale >>= 1) {
+            if (scale & 1)
+                value = exponent < 0 ? value / powers[i] : value * powers[i];
+        }
+        // Still more than 10^63 is out of range either way
+        if (scale && mantissa)
+            value = exponent < 0 ? 0 : __builtin_inff();
+        if (mantissa && (value == 0 || __builtin_isinf(value)))
+            errno = ERANGE;
+    }
+    if (end)
+        *end = (char*)s;
+    return negative ? -value : value;
+}
+
+// With float precision, which is all the DS works in
+double strtod(const char* restrict str, char** restrict end) {
+    return strtof(str, end);
 }
 
 static void swap(char* a, char* b, size_t size) {

@@ -8,6 +8,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/iosupport.h>
+#include <sys/uio.h>
 #include <unistd.h>
 
 #define MAX_FILES 32
@@ -252,6 +253,42 @@ off_t lseek(int fd, off_t offset, int whence) {
     return position;
 }
 
+ssize_t readv(int fd, const struct iovec* vector, int count) {
+    ssize_t total = 0;
+    for (int i = 0; i < count; i++) {
+        ssize_t done = read(fd, vector[i].iov_base, vector[i].iov_len);
+        if (done < 0)
+            return total ? total : -1;
+        total += done;
+        if ((size_t)done < vector[i].iov_len)
+            break;
+    }
+    return total;
+}
+
+ssize_t writev(int fd, const struct iovec* vector, int count) {
+    ssize_t total = 0;
+    for (int i = 0; i < count; i++) {
+        ssize_t done = write(fd, vector[i].iov_base, vector[i].iov_len);
+        if (done < 0)
+            return total ? total : -1;
+        total += done;
+        if ((size_t)done < vector[i].iov_len)
+            break;
+    }
+    return total;
+}
+
+int fstat(int fd, struct stat* st) {
+    struct _reent r;
+    const Handle* h = handle(fd, &r);
+    if (!h)
+        return -1;
+    if (!h->device->fstat_r)
+        return not_supported();
+    return result(h->device->fstat_r(&r, h->file, st), &r);
+}
+
 int stat(const char* path, struct stat* st) {
     char buffer[PATH_MAX];
     struct _reent r;
@@ -261,6 +298,12 @@ int stat(const char* path, struct stat* st) {
     if (!device->stat_r)
         return not_supported();
     return result(device->stat_r(&r, path, st), &r);
+}
+
+int access(const char* path, int mode) {
+    struct stat st;
+    (void)mode;
+    return stat(path, &st);
 }
 
 int mkdir(const char* path, mode_t mode) {

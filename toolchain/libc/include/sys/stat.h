@@ -17,6 +17,11 @@
 #define S_IRWXO 0007
 #define S_IROTH 0004
 #define S_IWOTH 0002
+#define S_IXOTH 0001
+// The old names of the owner's permissions
+#define S_IREAD S_IRUSR
+#define S_IWRITE S_IWUSR
+#define S_IEXEC S_IXUSR
 
 struct stat {
     dev_t st_dev;
@@ -35,4 +40,5 @@ struct stat {
 };
 
 int stat(const char* restrict path, struct stat* restrict st);
+int fstat(int fd, struct stat* st);
 int mkdir(const char* path, mode_t mode);

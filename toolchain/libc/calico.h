@@ -7,6 +7,7 @@
 
 #include <calico/arm/common.h>
 #include <calico/nds/env.h>
+#include <calico/system/tick.h>
 #include <sys/reent.h>
 #include <sys/time.h>
 

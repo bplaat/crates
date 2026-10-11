@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <sys/uio.h>
 #include <time.h>
 #include <unistd.h>
 
@@ -119,6 +120,24 @@ static void test_format(void) {
     CHECK(sscanf("  -7 word x", "%d %s %c", &a, word, &c) == 3 && a == -7 && !strcmp(word, "word") && c == 'x');
     CHECK(sscanf("ff 0x10", "%x %i", &a, &b) == 2 && a == 255 && b == 16);
     CHECK(sscanf("abc", "%d", &a) == 0);
+    // Scansets, a quoted string read into the buffer it comes from
+    char quoted[16] = "\"two words\"x";
+    CHECK(sscanf(quoted, "\"%[^\"]\"", quoted) == 1 && !strcmp(quoted, "two words"));
+    CHECK(sscanf("abc123-]x", "%[a-c]%2[0-9]%*[0-9]%[]-]", word, text, quoted) == 3 && !strcmp(word, "abc") &&
+          !strcmp(text, "12") && !strcmp(quoted, "-]"));
+    CHECK(sscanf("xyz", "%[a-c]", word) == 0);
+    float f = 0;
+    double d = 0;
+    int count = 0;
+    CHECK(sscanf("1.5 -2.5e2 3x", "%f %lf%n", &f, &d, &count) == 2 && f == 1.5f && d == -250.0 && count == 10);
+    CHECK(sscanf("0x1f -017", "%i %i", &a, &b) == 2 && a == 31 && b == -15);
+    // Floats end where a number can't go on, letters only spell inf and nan
+    CHECK(sscanf("3.5f rest", "%f%s", &f, word) == 2 && f == 3.5f && !strcmp(word, "f"));
+    CHECK(sscanf("-inf 1e5e", "%f %lf%s", &f, &d, word) == 3 && isinf(f) && f < 0 && d == 1e5 &&
+          !strcmp(word, "e"));
+    float g = 0;
+    CHECK(sscanf("infinity! nanx", "%f%s %f", &f, word, &g) == 3 && isinf(f) && !strcmp(word, "!") && isnan(g));
+    CHECK(sscanf("", "%d", &a) == EOF && sscanf("  ", "%s", word) == EOF);
 }
 
 static int compare_ints(const void* a, const void* b) {
@@ -134,7 +153,31 @@ static void test_stdlib(void) {
     CHECK(strtoul("4294967295", NULL, 10) == 4294967295u);
     errno = 0;
     CHECK(strtol("99999999999", NULL, 10) == LONG_MAX && errno == ERANGE);
-    CHECK(atoi("42") == 42 && abs(-5) == 5);
+    CHECK(atoi("42") == 42 && atol("-123456789") == -123456789L && abs(-5) == 5);
+    // Floats, strtod and atof with float precision too
+    CHECK(strtof(" -1.5e3x", &end) == -1500.0f && *end == 'x');
+    CHECK(strtof("0.1", NULL) == 0.1f && strtof("123456.7", NULL) == 123456.7f && atof(".25") == 0.25);
+    CHECK(strtod("3.14159f", &end) == (double)3.14159f && *end == 'f');
+    // Up to 7 digits and a power up to 10^10 are rounded exactly
+    CHECK(strtof("0.3", NULL) == 0.3f && strtof("1234.567", NULL) == 1234.567f && strtof("2.5e-3", NULL) == 2.5e-3f &&
+          strtof("9999999e10", NULL) == 9999999e10f && strtof("-0.0000001", NULL) == -0.0000001f);
+    check_float(strtof("1e-30", NULL), 1e-30f, 1e-6f, __LINE__, "strtof(\"1e-30\")");
+    check_float(strtof("6.02214076e23", NULL), 6.02214076e23f, 1e-6f, __LINE__, "strtof(\"6.02214076e23\")");
+    CHECK(isinf(strtof("-Infinity", &end)) && !*end && isnan(strtof("nan", NULL)));
+    CHECK(strtof("0e999", NULL) == 0 && strtof("x1", &end) == 0 && !strcmp(end, "x1"));
+    errno = 0;
+    CHECK(isinf(strtof("1e39", NULL)) && errno == ERANGE);
+    // alloca from stdlib.h like glibc's, and the byte order from sys/types.h
+    char* stack = alloca(64);
+    stack[63] = 1;
+    CHECK(stack[63] == 1 && BYTE_ORDER == LITTLE_ENDIAN);
+    // There is no input
+    CHECK(getchar() == EOF);
+    // clock() runs before anything slept or started a tick task
+    clock_t first = clock();
+    for (int spins = 0; clock() == first && spins < 10000000; spins++)
+        ;
+    CHECK(clock() != first);
 
     int numbers[100];
     for (int i = 0; i < 100; i++)
@@ -362,12 +405,16 @@ static void test_threads(void) {
     u32 elapsed = tickGetCount() - start;
     CHECK(elapsed >= ticksFromUsec(19000) && elapsed < ticksFromUsec(100000));
     CHECK(time(NULL) > 1700000000);
+    clock_t clock_start = clock();
+    usleep(20000);
+    CHECK(clock() - clock_start >= 19 * CLOCKS_PER_SEC / 1000 && clock() - clock_start < CLOCKS_PER_SEC / 10);
     // Dates, 2024-02-29 was a Thursday
     time_t leap = 1709251199;
     struct tm date;
     gmtime_r(&leap, &date);
     CHECK(date.tm_year == 124 && date.tm_mon == 1 && date.tm_mday == 29 && date.tm_hour == 23 && date.tm_min == 59 &&
           date.tm_sec == 59 && date.tm_wday == 4 && date.tm_yday == 59);
+    CHECK(localtime(&leap)->tm_mday == 29 && gmtime(&leap)->tm_hour == 23);
     date.tm_mon = 13;
     CHECK(mktime(&date) == 1740873599 && date.tm_year == 125 && date.tm_mon == 2 && date.tm_mday == 1);
 }
@@ -391,6 +438,7 @@ static void test_files(void) {
     CHECK(size == 8890);
     fclose(file);
     CHECK(stat("data.txt", &st) == 0 && st.st_size == size);
+    CHECK(access("data.txt", F_OK) == 0 && access("missing.txt", R_OK) == -1 && errno == ENOENT);
 
     file = fopen("data.txt", "r");
     char line[64];
@@ -400,6 +448,13 @@ static void test_files(void) {
         sscanf(line, "line %d", &last);
     }
     CHECK(lines == 1000 && last == 999 && feof(file));
+    // fscanf reads on where it stopped, ungetc puts a character back
+    fseek(file, 0, SEEK_SET);
+    char name[8];
+    int number = -1, next_number = -1;
+    CHECK(fscanf(file, "%4s %d\n%*s %d", name, &number, &next_number) == 3 && !strcmp(name, "line") && number == 0 &&
+          next_number == 1);
+    CHECK(fgetc(file) == '\n' && ungetc('L', file) == 'L' && fgetc(file) == 'L' && fgetc(file) == 'l');
     fseek(file, 5, SEEK_SET);
     CHECK(fgetc(file) == '0' && ftell(file) == 6);
     CHECK(fgetc(file) == '\n');
@@ -446,8 +501,14 @@ static void test_files(void) {
     CHECK(fopen("/missing/file.txt", "r") == NULL && errno == ENOENT);
     CHECK(fopen("nodevice:/file.txt", "r") == NULL && errno == ENODEV);
 
-    int fd = open("raw.bin", O_WRONLY | O_CREAT | O_TRUNC);
-    CHECK(fd >= 0 && write(fd, "raw", 3) == 3 && close(fd) == 0);
+    int fd = open("raw.bin", O_WRONLY | O_CREAT | O_TRUNC, S_IREAD | S_IWRITE);
+    CHECK(fd >= 0 && write(fd, "raw", 3) == 3);
+    struct iovec parts[2] = {{"ab", 2}, {"cde", 3}};
+    CHECK(writev(fd, parts, 2) == 5 && fstat(fd, &st) == 0 && st.st_size == 8 && close(fd) == 0);
+    char first[4] = {0}, second[5] = {0};
+    struct iovec into[2] = {{first, 3}, {second, 4}};
+    fd = open("raw.bin", O_RDONLY);
+    CHECK(fd >= 0 && readv(fd, into, 2) == 7 && !strcmp(first, "raw") && !strcmp(second, "abcd") && close(fd) == 0);
     CHECK(unlink("raw.bin") == 0);
 }
 

@@ -27,11 +27,13 @@ struct FILE {
 };
 
 static FILE standard_streams[] = {
+    {.fd = 0, .flags = FILE_READ},
     {.fd = 1, .flags = FILE_WRITE},
     {.fd = 2, .flags = FILE_WRITE},
 };
-FILE* const stdout = &standard_streams[0];
-FILE* const stderr = &standard_streams[1];
+FILE* const stdin = &standard_streams[0];
+FILE* const stdout = &standard_streams[1];
+FILE* const stderr = &standard_streams[2];
 
 // The open files, so exit() can flush them
 static FILE* files = NULL;
@@ -200,6 +202,19 @@ int getc(FILE* file) {
     return fgetc(file);
 }
 
+// Back into the buffer the character came from, or into the empty buffer of a file being read
+int ungetc(int c, FILE* file) {
+    if (c == EOF || file->writing || (file->position == 0 && (file->length || !file->size)))
+        return EOF;
+    if (file->position == 0)
+        file->length = 1;
+    else
+        file->position--;
+    file->buffer[file->position] = (char)c;
+    file->flags &= ~FILE_EOF;
+    return (unsigned char)c;
+}
+
 char* fgets(char* restrict str, int size, FILE* restrict file) {
     int length = 0;
     while (length + 1 < size) {
@@ -219,6 +234,10 @@ char* fgets(char* restrict str, int size, FILE* restrict file) {
 int fputc(int c, FILE* file) {
     unsigned char byte = (unsigned char)c;
     return fwrite(&byte, 1, 1, file) ? byte : EOF;
+}
+
+int getchar(void) {
+    return fgetc(stdin);
 }
 
 int putchar(int c) {

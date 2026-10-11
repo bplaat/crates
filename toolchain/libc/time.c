@@ -11,6 +11,12 @@ int usleep(unsigned microseconds) {
     return __syscall_nanosleep(&request, NULL);
 }
 
+// calico starts its tick counter with the first tick task, which may not have run yet
+clock_t clock(void) {
+    tickInit();
+    return (clock_t)(tickGetCount() * CLOCKS_PER_SEC / TICK_FREQ);
+}
+
 time_t time(time_t* result) {
     struct timeval now;
     __syscall_gettod_r(NULL, &now, NULL);
@@ -76,4 +82,15 @@ struct tm* gmtime_r(const time_t* restrict time, struct tm* restrict result) {
 
 struct tm* localtime_r(const time_t* restrict time, struct tm* restrict result) {
     return gmtime_r(time, result);
+}
+
+// The one result of gmtime and localtime, which the next call overwrites
+static struct tm shared_tm;
+
+struct tm* gmtime(const time_t* time) {
+    return gmtime_r(time, &shared_tm);
+}
+
+struct tm* localtime(const time_t* time) {
+    return localtime_r(time, &shared_tm);
 }

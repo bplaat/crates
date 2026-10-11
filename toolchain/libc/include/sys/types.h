@@ -2,6 +2,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <endian.h>
 #include <time.h>
 
 typedef int32_t ssize_t;

@@ -15,6 +15,7 @@
 #define _IONBF 2
 
 typedef struct FILE FILE;
+extern FILE* const stdin;
 extern FILE* const stdout;
 extern FILE* const stderr;
 
@@ -35,6 +36,10 @@ int puts(const char* str);
 int remove(const char* path);
 int rename(const char* old_path, const char* new_path);
 int getc(FILE* file);
+// Puts back one character read from a buffered file
+int ungetc(int c, FILE* file);
+// There is no input, stdin is always at its end
+int getchar(void);
 int putchar(int c);
 
 // Supports the d, i, u, x, X, o, p, s, c and % conversions with flags, width, precision and the
@@ -49,10 +54,13 @@ int vfprintf(FILE* restrict file, const char* restrict format, va_list args);
 int vsprintf(char* restrict buffer, const char* restrict format, va_list args);
 int vsnprintf(char* restrict buffer, size_t size, const char* restrict format, va_list args);
 
-// Supports the d, i, u, x, s, c and % conversions with widths, the * flag and the hh, h, l and ll
-// lengths
+// Supports the d, i, u, x, o, f, e, g, s, c, [, n and % conversions with widths, the * flag and
+// the hh, h, l and ll lengths, floats with float precision
 int sscanf(const char* restrict str, const char* restrict format, ...) __attribute__((format(scanf, 2, 3)));
+int fscanf(FILE* restrict file, const char* restrict format, ...) __attribute__((format(scanf, 2, 3)));
+int scanf(const char* restrict format, ...) __attribute__((format(scanf, 1, 2)));
 int vsscanf(const char* restrict str, const char* restrict format, va_list args);
+int vfscanf(FILE* restrict file, const char* restrict format, va_list args);
 
 // newlib's names for its integer only printf and scanf functions
 #define iprintf printf
@@ -65,3 +73,4 @@ int vsscanf(const char* restrict str, const char* restrict format, va_list args)
 #define vsniprintf vsnprintf
 #define siscanf sscanf
 #define vsiscanf vsscanf
+#define fiscanf fscanf
