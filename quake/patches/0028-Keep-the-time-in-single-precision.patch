@@ -298,10 +298,10 @@ index a72b2dd..912c555 100644
  
  void Host_ClearMemory (void);
 diff --git a/WinQuake/r_nds.c b/WinQuake/r_nds.c
-index fe45ad1..9777285 100644
+index 017f3df..f9d0a01 100644
 --- a/WinQuake/r_nds.c
 +++ b/WinQuake/r_nds.c
-@@ -2650,7 +2650,7 @@ static void R_DimView (void)
+@@ -2660,7 +2660,7 @@ static void R_DimView (void)
  
  void R_RenderView (void)
  {

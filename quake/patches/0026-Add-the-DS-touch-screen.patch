@@ -79,10 +79,10 @@ index 14c3b21..10e7dc5 100644
  	loadmodel->vertexes = NULL;
  	loadmodel->edges = NULL;
 diff --git a/WinQuake/model.h b/WinQuake/model.h
-index fd6d138..ff93b9d 100644
+index 910c73c..be323f6 100644
 --- a/WinQuake/model.h
 +++ b/WinQuake/model.h
-@@ -340,6 +340,9 @@ typedef struct model_s
+@@ -342,6 +342,9 @@ typedef struct model_s
  	mvertex_t	*vertexes;
  	unsigned	*gxvertexes;	// numvertexes packed XY, Z pairs
  	struct gxalias_s	*gxalias;	// alias skins in VRAM and more, R_NewMap sets it
@@ -92,7 +92,7 @@ index fd6d138..ff93b9d 100644
  
  	int			numedges;
  	medge_t		*edges;
-@@ -397,4 +400,7 @@ void	Mod_ReadLump (lump_t *l, int ofs, void *dest, int len);
+@@ -399,4 +402,7 @@ void	Mod_ReadLump (lump_t *l, int ofs, void *dest, int len);
  void	R_LoadTextures (texture_t **textures, int numtextures, lump_t *l);
  void	R_BuildSurfaces (model_t *mod);
  

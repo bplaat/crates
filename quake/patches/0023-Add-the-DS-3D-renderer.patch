@@ -72,12 +72,12 @@ particles on the top screen.
 ---
  WinQuake/anorm_dots_nds.h |  164 +++
  WinQuake/model.c          |   17 +
- WinQuake/model.h          |   13 +-
- WinQuake/r_light.c        |   36 +-
- WinQuake/r_nds.c          | 2807 +++++++++++++++++++++++++++++++++++++
+ WinQuake/model.h          |   15 +-
+ WinQuake/r_light.c        |   77 +-
+ WinQuake/r_nds.c          | 2817 +++++++++++++++++++++++++++++++++++++
  WinQuake/vid.h            |    3 +
  WinQuake/view.c           |    7 -
- 7 files changed, 3007 insertions(+), 40 deletions(-)
+ 7 files changed, 3043 insertions(+), 57 deletions(-)
  create mode 100644 WinQuake/anorm_dots_nds.h
  create mode 100644 WinQuake/r_nds.c
 
@@ -287,7 +287,7 @@ index 104c15b..14c3b21 100644
  ==================
  Mod_ForName
 diff --git a/WinQuake/model.h b/WinQuake/model.h
-index be9b165..fd6d138 100644
+index be9b165..910c73c 100644
 --- a/WinQuake/model.h
 +++ b/WinQuake/model.h
 @@ -63,6 +63,9 @@ typedef struct mplane_s
@@ -311,7 +311,16 @@ index be9b165..fd6d138 100644
  } texture_t;
  
  
-@@ -113,7 +120,8 @@ typedef struct msurface_s
+@@ -94,6 +101,8 @@ typedef struct
+ typedef struct
+ {
+ 	float		vecs[2][4];
++	// fixed point for the light points: s = (ivecs * origin * 8 + ivecs[3]) / 32768
++	int			ivecs[2][4];
+ 	float		mipadjust;
+ 	texture_t	*texture;
+ 	int			flags;
+@@ -113,7 +122,8 @@ typedef struct msurface_s
  	int			numedges;	// are backwards edges
  	
  // surface generation data
@@ -321,7 +330,7 @@ index be9b165..fd6d138 100644
  
  	short		texturemins[2];
  	short		extents[2];
-@@ -330,6 +338,8 @@ typedef struct model_s
+@@ -330,6 +340,8 @@ typedef struct model_s
  
  	int			numvertexes;
  	mvertex_t	*vertexes;
@@ -330,7 +339,7 @@ index be9b165..fd6d138 100644
  
  	int			numedges;
  	medge_t		*edges;
-@@ -374,6 +384,7 @@ void	Mod_Init (void);
+@@ -374,6 +386,7 @@ void	Mod_Init (void);
  void	Mod_ClearAll (void);
  model_t *Mod_ForName (char *name, qboolean crash);
  void	*Mod_Extradata (model_t *mod);	// handles caching
@@ -339,19 +348,38 @@ index be9b165..fd6d138 100644
  
  mleaf_t *Mod_PointInLeaf (float *p, model_t *model);
 diff --git a/WinQuake/r_light.c b/WinQuake/r_light.c
-index deeb858..037728a 100644
+index deeb858..1baa3ee 100644
 --- a/WinQuake/r_light.c
 +++ b/WinQuake/r_light.c
-@@ -22,6 +22,8 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
+@@ -22,6 +22,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  #include "quakedef.h"
  #include "r_local.h"
  
++#include <nds.h>
++
 +int R_SurfaceLight (msurface_t *surf, int ds, int dt);
 +
  int	r_dlightframecount;
  
  
-@@ -149,9 +151,6 @@ HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
+@@ -138,39 +142,38 @@ LIGHT SAMPLING
+ =============================================================================
+ */
+ 
+-HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
++// In fixed point, without the soft float of the original for every node the
++// line crosses: the points are world units times 8 like the renderer's planes,
++// the plane distances are shifted down so their difference fits in 32 bits
++HOT_CODE static int RecursiveLightPoint (mnode_t *node, const int *start, const int *end)
+ {
+ 	int			r;
+-	float		front, back, frac;
++	int			front, back;
+ 	int			side;
+ 	mplane_t	*plane;
+-	vec3_t		mid;
++	int			mid[3];
+ 	msurface_t	*surf;
  	int			s, t, ds, dt;
  	int			i;
  	mtexinfo_t	*tex;
@@ -361,7 +389,45 @@ index deeb858..037728a 100644
  
  	if (node->contents < 0)
  		return -1;		// didn't hit anything
-@@ -203,32 +202,8 @@ HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
+ 	
+ // calculate mid point
+ 
+-// FIXME: optimize for axial
+ 	plane = node->plane;
+-	front = DotProduct (start, plane->normal) - plane->dist;
+-	back = DotProduct (end, plane->normal) - plane->dist;
++	front = (plane->inormal[0] * start[0] + plane->inormal[1] * start[1] +
++		plane->inormal[2] * start[2] - plane->idist) >> 4;
++	back = (plane->inormal[0] * end[0] + plane->inormal[1] * end[1] +
++		plane->inormal[2] * end[2] - plane->idist) >> 4;
+ 	side = front < 0;
+ 	
+ 	if ( (back < 0) == side)
+ 		return RecursiveLightPoint (node->children[side], start, end);
+ 	
+-	frac = front / (front-back);
+-	mid[0] = start[0] + (end[0] - start[0])*frac;
+-	mid[1] = start[1] + (end[1] - start[1])*frac;
+-	mid[2] = start[2] + (end[2] - start[2])*frac;
++	for (i = 0; i < 3; i++)
++		mid[i] = start[i] + div64 ((s64) (end[i] - start[i]) * front, front - back);
+ 	
+ // go down front side	
+ 	r = RecursiveLightPoint (node->children[side], start, mid);
+@@ -190,8 +193,10 @@ HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
+ 
+ 		tex = surf->texinfo;
+ 		
+-		s = DotProduct (mid, tex->vecs[0]) + tex->vecs[0][3];
+-		t = DotProduct (mid, tex->vecs[1]) + tex->vecs[1][3];;
++		s = ((s64) tex->ivecs[0][0] * mid[0] + (s64) tex->ivecs[0][1] * mid[1] +
++			(s64) tex->ivecs[0][2] * mid[2] + tex->ivecs[0][3]) >> 15;
++		t = ((s64) tex->ivecs[1][0] * mid[0] + (s64) tex->ivecs[1][1] * mid[1] +
++			(s64) tex->ivecs[1][2] * mid[2] + tex->ivecs[1][3]) >> 15;
+ 
+ 		if (s < surf->texturemins[0] ||
+ 		t < surf->texturemins[1])
+@@ -203,32 +208,8 @@ HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
  		if ( ds > surf->extents[0] || dt > surf->extents[1] )
  			continue;
  
@@ -396,22 +462,36 @@ index deeb858..037728a 100644
  	}
  
  // go down back side
-@@ -240,9 +215,6 @@ int R_LightPoint (vec3_t p)
- 	vec3_t		end;
+@@ -237,17 +218,15 @@ HOT_CODE int RecursiveLightPoint (mnode_t *node, vec3_t start, vec3_t end)
+ 
+ int R_LightPoint (vec3_t p)
+ {
+-	vec3_t		end;
++	int			start[3], end[3];
  	int			r;
  	
 -	if (!cl.worldmodel->lightdata)
 -		return 255;
 -	
- 	end[0] = p[0];
- 	end[1] = p[1];
- 	end[2] = p[2] - 2048;
+-	end[0] = p[0];
+-	end[1] = p[1];
+-	end[2] = p[2] - 2048;
++	start[0] = end[0] = p[0] * 8;
++	start[1] = end[1] = p[1] * 8;
++	start[2] = p[2] * 8;
++	end[2] = start[2] - 2048 * 8;
+ 	
+-	r = RecursiveLightPoint (cl.worldmodel->nodes, p, end);
++	r = RecursiveLightPoint (cl.worldmodel->nodes, start, end);
+ 	
+ 	if (r == -1)
+ 		r = 0;
 diff --git a/WinQuake/r_nds.c b/WinQuake/r_nds.c
 new file mode 100644
-index 0000000..fe45ad1
+index 0000000..017f3df
 --- /dev/null
 +++ b/WinQuake/r_nds.c
-@@ -0,0 +1,2807 @@
+@@ -0,0 +1,2817 @@
 +/*
 +Copyright (C) 1996-1997 Id Software, Inc.
 +
@@ -1729,6 +1809,16 @@ index 0000000..fe45ad1
 +		for (j = 0; j < 3; j++)
 +			mod->planes[i].inormal[j] = mod->planes[i].normal[j] * 16384;
 +		mod->planes[i].idist = mod->planes[i].dist * (VERTEX_SCALE * 16384);
++	}
++
++	for (i = 0, tex = mod->texinfo; i < mod->numtexinfo; i++, tex++)
++	{
++		for (j = 0; j < 2; j++)
++		{
++			for (k = 0; k < 3; k++)
++				tex->ivecs[j][k] = tex->vecs[j][k] * (32768 / VERTEX_SCALE);
++			tex->ivecs[j][3] = tex->vecs[j][3] * 32768;
++		}
 +	}
 +
 +	out = mod->gxvertexes = Hunk_AllocName (mod->numvertexes * 8, "gxverts");
