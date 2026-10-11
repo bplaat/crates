@@ -31,14 +31,14 @@ goes to both screens, the texture palette and the particle colors, so
 palette shifts for damage and pickups tint everything for free. vid_showfps shows the frame
 rate.
 ---
- WinQuake/draw.c    |   8 +
+ WinQuake/draw.c    |  11 +-
  WinQuake/vid.h     |   8 +
  WinQuake/vid_nds.c | 639 +++++++++++++++++++++++++++++++++++++++++++++
- 3 files changed, 655 insertions(+)
+ 3 files changed, 656 insertions(+), 2 deletions(-)
  create mode 100644 WinQuake/vid_nds.c
 
 diff --git a/WinQuake/draw.c b/WinQuake/draw.c
-index f98ee96..0a7ebe2 100644
+index f98ee96..9fcc2d8 100644
 --- a/WinQuake/draw.c
 +++ b/WinQuake/draw.c
 @@ -149,6 +149,7 @@ void Draw_Character (int x, int y, int num)
@@ -89,7 +89,7 @@ index f98ee96..0a7ebe2 100644
  
  	vr.y = r_rectdesc.rect.y;
  	height = r_rectdesc.rect.height;
-@@ -821,6 +827,7 @@ void Draw_Fill (int x, int y, int w, int h, int c)
+@@ -821,12 +827,12 @@ void Draw_Fill (int x, int y, int w, int h, int c)
  	unsigned		uc;
  	int				u, v;
  
@@ -97,7 +97,14 @@ index f98ee96..0a7ebe2 100644
  	if (r_pixbytes == 1)
  	{
  		dest = vid.buffer + y*vid.rowbytes + x;
-@@ -854,6 +861,7 @@ void Draw_FadeScreen (void)
+ 		for (v=0 ; v<h ; v++, dest += vid.rowbytes)
+-			for (u=0 ; u<w ; u++)
+-				dest[u] = c;
++			memset (dest, c, w);	// the toolchain keeps loops from becoming memset
+ 	}
+ 	else
+ 	{
+@@ -854,6 +860,7 @@ void Draw_FadeScreen (void)
  	VID_UnlockBuffer ();
  	S_ExtraUpdate ();
  	VID_LockBuffer ();
