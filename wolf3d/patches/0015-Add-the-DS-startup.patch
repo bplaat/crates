@@ -19,9 +19,9 @@ touch screen console, failed assertions too. wl_nds.h is the glue
 between the SDL implementation and the game.
 ---
  nds/wl_nds.c | 343 +++++++++++++++++++++++++++++++++++++++++++++++++++
- nds/wl_nds.h |  46 +++++++
+ nds/wl_nds.h |  45 +++++++
  wl_main.c    |   2 +
- 3 files changed, 391 insertions(+)
+ 3 files changed, 390 insertions(+)
  create mode 100644 nds/wl_nds.c
  create mode 100644 nds/wl_nds.h
 
@@ -376,10 +376,10 @@ index 0000000..86bafa4
 +}
 diff --git a/nds/wl_nds.h b/nds/wl_nds.h
 new file mode 100644
-index 0000000..8292139
+index 0000000..bdf6ccb
 --- /dev/null
 +++ b/nds/wl_nds.h
-@@ -0,0 +1,46 @@
+@@ -0,0 +1,45 @@
 +//
 +// Nintendo DS platform glue between the SDL implementation (sdl*.c) and the
 +// game: its startup (wl_nds.c) and the touch screen (wl_touch.c)
@@ -391,9 +391,8 @@ index 0000000..8292139
 +#include "SDL.h"
 +
 +// Hardware channels: digitized sounds on 0-5 (MIX_CHANNELS), the PC
-+// speaker stream on 6 and the OPL2 channels on 7-15
++// speaker stream on 6 and the OPL2 channels on 7-15 (opl_nds.h)
 +#define NDS_STREAM_CHANNEL  6
-+#define NDS_OPL_CHANNEL     7
 +
 +// Sets up the file systems, finds the game data and adds the arguments
 +void NDS_Init (int *argc, char ***argv);

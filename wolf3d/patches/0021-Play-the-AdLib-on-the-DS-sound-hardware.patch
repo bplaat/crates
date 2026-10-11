@@ -8,51 +8,153 @@ OPL channel is a hardware channel looping one period of the waveform its
 two FM operators make, at its pitch, with the envelopes, key scaling and
 levels of the MAME emulator done in software at about 780 Hz.
 ---
- nds/opl.c | 446 ++++++++++++++++++++++++++++++++++++++++++++++++++++++
- 1 file changed, 446 insertions(+)
+ nds/opl.c     |  96 ++++++++++
+ nds/opl7.c    | 477 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ nds/opl_nds.h |  36 ++++
+ 3 files changed, 609 insertions(+)
  create mode 100644 nds/opl.c
+ create mode 100644 nds/opl7.c
+ create mode 100644 nds/opl_nds.h
 
 diff --git a/nds/opl.c b/nds/opl.c
 new file mode 100644
-index 0000000..309cba7
+index 0000000..db40887
 --- /dev/null
 +++ b/nds/opl.c
-@@ -0,0 +1,446 @@
+@@ -0,0 +1,96 @@
 +//
 +// The OPL2 (YM3812) of the AdLib card, played by the Nintendo DS sound
 +// hardware instead of emulated sample by sample, which costs most of the
-+// ARM9. It replaces mame/fmopl.c behind the same interface.
++// ARM9. It replaces mame/fmopl.c behind the same interface: the ARM7 plays
++// it (opl7.c), this side works out its tables and sends it the register
++// writes.
++//
++
++#include <nds.h>
++#include <math.h>
++#include <stdlib.h>
++
++#include "mame/fmopl.h"
++#include "opl_nds.h"
++
++// From mame/fmopl.c: the increments of the envelope rates
++static const u8 eg_inc[15][8] =
++{
++    { 0,1, 0,1, 0,1, 0,1 }, { 0,1, 0,1, 1,1, 0,1 }, { 0,1, 1,1, 0,1, 1,1 }, { 0,1, 1,1, 1,1, 1,1 },
++    { 1,1, 1,1, 1,1, 1,1 }, { 1,1, 1,2, 1,1, 1,2 }, { 1,2, 1,2, 1,2, 1,2 }, { 1,2, 2,2, 1,2, 2,2 },
++    { 2,2, 2,2, 2,2, 2,2 }, { 2,2, 2,4, 2,2, 2,4 }, { 2,4, 2,4, 2,4, 2,4 }, { 2,4, 4,4, 2,4, 4,4 },
++    { 4,4, 4,4, 4,4, 4,4 }, { 8,8, 8,8, 8,8, 8,8 }, { 0,0, 0,0, 0,0, 0,0 },
++};
++
++static void InitTables (opl_tables_t *t)
++{
++    int i, w;
++
++    for (i = 0; i < SIN_LEN; ++i)
++    {
++        s16 s = (s16) lrint (sin ((i * 2 + 1) * M_PI / SIN_LEN) * 4095);
++        int quarter = i / (SIN_LEN / 4);
++
++        t->sin_tab[0][i] = s;
++        t->sin_tab[1][i] = s > 0 ? s : 0;
++        t->sin_tab[2][i] = s > 0 ? s : -s;
++        t->sin_tab[3][i] = quarter & 1 ? 0 : t->sin_tab[2][i];
++    }
++    for (w = 0; w < 32; ++w)
++        t->att_volume[w] = (u16) lrint (2047 * pow (2.0, -w / 32.0));
++
++    // The first 16 rates are infinite, rates 0-12 step every 2^(12-n)
++    // samples and 13-15 every sample, with the increments of the MAME
++    // emulator for each quarter step
++    for (i = 0; i < 96; ++i)
++    {
++        int rate = (i - 16) / 4, sel, shift = 0;
++        double avg = 0, updates;
++
++        if (i < 16)
++            sel = 14;
++        else if (rate < 13)
++        {
++            sel = (i - 16) & 3;
++            shift = 12 - rate;
++        }
++        else
++            sel = rate < 15 ? 4 + (rate - 13) * 4 + ((i - 16) & 3) : 12;
++        updates = (double) EG_QUANTUM / (1 << shift);
++
++        for (w = 0; w < 8; ++w)
++            avg += eg_inc[sel][w] / 8.0;
++        t->rate_inc[i] = (s32) (avg * updates * 65536);
++        t->rate_att[i] = (u32) (pow (1.0 - avg / 8.0, updates) * 65536);
++    }
++}
++
++int YM3812Init (int num, int clock, int rate)
++{
++    opl_tables_t *tables = malloc (sizeof(*tables));
++
++    if (tables == NULL)
++        return -1;
++    InitTables (tables);
++    DC_FlushRange (tables, sizeof(*tables));
++    pxiWaitRemote (OPL_PXI);
++    pxiSendAndReceive (OPL_PXI, OPL_MSG_TABLES | ((uintptr_t) tables - MM_MAINRAM));
++    free (tables);
++    return 0;
++}
++
++void YM3812Shutdown (void)
++{
++    pxiSend (OPL_PXI, OPL_MSG_STOP);
++}
++
++int YM3812Write (int which, int reg, int v)
++{
++    pxiSend (OPL_PXI, OPL_MSG_WRITE | (reg & 0xff) << 8 | (v & 0xff));
++    return 0;
++}
++
++// The envelopes run on the ARM7, no samples are rendered
++void YM3812UpdateOne (int which, INT16 *buffer, int length)
++{
++}
+diff --git a/nds/opl7.c b/nds/opl7.c
+new file mode 100644
+index 0000000..34b8f3d
+--- /dev/null
++++ b/nds/opl7.c
+@@ -0,0 +1,477 @@
++//
++// The OPL2 (YM3812) of the AdLib card on the ARM7, played by the sound
++// hardware instead of emulated sample by sample, which costs most of a CPU.
++// The ARM9 (opl.c) sends the register writes.
 +//
 +// Every OPL channel is a DS hardware channel looping one period of the
 +// waveform its two operators make: the modulator, with its feedback, phase
 +// modulating the carrier (or both added up), at their multiples and
 +// waveforms, computed whenever the instrument changes. The hardware timer
 +// plays it at the pitch of the channel. The envelopes, key scaling and
-+// total levels follow the MAME emulator in software at about 780 Hz, the
++// total levels follow the MAME emulator in software at about 780 Hz, in a
++// thread that applies the register writes queued since, the
 +// carrier envelope sets the channel volume and the modulator envelope the
 +// brightness, so the waveform is recomputed as that changes noticeably.
 +// Tremolo, vibrato and the rhythm mode are left out, Wolfenstein's music
 +// and sounds hardly use them.
 +//
 +
-+#include <nds.h>
-+#include <math.h>
++#include <calico.h>
 +#include <stdlib.h>
 +#include <string.h>
 +
-+#include "mame/fmopl.h"
-+#include "wl_nds.h"
++#include "opl_nds.h"
 +
 +#define MIN(a, b)       ((a) < (b) ? (a) : (b))
 +
 +#define NUM_CHANNELS    9
-+#define OPL_RATE        49716           // 3.579545 MHz / 72
-+#define EG_QUANTUM      64              // OPL samples per envelope step
 +#define OUTPUT_STEPS    4               // envelope steps per output update
 +
 +// One waveform period covers two base periods, for the 1/2 multiple
 +#define WAVE_LEN        256
-+#define SIN_LEN         1024
 +
 +// Attenuations are in the 0.1875 dB units of the envelope, 32 per halving
 +#define MAX_ATT         511
@@ -81,19 +183,19 @@ index 0000000..309cba7
 +    // What the waveform was computed with
 +    int wave_mod_att, wave_car_att;
 +    unsigned volume, timer;
-+    s16 wave[WAVE_LEN] __attribute__((aligned(32)));
++    s16 wave[WAVE_LEN];
 +} opl_channel_t;
 +
 +static opl_channel_t channels[NUM_CHANNELS];
 +static bool wave_select;
 +
-+static s16 sin_tab[4][SIN_LEN];
-+static s32 rate_inc[96];                // 16.16 decay per envelope step
-+static u32 rate_att[96];                // 0.16 attack factor per envelope step
-+static u16 att_volume[32];              // DS volume of the fraction of a halving
++// In WRAM, copied from the ARM9
++static opl_tables_t tables;
++#define sin_tab     tables.sin_tab
++#define rate_inc    tables.rate_inc
++#define rate_att    tables.rate_att
++#define att_volume  tables.att_volume
 +
-+static u32 opl_time;                    // OPL samples << 16 waiting for envelope steps
-+static u32 opl_per_sample;              // OPL samples << 16 per output sample
 +static unsigned eg_steps;
 +
 +// Operator register offset to channel, -1 for the gaps
@@ -117,70 +219,6 @@ index 0000000..309cba7
 +};
 +
 +static const u8 mul_tab[16] = { 1, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 20, 24, 24, 30, 30 };
-+
-+static const u8 eg_inc[15][8] =
-+{
-+    { 0,1, 0,1, 0,1, 0,1 }, { 0,1, 0,1, 1,1, 0,1 }, { 0,1, 1,1, 0,1, 1,1 }, { 0,1, 1,1, 1,1, 1,1 },
-+    { 1,1, 1,1, 1,1, 1,1 }, { 1,1, 1,2, 1,1, 1,2 }, { 1,2, 1,2, 1,2, 1,2 }, { 1,2, 2,2, 1,2, 2,2 },
-+    { 2,2, 2,2, 2,2, 2,2 }, { 2,2, 2,4, 2,2, 2,4 }, { 2,4, 2,4, 2,4, 2,4 }, { 2,4, 4,4, 2,4, 4,4 },
-+    { 4,4, 4,4, 4,4, 4,4 }, { 8,8, 8,8, 8,8, 8,8 }, { 0,0, 0,0, 0,0, 0,0 },
-+};
-+
-+static void InitTables (void)
-+{
-+    int i, w;
-+
-+    for (i = 0; i < SIN_LEN; ++i)
-+    {
-+        s16 s = (s16) lrint (sin ((i * 2 + 1) * M_PI / SIN_LEN) * 4095);
-+        int quarter = i / (SIN_LEN / 4);
-+
-+        sin_tab[0][i] = s;
-+        sin_tab[1][i] = s > 0 ? s : 0;
-+        sin_tab[2][i] = s > 0 ? s : -s;
-+        sin_tab[3][i] = quarter & 1 ? 0 : sin_tab[2][i];
-+    }
-+    for (w = 0; w < 32; ++w)
-+        att_volume[w] = (u16) lrint (2047 * pow (2.0, -w / 32.0));
-+
-+    // The first 16 rates are infinite, rates 0-12 step every 2^(12-n)
-+    // samples and 13-15 every sample, with the increments of the MAME
-+    // emulator for each quarter step
-+    for (i = 0; i < 96; ++i)
-+    {
-+        int rate = (i - 16) / 4, sel, shift = 0;
-+        double avg = 0, updates;
-+
-+        if (i < 16)
-+            sel = 14;
-+        else if (rate < 13)
-+        {
-+            sel = (i - 16) & 3;
-+            shift = 12 - rate;
-+        }
-+        else
-+            sel = rate < 15 ? 4 + (rate - 13) * 4 + ((i - 16) & 3) : 12;
-+        updates = (double) EG_QUANTUM / (1 << shift);
-+
-+        for (w = 0; w < 8; ++w)
-+            avg += eg_inc[sel][w] / 8.0;
-+        rate_inc[i] = (s32) (avg * updates * 65536);
-+        rate_att[i] = (u32) (pow (1.0 - avg / 8.0, updates) * 65536);
-+    }
-+}
-+
-+int YM3812Init (int num, int clock, int rate)
-+{
-+    InitTables ();
-+    opl_per_sample = (u32) (((u64) OPL_RATE << 16) / rate);
-+    memset (channels, 0, sizeof(channels));
-+    return 0;
-+}
-+
-+void YM3812Shutdown (void)
-+{
-+    soundStop (0x1ff << NDS_OPL_CHANNEL);
-+}
 +
 +static unsigned KeyCode (const opl_channel_t *ch)
 +{
@@ -216,7 +254,9 @@ index 0000000..309cba7
 +    return sin_tab[wave_select ? op->regE0 & 3 : 0];
 +}
 +
-+// One period of the operators' output, the modulator at its current level
++// One period of the operators' output, the modulator at its current level:
++// the modulator's output first, then the carrier from it, each loop for one
++// case only, with the phases stepped instead of multiplied
 +static void ComputeWave (opl_channel_t *ch)
 +{
 +    const opl_op_t *mod = &ch->op[0], *car = &ch->op[1];
@@ -229,33 +269,63 @@ index 0000000..309cba7
 +    // Additive output is relative to the louder operator
 +    int mod_level = additive ? mod_att - MIN (mod_att, car_att) : mod_att;
 +    int car_level = additive ? car_att - MIN (mod_att, car_att) : 0;
-+    unsigned mvol = mod_level < MOD_ATT_NONE ? Volume (mod_level) : 0, cvol = Volume (car_level);
-+    int prev1 = 0, prev2 = 0, pass, i;
++    int mvol = mod_level < MOD_ATT_NONE ? Volume (mod_level) : 0, cvol = Volume (car_level);
++    s16 m[WAVE_LEN];
++    unsigned phase;
++    int i;
 +
-+    // With feedback the modulator settles in its first period
-+    for (pass = fb && mvol ? 0 : 1; pass < 2; ++pass)
++    if (mvol == 0)
++        memset (m, 0, sizeof(m));
++    else if (fb == 0)
 +    {
-+        for (i = 0; i < WAVE_LEN; ++i)
-+        {
-+            int fbofs = fb ? (prev1 + prev2) >> (9 - fb) : 0;
-+            int m = mvol ? mwave[(i * mstep + fbofs) & (SIN_LEN - 1)] * (int) mvol >> 11 : 0;
-+            int out;
-+
-+            prev2 = prev1;
-+            prev1 = m;
-+            if (pass == 0)
-+                continue;
-+            if (additive)
-+                out = m + (cwave[(i * cstep) & (SIN_LEN - 1)] * (int) cvol >> 11);
-+            else
-+                out = cwave[(i * cstep + m) & (SIN_LEN - 1)];
-+            ch->wave[i] = out > 8191 ? 32767 : out < -8192 ? -32768 : out * 4;
-+        }
++        for (i = 0, phase = 0; i < WAVE_LEN; ++i, phase += mstep)
++            m[i] = mwave[phase & (SIN_LEN - 1)] * mvol >> 11;
 +    }
-+    DC_FlushRange (ch->wave, sizeof(ch->wave));
++    else
++    {
++        // With feedback the modulator settles in its first period
++        int prev1 = 0, prev2 = 0, pass, shift = 9 - fb;
++
++        for (pass = 0; pass < 2; ++pass)
++            for (i = 0, phase = 0; i < WAVE_LEN; ++i, phase += mstep)
++            {
++                int out = mwave[(phase + ((prev1 + prev2) >> shift)) & (SIN_LEN - 1)] * mvol >> 11;
++
++                prev2 = prev1;
++                prev1 = out;
++                m[i] = out;
++            }
++    }
++
++    for (i = 0, phase = 0; i < WAVE_LEN; ++i, phase += cstep)
++    {
++        int out = additive ? m[i] + (cwave[phase & (SIN_LEN - 1)] * cvol >> 11)
++                           : cwave[(phase + m[i]) & (SIN_LEN - 1)];
++
++        ch->wave[i] = out > 8191 ? 32767 : out < -8192 ? -32768 : out * 4;
++    }
 +    ch->wave_mod_att = mod_att;
 +    ch->wave_car_att = car_att;
 +    ch->wave_dirty = false;
++}
++
++// The DS volume (up to 2047) as the 7-bit volume of a channel and its divider
++static SoundVolDiv VolDiv (unsigned *vol)
++{
++    if (*vol < 0x80)
++        return SoundVolDiv_16;
++    if (*vol < 0x200)
++    {
++        *vol /= 4;
++        return SoundVolDiv_4;
++    }
++    if (*vol < 0x400)
++    {
++        *vol /= 8;
++        return SoundVolDiv_2;
++    }
++    *vol = MIN (*vol / 16, 0x7f);
++    return SoundVolDiv_1;
 +}
 +
 +static unsigned ChannelVolume (const opl_channel_t *ch)
@@ -278,6 +348,8 @@ index 0000000..309cba7
 +
 +static void KeyOn (opl_channel_t *ch, int c)
 +{
++    unsigned vol;
++    SoundVolDiv voldiv;
 +    int i;
 +
 +    for (i = 0; i < 2; ++i)
@@ -297,8 +369,11 @@ index 0000000..309cba7
 +    ComputeWave (ch);
 +    ch->volume = ChannelVolume (ch);
 +    ch->timer = ChannelTimer (ch);
-+    soundPreparePcm ((NDS_OPL_CHANNEL + c) | SOUND_START, ch->volume, 64, ch->timer, SoundMode_Repeat,
-+        SoundFmt_Pcm16, ch->wave, 0, sizeof(ch->wave) / 4);
++    vol = ch->volume;
++    voldiv = VolDiv (&vol);
++    soundChPreparePcm (NDS_OPL_CHANNEL + c, vol, voldiv, 64, ch->timer, SoundMode_Repeat, SoundFmt_Pcm16,
++        ch->wave, 0, sizeof(ch->wave) / 4);
++    soundChStart (NDS_OPL_CHANNEL + c);
 +    ch->playing = true;
 +}
 +
@@ -311,7 +386,7 @@ index 0000000..309cba7
 +            ch->op[i].state = EG_REL;
 +}
 +
-+int YM3812Write (int which, int reg, int v)
++static void Write (int reg, int v)
 +{
 +    opl_channel_t *ch;
 +    int c;
@@ -320,14 +395,14 @@ index 0000000..309cba7
 +    if (reg == 0x01)
 +    {
 +        wave_select = v & 0x20;
-+        return 0;
++        return;
 +    }
 +    if ((reg >= 0x20 && reg < 0xa0) || reg >= 0xe0)
 +    {
 +        opl_op_t *op;
 +
 +        if ((c = op_channel[reg & 0x1f]) < 0)
-+            return 0;
++            return;
 +        ch = &channels[c];
 +        op = &ch->op[(reg & 7) >= 3];
 +        switch (reg & 0xe0)
@@ -339,10 +414,10 @@ index 0000000..309cba7
 +            default: op->regE0 = v; ch->wave_dirty = true; break;
 +        }
 +        UpdateOperator (ch, op);
-+        return 0;
++        return;
 +    }
 +    if ((c = reg & 0x0f) >= NUM_CHANNELS)
-+        return 0;
++        return;
 +    ch = &channels[c];
 +    switch (reg & 0xf0)
 +    {
@@ -363,9 +438,9 @@ index 0000000..309cba7
 +        case 0xc0:
 +            ch->regC0 = v;
 +            ch->wave_dirty = true;
-+            return 0;
++            return;
 +        default:
-+            return 0;
++            return;
 +    }
 +    // Pitch changes apply right away, like the frequency slides of the sounds
 +    if (ch->playing && ChannelTimer (ch) != ch->timer)
@@ -373,7 +448,6 @@ index 0000000..309cba7
 +        ch->timer = ChannelTimer (ch);
 +        soundChSetTimer (NDS_OPL_CHANNEL + c, ch->timer);
 +    }
-+    return 0;
 +}
 +
 +static void StepEnvelope (opl_op_t *op)
@@ -426,7 +500,7 @@ index 0000000..309cba7
 +            continue;
 +        if (ch->op[1].state == EG_OFF && (!(ch->regC0 & 1) || ch->op[0].state == EG_OFF))
 +        {
-+            soundStop (BIT (NDS_OPL_CHANNEL + c));
++            soundChStop (NDS_OPL_CHANNEL + c);
 +            ch->playing = false;
 +            continue;
 +        }
@@ -439,22 +513,77 @@ index 0000000..309cba7
 +        volume = ChannelVolume (ch);
 +        if (volume != ch->volume)
 +        {
++            SoundVolDiv voldiv;
++
 +            ch->volume = volume;
-+            soundChSetVolume (NDS_OPL_CHANNEL + c, volume);
++            voldiv = VolDiv (&volume);
++            soundChSetVolume (NDS_OPL_CHANNEL + c, volume, voldiv);
 +        }
 +    }
 +}
 +
-+// Renders no samples, but advances the envelopes by their duration
-+void YM3812UpdateOne (int which, INT16 *buffer, int length)
++// The messages of the ARM9, queued by the PXI interrupt for the thread
++#define QUEUE_LEN       256
++
++static u32 queue[QUEUE_LEN];
++static volatile unsigned queue_head, queue_tail;
++static Thread opl_thread;
++static u8 opl_stack[2048] __attribute__((aligned(8)));
++
++static void Receive (void *user, u32 msg)
++{
++    unsigned next = (queue_head + 1) % QUEUE_LEN;
++
++    if (next != queue_tail)
++    {
++        queue[queue_head] = msg;
++        queue_head = next;
++    }
++}
++
++static void Stop (void)
 +{
 +    int c;
 +
-+    memset (buffer, 0, length * 4);
-+    opl_time += length * opl_per_sample;
-+    while (opl_time >= (EG_QUANTUM << 16))
++    for (c = 0; c < NUM_CHANNELS; ++c)
 +    {
-+        opl_time -= EG_QUANTUM << 16;
++        soundChStop (NDS_OPL_CHANNEL + c);
++        channels[c].playing = false;
++    }
++}
++
++// Applies the writes queued since the last envelope step, then steps the
++// envelopes, every OPL_RATE / EG_QUANTUM of a second
++static int OplThreadMain (void *arg)
++{
++    TickTask task;
++    int c;
++
++    threadTimerStart (&task, OPL_RATE / EG_QUANTUM);
++    for (;;)
++    {
++        threadTimerWait (&task);
++        while (queue_tail != queue_head)
++        {
++            u32 msg = queue[queue_tail];
++
++            queue_tail = (queue_tail + 1) % QUEUE_LEN;
++            switch (msg & OPL_MSG_MASK)
++            {
++                case OPL_MSG_WRITE:
++                    Write ((msg >> 8) & 0xff, msg & 0xff);
++                    break;
++                case OPL_MSG_TABLES:
++                    Stop ();
++                    memset (channels, 0, sizeof(channels));
++                    memcpy (&tables, (const void *) (MM_MAINRAM + (msg & ~OPL_MSG_MASK)), sizeof(tables));
++                    pxiReply (OPL_PXI, 0);
++                    break;
++                case OPL_MSG_STOP:
++                    Stop ();
++                    break;
++            }
++        }
 +        for (c = 0; c < NUM_CHANNELS; ++c)
 +        {
 +            StepEnvelope (&channels[c].op[0]);
@@ -463,4 +592,54 @@ index 0000000..309cba7
 +        if (++eg_steps % OUTPUT_STEPS == 0)
 +            UpdateOutput ();
 +    }
++    return 0;
 +}
++
++void arm7PortInit (void)
++{
++    threadPrepare (&opl_thread, OplThreadMain, NULL, opl_stack + sizeof(opl_stack), MAIN_THREAD_PRIO - 4);
++    threadStart (&opl_thread);
++    pxiSetHandler (OPL_PXI, Receive, NULL);
++}
+diff --git a/nds/opl_nds.h b/nds/opl_nds.h
+new file mode 100644
+index 0000000..42c4ff6
+--- /dev/null
++++ b/nds/opl_nds.h
+@@ -0,0 +1,36 @@
++//
++// The OPL2 (YM3812) of the AdLib card, played by the ARM7 (opl7.c) on the
++// sound hardware. The ARM9 (opl.c) works out its tables, which take floating
++// point, and sends it the register writes over PXI.
++//
++
++#ifndef OPL_NDS_H
++#define OPL_NDS_H
++
++#include <calico.h>
++
++#define OPL_PXI         PxiChannel_User0
++
++// The OPL2 channels play on hardware channels 7-15
++#define NDS_OPL_CHANNEL     7
++
++// Messages: a register write as register << 8 | value, the tables at their
++// offset in main RAM, replied once copied, and stopping the channels
++#define OPL_MSG_WRITE   (0 << 24)
++#define OPL_MSG_TABLES  (1 << 24)
++#define OPL_MSG_STOP    (2 << 24)
++#define OPL_MSG_MASK    (3 << 24)
++
++#define OPL_RATE        49716           // 3.579545 MHz / 72
++#define EG_QUANTUM      64              // OPL samples per envelope step
++#define SIN_LEN         1024
++
++typedef struct
++{
++    s16 sin_tab[4][SIN_LEN];
++    s32 rate_inc[96];                   // 16.16 decay per envelope step
++    u32 rate_att[96];                   // 0.16 attack factor per envelope step
++    u16 att_volume[32];                 // DS volume of the fraction of a halving
++} opl_tables_t;
++
++#endif

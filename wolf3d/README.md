@@ -169,7 +169,7 @@ it uses, in `nds/`, so its own code is barely changed.
 - [0014](patches/0014-Add-a-Nintendo-DS-build.patch): `Makefile.nds`
   builds the `.nds` with the [toolchain](../toolchain), with the Apogee v1.4
   graphics layout. The ray caster, the scaler and the fixed point math run
-  from ITCM as ARM code, the rest is Thumb code in main RAM, the cold parts
+  from ITCM as ARM code, the AdLib on the ARM7, the rest is Thumb code in main RAM, the cold parts
   optimized for size. The Tab debug keys, which need a keyboard, are left
   out.
 - [0015](patches/0015-Add-the-DS-startup.patch): `wl_nds.c` switches the
@@ -208,11 +208,15 @@ it uses, in `nds/`, so its own code is barely changed.
   Wolf4SDL, and mixes the music hook and the PC speaker into a stream on
   channel 6 from a 700 Hz thread.
 - [0021](patches/0021-Play-the-AdLib-on-the-DS-sound-hardware.patch):
-  `opl.c` plays the OPL2 register writes on the sound hardware instead of
-  emulating the chip sample by sample, which took most of the ARM9: every OPL
-  channel is a hardware channel looping one period of the waveform its two
-  FM operators make, at its pitch, with the envelopes, key scaling and levels
-  of the MAME emulator done in software.
+  `opl7.c` plays the OPL2 register writes on the sound hardware from the
+  ARM7 instead of emulating the chip sample by sample, which took most of
+  the ARM9: every OPL channel is a hardware channel looping one period of the
+  waveform its two FM operators make, at its pitch, with the envelopes, key
+  scaling and levels of the MAME emulator done in software, in a thread at
+  about 780 Hz. A period is the modulator's output first, then the carrier
+  from it, each in a loop for one case only. `opl.c` on the ARM9 works out
+  the tables, which take floating point, and sends the register writes over
+  PXI.
 - [0022](patches/0022-Use-single-precision-and-reduce-floating-point-work.patch):
   Use single-precision trig, projection and AdLib tables (without `powf`);
   share the direction-to-angle conversion and replace its division with

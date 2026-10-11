@@ -101,7 +101,7 @@ index 86bafa4..2f13be2 100644
      videoSetMode (MODE_0_2D);
      setBackdropColor (0);
 diff --git a/nds/wl_nds.h b/nds/wl_nds.h
-index 8292139..fa4a6d7 100644
+index bdf6ccb..f19d9ae 100644
 --- a/nds/wl_nds.h
 +++ b/nds/wl_nds.h
 @@ -1,6 +1,6 @@
@@ -112,7 +112,7 @@ index 8292139..fa4a6d7 100644
  //
  
  #ifndef WL_NDS_H
-@@ -16,6 +16,10 @@
+@@ -15,6 +15,10 @@
  // Sets up the file systems, finds the game data and adds the arguments
  void NDS_Init (int *argc, char ***argv);
  
