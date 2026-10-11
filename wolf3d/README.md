@@ -204,7 +204,8 @@ it uses, in `nds/`, so its own code is barely changed.
   and pistol as held), copies the parts that changed to VRAM by DMA, selects the weapon tapped
   and handles the lid and power button. The map is a bitmap background of
   its own, scrolled by the hardware to follow the player and shown in its
-  panel by a window, so only the tiles that change are drawn.
+  panel by a window, so only the tiles that change are drawn. The tiles in
+  view are merged into it half of the level a frame.
 - [0020](patches/0020-Add-DS-sound.patch): `sdl_mixer.c` plays the digitized
   sounds as they are on hardware channels 0-5, with the positional stereo of
   Wolf4SDL, and mixes the music hook and the PC speaker into a stream on

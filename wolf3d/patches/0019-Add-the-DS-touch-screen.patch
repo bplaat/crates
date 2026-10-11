@@ -11,22 +11,24 @@ each weapon with its sprite in color, the machine guns as picked up, the
 knife and pistol as held, dark until it is picked up. The map is a
 bitmap background of its own below the rest, which is scrolled on vblank
 to follow the player and shown in its panel by a window, only the tiles
-that change are drawn into it. DMA copies the other parts that changed.
+that change are drawn into it. The tiles in view are merged into it a
+half of the level a frame, both maps don't fit in the data cache. DMA
+copies the other parts that changed.
 Tapping a cell selects the weapon. Outside of a game it shows BJ and the
 controls. The lid puts the DS to sleep, the DSi power button or
 L+R+START+SELECT quit.
 ---
- nds/wl_touch.c | 854 +++++++++++++++++++++++++++++++++++++++++++++++++
+ nds/wl_touch.c | 858 +++++++++++++++++++++++++++++++++++++++++++++++++
  wl_play.c      |   3 +-
- 2 files changed, 856 insertions(+), 1 deletion(-)
+ 2 files changed, 860 insertions(+), 1 deletion(-)
  create mode 100644 nds/wl_touch.c
 
 diff --git a/nds/wl_touch.c b/nds/wl_touch.c
 new file mode 100644
-index 0000000..7e6ab14
+index 0000000..8db97b4
 --- /dev/null
 +++ b/nds/wl_touch.c
-@@ -0,0 +1,854 @@
+@@ -0,0 +1,858 @@
 +//
 +// The Nintendo DS touch screen for Wolf4SDL
 +//
@@ -584,6 +586,7 @@ index 0000000..7e6ab14
 +// Adds the tiles in view and draws the new ones and the walls around them
 +static void UpdateSeen (void)
 +{
++    static int seen_half;
 +    int level = gamestate.episode * 10 + gamestate.mapon;
 +    u32 *dest = (u32 *) seen;
 +    const u32 *src = (const u32 *) spotvis;
@@ -605,7 +608,10 @@ index 0000000..7e6ab14
 +        seen[player->tilex][player->tiley] = true;
 +        DrawTileAndAround (player->tilex, player->tiley);
 +    }
-+    for (i = 0; i < MAPAREA / 4; ++i)
++    // Half the map a frame, the two arrays are twice the data cache: what
++    // is in view stays in view longer than a frame
++    seen_half ^= 1;
++    for (i = seen_half * MAPAREA / 8; i < (seen_half + 1) * MAPAREA / 8; ++i)
 +    {
 +        u32 added = src[i] & ~dest[i];
 +
