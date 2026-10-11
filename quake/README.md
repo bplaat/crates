@@ -268,7 +268,8 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   sounds (torches, machines) on 12-15. Sounds load when they first play,
   not with the level, and only the sounds that play stay in the cache, the
   ambient ones only near water or sky, so the models aren't pushed out of
-  it.
+  it. The volume cvar is read once for each update, the channel volumes
+  are integers.
 - [0028](patches/0028-Keep-the-time-in-single-precision.patch): The clocks
   (`realtime`, `host_frametime`, `cl.time`, `sv.time` and the network
   timers) are floats instead of doubles, so the physics, view and particle

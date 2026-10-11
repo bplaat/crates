@@ -22,9 +22,9 @@ frees or moves samples that play, their hardware channel stops before
 it plays what comes there next.
 ---
  WinQuake/snd_dma.c |   6 +-
- WinQuake/snd_nds.c | 336 +++++++++++++++++++++++++++++++++++++++++++++
+ WinQuake/snd_nds.c | 341 +++++++++++++++++++++++++++++++++++++++++++++
  WinQuake/sound.h   |   3 +
- 3 files changed, 344 insertions(+), 1 deletion(-)
+ 3 files changed, 349 insertions(+), 1 deletion(-)
  create mode 100644 WinQuake/snd_nds.c
 
 diff --git a/WinQuake/snd_dma.c b/WinQuake/snd_dma.c
@@ -53,10 +53,10 @@ index a261f12..6df279d 100644
  	if (!sound_started || !shm || (!shm->buffer && !pDSBuf))
 diff --git a/WinQuake/snd_nds.c b/WinQuake/snd_nds.c
 new file mode 100644
-index 0000000..6dd4055
+index 0000000..5a269c9
 --- /dev/null
 +++ b/WinQuake/snd_nds.c
-@@ -0,0 +1,336 @@
+@@ -0,0 +1,341 @@
 +/*
 +Copyright (C) 1996-1997 Id Software, Inc.
 +
@@ -177,13 +177,16 @@ index 0000000..6dd4055
 +	return shm->samplepos;
 +}
 +
++// The volume cvar as 0..256, worked out once for each S_PaintChannels
++static unsigned master_volume;
++
 +// The volume (0..2047) and pan (0..127) of a channel like Quake's mixer,
 +// with the volume cvar
 +static void HW_Volume (const channel_t *ch, unsigned *vol, unsigned *pan)
 +{
 +	int	left = min (ch->leftvol, 255), right = min (ch->rightvol, 255);
 +
-+	*vol = (left + right) * 4 * bound (0, volume.value, 1);
++	*vol = (left + right) * 4 * master_volume >> 8;
 +	*pan = left + right ? right * 127 / (left + right) : 64;
 +}
 +
@@ -272,6 +275,8 @@ index 0000000..6dd4055
 +	sfxcache_t	*sc;
 +	int			i, slot, loudest[HW_CHANNELS - HW_STATIC];
 +	unsigned	vol, pan, loudvol[HW_CHANNELS - HW_STATIC];
++
++	master_volume = bound (0, volume.value, 1) * 256;
 +
 +	// sounds that end before endtime stop, looping ones go on. Only the
 +	// ambient and static sounds that play stay in the cache, it can't hold

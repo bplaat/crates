@@ -372,10 +372,10 @@ index 2d4dfeb..cb97fc4 100644
  extern	edict_t		*sv_player;
  
 diff --git a/WinQuake/snd_nds.c b/WinQuake/snd_nds.c
-index 6dd4055..ef3f816 100644
+index 5a269c9..044f46b 100644
 --- a/WinQuake/snd_nds.c
 +++ b/WinQuake/snd_nds.c
-@@ -167,11 +167,11 @@ static void HW_Start (int slot, int channel, sfxcache_t *sc)
+@@ -170,11 +170,11 @@ static void HW_Start (int slot, int channel, sfxcache_t *sc)
  
  static sfxcache_t *SND_LoadSound (sfx_t *sfx)
  {
