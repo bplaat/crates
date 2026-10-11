@@ -15,13 +15,13 @@ out the same bits with a count of leading zeros, rounded like the
 conversion. The depth of the sloped floor drawer is an integer again,
 like in Ken's C version, instead of a float added to every 8 pixels.
 ---
- Engine/src/draw.c   | 208 ++++++++++++++++----------------------------
+ Engine/src/draw.c   | 237 ++++++++++++++++++++------------------------
  Engine/src/draw.h   |  29 +++++-
  Engine/src/engine.c |   6 +-
- 3 files changed, 106 insertions(+), 137 deletions(-)
+ 3 files changed, 134 insertions(+), 138 deletions(-)
 
 diff --git a/Engine/src/draw.c b/Engine/src/draw.c
-index 00ca069..363957a 100644
+index 00ca069..f994165 100644
 --- a/Engine/src/draw.c
 +++ b/Engine/src/draw.c
 @@ -10,8 +10,6 @@
@@ -203,30 +203,56 @@ index 00ca069..363957a 100644
  }
  
  
-@@ -400,36 +357,39 @@ void setupvlineasm(int32_t i1)
+@@ -400,36 +357,65 @@ void setupvlineasm(int32_t i1)
  }
  
  //FCS This is used to fill the inside of a wall (so it draws VERTICAL column, always).
 -void vlineasm4(int32_t columnIndex, intptr_t framebuffer)
-+//Two columns at a time, a halfword per row, so everything fits in registers
-+static inline void vlineasm2(int32_t numRows, uint16_t *dest, int32_t i)
++//Two columns at a time, a halfword per row. The loop is assembly: its 14 values
++//only fit in the registers without the compiler keeping any for itself.
++typedef struct
++{
++    const uint8_t *b0, *b1, *p0, *p1;   // textures and palettes of both columns
++    uint32_t v0, v1;                    // texture positions, written back
++    int32_t i0, i1, shift;              // their steps and the shift to a texel
++} vline2_t;
++
++__attribute__((naked)) static void vline2(uint16_t *dest, uint16_t *end, int32_t pitch, vline2_t *c)
  {
-+    const int32_t shift = mach3_al, pitch = bytesperline >> 1;
-+    const int32_t i0 = vince[i], i1 = vince[i + 1];
-+    const uint8_t *b0 = (const uint8_t *)bufplce[i], *b1 = (const uint8_t *)bufplce[i + 1];
-+    const uint8_t *p0 = palookupoffse[i], *p1 = palookupoffse[i + 1];
-+    uint32_t v0 = vplce[i], v1 = vplce[i + 1];
++    __asm__ volatile (
++        "push   {r3-r11, lr}\n"
++        "ldr    r12, [r3, #32]\n"
++        "ldmia  r3, {r4-r11}\n"
++        "1:\n"
++        "mov    r3, r8, lsr r12\n"
++        "mov    lr, r9, lsr r12\n"
++        "ldrb   r3, [r4, r3]\n"
++        "ldrb   lr, [r5, lr]\n"
++        "add    r8, r8, r10\n"
++        "add    r9, r9, r11\n"
++        "ldrb   r3, [r6, r3]\n"
++        "ldrb   lr, [r7, lr]\n"
++        "orr    r3, r3, lr, lsl #8\n"
++        "strh   r3, [r0], r2\n"
++        "cmp    r0, r1\n"
++        "bne    1b\n"
++        "pop    {r3}\n"
++        "str    r8, [r3, #16]\n"
++        "str    r9, [r3, #20]\n"
++        "pop    {r4-r11, pc}\n");
++}
++
++static inline void vlineasm2(int32_t numRows, uint16_t *dest, int32_t i)
++{
++    vline2_t c = { (const uint8_t *)bufplce[i], (const uint8_t *)bufplce[i + 1],
++                   palookupoffse[i], palookupoffse[i + 1], vplce[i], vplce[i + 1],
++                   vince[i], vince[i + 1], mach3_al };
  
 -	if (!RENDER_DRAW_WALL_INSIDE)
 -		return ;
-+    do {
-+        *dest = p0[b0[v0 >> shift]] | (p1[b1[v1 >> shift]] << 8);
-+        v0 += i0;
-+        v1 += i1;
-+        dest += pitch;
-+    } while (--numRows);
-+    vplce[i] = v0;
-+    vplce[i + 1] = v1;
++    vline2(dest, dest + numRows * (bytesperline >> 1), bytesperline, &c);
++    vplce[i] = c.v0;
++    vplce[i + 1] = c.v1;
 +}
  
 +void vlineasm4(int32_t numRows, intptr_t framebuffer)
@@ -268,7 +294,7 @@ index 00ca069..363957a 100644
  } 
  
  
-@@ -440,33 +400,29 @@ void setupmvlineasm(int32_t i1)
+@@ -440,33 +426,30 @@ void setupmvlineasm(int32_t i1)
  } 
  
  
@@ -285,14 +311,7 @@ index 00ca069..363957a 100644
 -
 -		if (pixelsAllowed <= 0)
 -			return;
-+    for (i = 0; i < 4; i++)
-+    {
-+        const int32_t shift = machmv, inc = vince[i];
-+        const uint8_t *texture = (const uint8_t *)bufplce[i], *pal = palookupoffse[i];
-+        uint32_t v = vplce[i];
-+        uint8_t *dest = (uint8_t *)framebufferOffset + i;
-+        int32_t n = numRows;
- 
+-
 -        for (i = 0; i < 4; i++)
 -        {
 -			
@@ -306,21 +325,30 @@ index 00ca069..363957a 100644
 -	      vplce[i] += vince[i];
 -        }
 -        dest += bytesperline;
-+        do {
-+            uint32_t temp = texture[v >> shift];
++    for (i = 0; i < 4; i++)
++    {
++        // The pitch is read once, the stores could change the global
++        const int32_t shift = machmv, inc = vince[i], pitch = bytesperline;
++        const uint8_t *texture = (const uint8_t *)bufplce[i], *pal = palookupoffse[i];
++        uint32_t v = vplce[i];
++        uint8_t *dest = (uint8_t *)framebufferOffset + i;
++        int32_t n = numRows;
  
 -    } while (((uint32_t)dest - bytesperline) < ((uint32_t)dest));
++        do {
++            uint32_t temp = texture[v >> shift];
++
 +            if (temp != 255)
 +                *dest = pal[temp];
 +            v += inc;
-+            dest += bytesperline;
++            dest += pitch;
 +        } while (--n);
 +        vplce[i] = v;
 +    }
  } 
  /* END ---------------  WALLS RENDERING METHOD (USED TO BE HIGHLY OPTIMIZED ASSEMBLY) ----------------------------*/
  
-@@ -531,7 +487,6 @@ setup:
+@@ -531,7 +514,6 @@ setup:
          
          i1 = (i1&0xffffff00) | (((uint8_t  *)spal_eax)[i1]&0xff);
          
@@ -328,7 +356,7 @@ index 00ca069..363957a 100644
              *dest = i1;
          
          dest += bytesperline;
-@@ -591,7 +546,6 @@ setup:
+@@ -591,7 +573,6 @@ setup:
          {
              colorIndex = (colorIndex&0xffffff00) | (((uint8_t  *)spal_eax)[colorIndex]&0xff);
              
@@ -336,7 +364,7 @@ index 00ca069..363957a 100644
                  *dest = colorIndex;
          }
     
-@@ -671,7 +625,6 @@ void DrawSpriteVerticalLine(int32_t i2, int32_t numPixels, uint32_t i4, uint8_t
+@@ -671,7 +652,6 @@ void DrawSpriteVerticalLine(int32_t i2, int32_t numPixels, uint32_t i4, uint8_t
  
  				colorIndex = transluc[val];
  
@@ -344,7 +372,7 @@ index 00ca069..363957a 100644
  					*dest = colorIndex;
  			}
              
-@@ -743,7 +696,6 @@ void mhlineskipmodify( uint32_t i2, int32_t numPixels, int32_t i5, uint8_t* dest
+@@ -743,7 +723,6 @@ void mhlineskipmodify( uint32_t i2, int32_t numPixels, int32_t i5, uint8_t* dest
  
          //Skip transparent color.
  		if ((colorIndex&0xff) != 0xff){
@@ -352,7 +380,7 @@ index 00ca069..363957a 100644
  				*dest = mmach_asm3[colorIndex];
          }
  	    i2 += mmach_asm1;
-@@ -797,7 +749,6 @@ void thlineskipmodify(int32_t i1, uint32_t i2, uint32_t i3, int32_t i4, int32_t
+@@ -797,7 +776,6 @@ void thlineskipmodify(int32_t i1, uint32_t i2, uint32_t i3, int32_t i4, int32_t
  		    if (transrev) 
  				val = ((val>>8)|(val<<8));
  
@@ -360,7 +388,7 @@ index 00ca069..363957a 100644
  			 *i6 = transluc[val];
  	    }
  
-@@ -826,19 +777,18 @@ static int32_t slopemach_ecx;
+@@ -826,19 +804,18 @@ static int32_t slopemach_ecx;
  static int32_t slopemach_edx;
  static uint8_t  slopemach_ah1;
  static uint8_t  slopemach_ah2;
@@ -384,7 +412,7 @@ index 00ca069..363957a 100644
  }
  
  extern int32_t reciptable[2048];
-@@ -850,10 +800,8 @@ extern int32_t fpuasm;
+@@ -850,10 +827,8 @@ extern int32_t fpuasm;
  //FCS: Render RENDER_SLOPPED_CEILING_AND_FLOOR
  void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int32_t i6)
  {
@@ -396,7 +424,7 @@ index 00ca069..363957a 100644
      i1 -= slopemach_ecx;
      esi = i5 + low32((__int64)globalx3 * (__int64)(i2<<3));
      edi = i6 + low32((__int64)globaly3 * (__int64)(i2<<3));
-@@ -865,8 +813,7 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
+@@ -865,8 +840,7 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
      do {
  	    // -------------
  	    // All this is calculating a fixed point approx. of 1/a
@@ -406,7 +434,7 @@ index 00ca069..363957a 100644
  	    edx = (((int32_t)eax) < 0) ? 0xffffffff : 0;
  	    eax = eax << 1;
  	    ecx = (eax>>24);	//  exponent
-@@ -881,7 +828,7 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
+@@ -881,7 +855,7 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
  	    eax -= edx;
  	    ecx = low32((__int64)globalx3 * (__int64)eax);
  	    eax = low32((__int64)globaly3 * (__int64)eax);
@@ -415,7 +443,7 @@ index 00ca069..363957a 100644
  
  	    asm4 = ebx;
  	    ecx = ((ecx&0xffffff00)|(ebx&0xff));
-@@ -903,7 +850,6 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
+@@ -903,7 +877,6 @@ void slopevlin(intptr_t i1, uint32_t i2, int32_t i3, int32_t i4, int32_t i5, int
  		    eax = ((eax&0xffffff00)|(*((uint8_t  *)(ebx+edx))));
  		    ebx = esi;
  

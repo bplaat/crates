@@ -129,7 +129,9 @@ of main RAM on a 16-bit bus at half its clock.
 - [0008](patches/0008-Speed-up-the-drawers.patch): The C versions of Ken's
   assembly drawers kept their state in globals and counted every pixel for a
   debugging feature. They keep it in registers, the wall drawer does two
-  columns at a time, a halfword per row, and the counter is gone. Twice the
+  columns at a time, a halfword per row, in an assembly loop as its values
+  only just fit in the registers, the masked wall drawer reads the pitch once,
+  and the counter is gone. Twice the
   frame rate. Ken's reciprocals read the bits of an integer turned into a
   float, `floatbits` works them out with a count of leading zeros, and the
   sloped floors keep their depth in an integer: the renderer does no
