@@ -165,7 +165,7 @@ of main RAM on a 16-bit bus at half its clock.
 - [0018](patches/0018-Speed-up-the-column-and-span-drawers.patch): The
   drawers keep their tables in registers, the column drawer draws four
   pixels at a time with a free texture wrap and the span drawer stores four
-  pixels as one word.
+  pixels as one word, both in assembly loops.
 - [0019](patches/0019-Keep-the-light-tables-in-DTCM.patch): The colormaps,
   read for every pixel, live in DTCM.
 - [0020](patches/0020-Run-hot-functions-from-ITCM.patch): `HOT_CODE` puts
