@@ -19,8 +19,9 @@ source port of id Software's Wolfenstein 3D, to the Nintendo DS and DSi.
 The title shows while the game loads and stays with its music until you
 press a button, then the main menu shows: New Game, Load Game, Save Game,
 View Scores, Back to Demo (or B), which shows the title and the demos, Sound,
-Control and Quit. In a game End Game takes the place of View Scores and there
-is no Quit. Sound has the sound effects, digitized sounds and music, each
+Control and Quit. In a game the menu starts with Back to Game (or B), then New
+Game, Load Game, Save Game, Sound and Control, and ends with End Game, there is
+no Quit. Sound has the sound effects, digitized sounds and music, each
 Disabled or Enabled, all enabled by default, the DS volume slider sets the
 loudness.
 
@@ -123,7 +124,8 @@ code is written for the DS only, without `__NDS__` checks.
   no Control menu, the buttons are the joystick, without mouse or keyboard.
   Sound moves down above Quit, with each sound just Disabled or Enabled,
   kept in the config once it is left. In a
-  game there is no Quit. B leaves the main menu like Back to Game/Demo
+  game there is no Quit, Back to Game is at the top and End Game at the
+  bottom. B leaves the main menu like Back to Game/Demo
   instead of asking to quit.
 - [0008](patches/0008-Start-in-the-main-menu.patch): The game starts with
   the title and its music until a button is pressed, then the main menu,

@@ -197,7 +197,7 @@ index 9285b92..44b8d70 100644
          fclose (file);
      }
 diff --git a/wl_menu.c b/wl_menu.c
-index 3f58654..46e661c 100644
+index d67ff9d..20592dc 100644
 --- a/wl_menu.c
 +++ b/wl_menu.c
 @@ -15,6 +15,7 @@
@@ -224,7 +224,7 @@ index 3f58654..46e661c 100644
      {1, STR_QT, 0}
  #endif
  };
-@@ -85,26 +88,12 @@ CP_itemtype SndMenu[] = {
+@@ -108,26 +111,12 @@ CP_itemtype SndMenu[] = {
      {1, STR_ENABLED, 0}
  };
  
@@ -255,7 +255,7 @@ index 3f58654..46e661c 100644
  };
  
  #ifndef SPEAR
-@@ -1512,31 +1501,21 @@ CP_Control (int blank)
+@@ -1537,31 +1526,21 @@ CP_Control (int blank)
          which = HandleMenu (&CtlItems, CtlMenu, NULL);
          switch (which)
          {
@@ -295,7 +295,7 @@ index 3f58654..46e661c 100644
      MenuFadeOut ();
  
      return 0;
-@@ -1688,29 +1667,11 @@ DrawCtlScreen (void)
+@@ -1713,29 +1692,11 @@ DrawCtlScreen (void)
      WindowW = 320;
      SETFONTCOLOR (TEXTCOLOR, BKGDCOLOR);
  

@@ -114,10 +114,10 @@ index 44b8d70..a164a97 100644
          fclose (file);
      }
 diff --git a/wl_menu.c b/wl_menu.c
-index 46e661c..d84e58f 100644
+index 20592dc..9c1642e 100644
 --- a/wl_menu.c
 +++ b/wl_menu.c
-@@ -88,12 +88,14 @@ CP_itemtype SndMenu[] = {
+@@ -111,12 +111,14 @@ CP_itemtype SndMenu[] = {
      {1, STR_ENABLED, 0}
  };
  
@@ -136,7 +136,7 @@ index 46e661c..d84e58f 100644
  };
  
  #ifndef SPEAR
-@@ -1508,6 +1510,12 @@ CP_Control (int blank)
+@@ -1533,6 +1535,12 @@ CP_Control (int blank)
                  DrawCtlScreen ();
                  ShootSnd ();
                  break;
@@ -149,7 +149,7 @@ index 46e661c..d84e58f 100644
          }
          // HandleMenu sees a held button as pressed again
          WaitKeyUp ();
-@@ -1676,6 +1684,12 @@ DrawCtlScreen (void)
+@@ -1701,6 +1709,12 @@ DrawCtlScreen (void)
      else
          VWB_DrawPic (x, y, C_NOTSELECTEDPIC);
  

@@ -21,10 +21,10 @@ The episodes the shareware lacks say where the data of the full game
 goes instead of pointing to Read This!.
 ---
  foreign.h |   2 +
- wl_main.c |   8 ++-
- wl_menu.c | 206 ++++++++++--------------------------------------------
- wl_menu.h |  17 ++---
- 4 files changed, 50 insertions(+), 183 deletions(-)
+ wl_main.c |   8 +-
+ wl_menu.c | 235 +++++++++++++++---------------------------------------
+ wl_menu.h |  17 +---
+ 4 files changed, 77 insertions(+), 185 deletions(-)
 
 diff --git a/foreign.h b/foreign.h
 index 0ea51fe..3cd1bea 100644
@@ -66,7 +66,7 @@ index e88c4e2..1b69819 100644
      }
      else
 diff --git a/wl_menu.c b/wl_menu.c
-index 0cce49e..3f58654 100644
+index 0cce49e..d67ff9d 100644
 --- a/wl_menu.c
 +++ b/wl_menu.c
 @@ -30,7 +30,7 @@ void SetTextColor (CP_itemtype *items, int hlight);
@@ -78,7 +78,7 @@ index 0cce49e..3f58654 100644
  #endif
  #endif
  
-@@ -50,70 +50,39 @@ char endStrings[9][80] = {
+@@ -50,70 +50,62 @@ char endStrings[9][80] = {
  CP_itemtype MainMenu[] = {
  #ifdef JAPAN
      {1, "", CP_NewGame},
@@ -120,6 +120,29 @@ index 0cce49e..3f58654 100644
  #endif
  };
  
++// In a game the menu starts with Back to Game and ends with End Game, the
++// other items in between in their order, without Quit
++static CP_itemtype GameMenu[lengthof(MainMenu) - 1];
++static int gamemenuitem[lengthof(MainMenu) - 1];
++
++// The items the main menu shows, in a game GameMenu with the items of
++// MainMenu as they are now
++static CP_itemtype *MainMenuItems (void)
++{
++    int i, n = 0;
++
++    if (!ingame)
++        return MainMenu;
++    gamemenuitem[n++] = backtodemo;
++    for (i = 0; i < quit; i++)
++        if (i != backtodemo && i != viewscores)
++            gamemenuitem[n++] = i;
++    gamemenuitem[n++] = viewscores;
++    for (i = 0; i < n; i++)
++        GameMenu[i] = MainMenu[gamemenuitem[i]];
++    return GameMenu;
++}
++
 +// Every sound is just disabled or enabled, the DS always plays the AdLib
 +// and digitized sounds
  CP_itemtype SndMenu[] = {
@@ -144,13 +167,13 @@ index 0cce49e..3f58654 100644
 -    {1, STR_NONE, 0},
 -    {1, STR_PC, 0},
 -    {1, STR_ALSB, 0},
--    {0, "", 0},
--    {0, "", 0},
+     {0, "", 0},
+     {0, "", 0},
 -    {1, STR_NONE, 0},
 -    {0, STR_DISNEY, 0},
 -    {1, STR_SB, 0},
-     {0, "", 0},
-     {0, "", 0},
+-    {0, "", 0},
+-    {0, "", 0},
 -    {1, STR_NONE, 0},
 -    {1, STR_ALSB, 0}
 -#endif
@@ -159,7 +182,18 @@ index 0cce49e..3f58654 100644
  };
  
  #ifdef JAPAN
-@@ -475,6 +444,8 @@ US_ControlPanel (ScanCode scancode)
+@@ -421,7 +413,9 @@ US_ControlPanel (ScanCode scancode)
+     //
+     do
+     {
+-        which = HandleMenu (&MainItems, &MainMenu[0], NULL);
++        which = HandleMenu (&MainItems, ingame ? GameMenu : MainMenu, NULL);
++        if (ingame && which >= 0)
++            which = gamemenuitem[which];
+ 
+ #ifdef SPEAR
+ #ifndef SPEARDEMO
+@@ -475,6 +469,8 @@ US_ControlPanel (ScanCode scancode)
                  }
                  break;
  
@@ -168,7 +202,7 @@ index 0cce49e..3f58654 100644
              case backtodemo:
                  StartGame = 1;
                  if (!ingame)
-@@ -482,7 +453,6 @@ US_ControlPanel (ScanCode scancode)
+@@ -482,7 +478,6 @@ US_ControlPanel (ScanCode scancode)
                  VL_FadeOut (0, 255, 0, 0, 0, 10);
                  break;
  
@@ -176,7 +210,7 @@ index 0cce49e..3f58654 100644
              case quit:
                  CP_Quit (0);
                  break;
-@@ -540,9 +510,11 @@ DrawMainMenu (void)
+@@ -540,9 +535,11 @@ DrawMainMenu (void)
  #ifdef SPANISH
      DrawWindow (MENU_X - 8, MENU_Y - 3, MENU_W + 8, MENU_H, BKGDCOLOR);
  #else
@@ -189,7 +223,16 @@ index 0cce49e..3f58654 100644
  
      //
      // CHANGE "GAME" AND "DEMO"
-@@ -884,9 +856,9 @@ CP_NewGame (int blank)
+@@ -568,7 +565,7 @@ DrawMainMenu (void)
+         MainMenu[backtodemo].active = 1;
+     }
+ 
+-    DrawMenu (&MainItems, &MainMenu[0]);
++    DrawMenu (&MainItems, MainMenuItems ());
+     VW_UpdateScreen ();
+ }
+ 
+@@ -884,9 +881,9 @@ CP_NewGame (int blank)
                  if (!EpisodeSelect[which / 2])
                  {
                      SD_PlaySound (NOWAYSND);
@@ -202,7 +245,7 @@ index 0cce49e..3f58654 100644
                      IN_ClearKeysDown ();
                      IN_Ack ();
                      DrawNewEpisode ();
-@@ -955,15 +927,6 @@ CP_NewGame (int blank)
+@@ -955,15 +952,6 @@ CP_NewGame (int blank)
      StartGame = 1;
      MenuFadeOut ();
  
@@ -218,7 +261,7 @@ index 0cce49e..3f58654 100644
      pickquick = 0;
  
      return 0;
-@@ -1075,14 +1038,8 @@ CP_Sound (int blank)
+@@ -1075,14 +1063,8 @@ CP_Sound (int blank)
      do
      {
          which = HandleMenu (&SndItems, &SndMenu[0], NULL);
@@ -233,7 +276,7 @@ index 0cce49e..3f58654 100644
              case 0:
                  if (SoundMode != sdm_Off)
                  {
-@@ -1092,16 +1049,6 @@ CP_Sound (int blank)
+@@ -1092,16 +1074,6 @@ CP_Sound (int blank)
                  }
                  break;
              case 1:
@@ -250,7 +293,7 @@ index 0cce49e..3f58654 100644
                  if (SoundMode != sdm_AdLib)
                  {
                      SD_WaitSoundDone ();
-@@ -1112,9 +1059,6 @@ CP_Sound (int blank)
+@@ -1112,9 +1084,6 @@ CP_Sound (int blank)
                  }
                  break;
  
@@ -260,7 +303,7 @@ index 0cce49e..3f58654 100644
              case 5:
                  if (DigiMode != sds_Off)
                  {
-@@ -1123,14 +1067,6 @@ CP_Sound (int blank)
+@@ -1123,14 +1092,6 @@ CP_Sound (int blank)
                  }
                  break;
              case 6:
@@ -275,7 +318,7 @@ index 0cce49e..3f58654 100644
                  if (DigiMode != sds_SoundBlaster)
                  {
                      SD_SetDigiDevice (sds_SoundBlaster);
-@@ -1139,9 +1075,6 @@ CP_Sound (int blank)
+@@ -1139,9 +1100,6 @@ CP_Sound (int blank)
                  }
                  break;
  
@@ -285,7 +328,7 @@ index 0cce49e..3f58654 100644
              case 10:
                  if (MusicMode != smm_Off)
                  {
-@@ -1160,9 +1093,13 @@ CP_Sound (int blank)
+@@ -1160,9 +1118,13 @@ CP_Sound (int blank)
                  }
                  break;
          }
@@ -299,7 +342,7 @@ index 0cce49e..3f58654 100644
      MenuFadeOut ();
  
      return 0;
-@@ -1193,20 +1130,6 @@ DrawSoundMenu (void)
+@@ -1193,20 +1155,6 @@ DrawSoundMenu (void)
      DrawWindow (SM_X - 8, SM_Y3 - 3, SM_W, SM_H3, BKGDCOLOR);
  #endif
  
@@ -320,7 +363,7 @@ index 0cce49e..3f58654 100644
      DrawMenu (&SndItems, &SndMenu[0]);
  #ifndef JAPAN
      VWB_DrawPic (100, SM_Y1 - 20, C_FXTITLEPIC);
-@@ -1214,69 +1137,23 @@ DrawSoundMenu (void)
+@@ -1214,69 +1162,23 @@ DrawSoundMenu (void)
      VWB_DrawPic (100, SM_Y3 - 20, C_MUSICTITLEPIC);
  #endif
  
@@ -404,7 +447,7 @@ index 0cce49e..3f58654 100644
  
      DrawMenuGun (&SndItems);
      VW_UpdateScreen ();
-@@ -1397,15 +1274,6 @@ CP_LoadGame (int quick)
+@@ -1397,15 +1299,6 @@ CP_LoadGame (int quick)
  
              StartGame = 1;
              ShootSnd ();
