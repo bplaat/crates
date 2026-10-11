@@ -33,7 +33,7 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
   `scanf` families, `strtof`, float math, time and `setjmp`. Floats are single precision
   throughout, `strtod` and `atof` too, nothing does double precision math. `stdin` is always
   empty. It only uses the calico functions in `libc/calico.h`.
-- `nds.mk` has the make rules for the ports' `Makefile.nds`
+- `nds.mk` has the make rules for the ports' `Makefile.nds`, at `-O3`
 - `run.sh` starts a program in melonDS, `make run` uses it
 - `desmume/runner.c` runs a `.nds` headless in [DeSmuME](https://github.com/TASEmulators/desmume)'s
   interface library, frame exact, for scripts and agents: it presses buttons, touches the touch
