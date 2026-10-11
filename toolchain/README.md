@@ -20,6 +20,7 @@ What the ports share to build Nintendo DS programs with plain clang and lld, wit
 ./build.sh clean           # remove target/
 ./build.sh export-patches  # write the commits in target/<name>/ back to <name>/patches/
 ./build.sh test            # build test/ and run it in melonDS
+./build.sh desmume         # build target/bin/desmume-runner, needs meson and ninja
 ```
 
 The ARM9 (ARMv5TE) and ARM7 (ARMv4T) have no floating point unit. Code is Thumb, except objects
@@ -34,6 +35,23 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
   empty. It only uses the calico functions in `libc/calico.h`.
 - `nds.mk` has the make rules for the ports' `Makefile.nds`
 - `run.sh` starts a program in melonDS, `make run` uses it
+- `desmume/runner.c` runs a `.nds` headless in [DeSmuME](https://github.com/TASEmulators/desmume)'s
+  interface library, frame exact, for scripts and agents: it presses buttons, touches the touch
+  screen, takes PNG screenshots of both screens and saves and loads savestates. Each argument is a
+  command, without them it reads one per line from stdin and answers each with `ok`:
+
+  ```sh
+  target/bin/desmume-runner ../duke3d/target/duke3d.nds 'wait 1200' 'press start' 'wait 60' \
+      'press a' 'shot menu.png' 'save menu.dst'
+  ```
+
+  The commands are `wait <frames>`, `press <keys> [frames]`, `hold <keys>`, `release`,
+  `touch <x> <y> [frames]`, `shot <file.png>`, `save <file>`, `load <file>`, `hook <address>`
+  and `count`, which count the executions of a function such as a renderer's for frame rates,
+  `profile start`, `busy`, the share of the ARM9's time not waiting, `profile save <file>`, the
+  ARM9 cycles per instruction address with their cache misses, `profile stop`, `wav <file>` and
+  `wav stop`, which record the sound, and `quit`, keys like `up+a`. DeSmuME has no SD card here,
+  the ports read their data from NitroFS.
 - `test/` is a DS program that checks the startup code, the C library, compiler-rt, threads, ITCM,
   FAT and NitroFS. `./build.sh test` runs it in melonDS with an SD card in `test/target/sd/` and
   fails when a check fails or it doesn't finish.
@@ -45,5 +63,9 @@ to write the commits back.
 
 - calico: unified assembly syntax for LLVM, no newlib glue, linker scripts that work with lld
 - libnds: builds with clang and without newlib, with a pregenerated `libversion.h`
+- desmume: returning from an interrupt to Thumb code at an address that isn't a multiple of 4,
+  like calico does with `ldm sp!, {..., pc}^`, ran the instruction before it again, the ARM9
+  cycles are counted per instruction address for `profile` of the runner and the sound can be
+  recorded for `wav`
 - compiler-rt: the optimized float functions for ARMv5TE, divisions that return to Thumb on
   ARMv4T

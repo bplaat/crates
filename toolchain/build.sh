@@ -8,6 +8,7 @@
 #   (none)          fetch, patch and build
 #   export-patches  write the commits in target/<name>/ back to <name>/patches/
 #   test            build test/ and run it in melonDS
+#   desmume         build DeSmuME's library and desmume/runner.c to target/bin/desmume-runner
 #   clean           remove target/
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -22,6 +23,10 @@ REPOS=(
     'ndstool https://github.com/devkitPro/ndstool.git v2.3.1 76e8b681bb225d945a48852821e03114e6c7ce1c'
     'compiler-rt https://github.com/llvm/llvm-project.git llvmorg-23.1.3 0d261d1ca552c95a8f007e061c787ac7132fbcbc /compiler-rt/lib/builtins/'
 )
+
+# DeSmuME for desmume/runner.c, only cloned by the desmume command. Its last release is from 2022,
+# so it's a commit of master, a version that is the commit fetches that commit.
+DESMUME_REPO='desmume https://github.com/TASEmulators/desmume.git 1275dc64f5d1f5ef18dc1bc1fa9e012024b6df1a 1275dc64f5d1f5ef18dc1bc1fa9e012024b6df1a'
 
 TOOLCHAIN_DIR="$PWD"
 BUILD_DIR="$TOOLCHAIN_DIR/target"
@@ -119,7 +124,11 @@ clone() {
     [ -d "$dir" ] && return
     msg "Cloning $name $version"
     rm -rf "$dir.part"
-    if [ $# -gt 0 ]; then
+    if [ "$version" = "$commit" ]; then
+        git init -q "$dir.part"
+        git -C "$dir.part" fetch -q --depth 1 "$url" "$commit"
+        git -C "$dir.part" -c advice.detachedHead=false checkout -q FETCH_HEAD
+    elif [ $# -gt 0 ]; then
         # LLVM's annotated release tags make git warn that the tag "is not a commit", which it is
         git -c advice.detachedHead=false clone -q --depth 1 --branch "$version" --filter=blob:none \
             --sparse "$url" "$dir.part" 2>&1 | grep -v 'is not a commit' >&2 || true
@@ -185,10 +194,12 @@ patch_all() {
 # Writes the commits on top of upstream back to <name>/patches/
 export_patches() {
     local repo name dir
-    for repo in "${REPOS[@]}"; do
+    for repo in "${REPOS[@]}" "$DESMUME_REPO"; do
         name="${repo%% *}"
         dir="$BUILD_DIR/$name"
         [ -d "$TOOLCHAIN_DIR/$name/patches" ] || continue
+        # DeSmuME is only there once the desmume command ran
+        [ "$repo" = "$DESMUME_REPO" ] && [ ! -d "$dir" ] && continue
         [ -d "$dir/.git" ] || die "No patched $name, run ./build.sh first"
         rm -f "$TOOLCHAIN_DIR/$name"/patches/*.patch
         git -C "$dir" format-patch -q --no-numbered --zero-commit --no-signature \
@@ -343,6 +354,25 @@ run_test() {
     msg "All tests passed"
 }
 
+# Builds DeSmuME's interface library, the one py-desmume uses, and the runner on it, which plays a
+# program headless and takes screenshots
+build_desmume() {
+    local interface="$BUILD_DIR/desmume/desmume/src/frontend/interface" objects_dir="$BUILD_DIR/objects/desmume"
+    command -v meson > /dev/null || die "Install meson and ninja to build DeSmuME"
+    # shellcheck disable=SC2086
+    clone $DESMUME_REPO
+    patch desmume "$(echo "$DESMUME_REPO" | cut -d' ' -f4)"
+    [ -f "$objects_dir/build.ninja" ] || meson setup "$objects_dir" "$interface" --buildtype=release > /dev/null
+    msg "Building DeSmuME"
+    ninja -C "$objects_dir" > /dev/null
+    outdated "$BUILD_DIR/bin/desmume-runner" "$TOOLCHAIN_DIR/desmume/runner.c" "$objects_dir"/libdesmume.* ||
+        return 0
+    msg "Building desmume-runner"
+    mkdir -p "$BUILD_DIR/bin"
+    cc -std=c11 -O2 -Wall -Wextra "$TOOLCHAIN_DIR/desmume/runner.c" -L"$objects_dir" -ldesmume -lz \
+        -Wl,-rpath,"$objects_dir" -o "$BUILD_DIR/bin/desmume-runner"
+}
+
 # Only one build at a time, the ports can start one at the same time
 locked=false
 lock() {
@@ -362,6 +392,7 @@ for command in "$@"; do
         all) lock; fetch; patch_all; build_libraries; build_arm7; build_ndstool ;;
         export-patches) export_patches ;;
         test) lock; fetch; patch_all; build_libraries; build_arm7; build_ndstool; run_test ;;
+        desmume) lock; build_desmume ;;
         clean) rm -rf "$BUILD_DIR" ;;
         *) die "Unknown command: $command" ;;
     esac
