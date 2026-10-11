@@ -109,7 +109,7 @@ index 286b3b6..0d163c2 100644
  extern	int			sb_lines;			// scan lines to draw
  
 diff --git a/WinQuake/screen.c b/WinQuake/screen.c
-index 1b150fd..97f489e 100644
+index db253ab..f0010e0 100644
 --- a/WinQuake/screen.c
 +++ b/WinQuake/screen.c
 @@ -292,10 +292,8 @@ static void SCR_CalcRefdef (void)

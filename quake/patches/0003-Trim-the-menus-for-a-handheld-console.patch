@@ -14,9 +14,9 @@ size, CD music and video modes. Leaving the options writes
 config.cfg right away, not only on quitting: a handheld is often just
 switched off.
 ---
- WinQuake/menu.c     | 2110 ++-----------------------------------------
+ WinQuake/menu.c     | 2834 +++++++------------------------------------
  WinQuake/quakedef.h |    1 +
- 2 files changed, 91 insertions(+), 2020 deletions(-)
+ 2 files changed, 453 insertions(+), 2382 deletions(-)
 
 diff --git a/WinQuake/menu.c b/WinQuake/menu.c
 index a2fa76f..74c584f 100644
@@ -280,27 +280,34 @@ index a2fa76f..74c584f 100644
  		break;
  
  	case K_ENTER:
-@@ -601,446 +590,10 @@ void M_Save_Key (int k)
- 	}
+@@ -602,2393 +591,520 @@ void M_Save_Key (int k)
  }
  
--//=============================================================================
+ //=============================================================================
 -/* MULTIPLAYER MENU */
--
++/* OPTIONS MENU */
+ 
 -int	m_multiplayer_cursor;
 -#define	MULTIPLAYER_ITEMS	3
--
--
++#define	OPTIONS_ITEMS	5
++
++#define	SLIDER_RANGE	10
+ 
++int		options_cursor;
+ 
 -void M_Menu_MultiPlayer_f (void)
--{
--	key_dest = key_menu;
++void M_Menu_Options_f (void)
+ {
+ 	key_dest = key_menu;
 -	m_state = m_multiplayer;
--	m_entersound = true;
--}
--
--
++	m_state = m_options;
+ 	m_entersound = true;
+ }
+ 
+ 
 -void M_MultiPlayer_Draw (void)
--{
++void M_AdjustSliders (int dir)
+ {
 -	int		f;
 -	qpic_t	*p;
 -
@@ -318,11 +325,13 @@ index a2fa76f..74c584f 100644
 -	M_PrintWhite ((320/2) - ((27*8)/2), 148, "No Communications Available");
 -}
 -
--
++	S_LocalSound ("misc/menu3.wav");
+ 
 -void M_MultiPlayer_Key (int key)
 -{
 -	switch (key)
--	{
++	switch (options_cursor)
+ 	{
 -	case K_ESCAPE:
 -		M_Menu_Main_f ();
 -		break;
@@ -331,18 +340,34 @@ index a2fa76f..74c584f 100644
 -		S_LocalSound ("misc/menu1.wav");
 -		if (++m_multiplayer_cursor >= MULTIPLAYER_ITEMS)
 -			m_multiplayer_cursor = 0;
--		break;
++	case 1:	// gamma
++		v_gamma.value -= dir * 0.05;
++		if (v_gamma.value < 0.5)
++			v_gamma.value = 0.5;
++		if (v_gamma.value > 1)
++			v_gamma.value = 1;
++		Cvar_SetValue ("gamma", v_gamma.value);
+ 		break;
 -
 -	case K_UPARROW:
 -		S_LocalSound ("misc/menu1.wav");
 -		if (--m_multiplayer_cursor < 0)
 -			m_multiplayer_cursor = MULTIPLAYER_ITEMS - 1;
--		break;
--
++	case 2:	// sfx volume
++		volume.value += dir * 0.1;
++		if (volume.value < 0)
++			volume.value = 0;
++		if (volume.value > 1)
++			volume.value = 1;
++		Cvar_SetValue ("volume", volume.value);
+ 		break;
+ 
 -	case K_ENTER:
 -		m_entersound = true;
 -		switch (m_multiplayer_cursor)
--		{
++	case 3:	// allways run
++		if (cl_forwardspeed.value > 200)
+ 		{
 -		case 0:
 -			if (serialAvailable || ipxAvailable || tcpipAvailable)
 -				M_Menu_Net_f ();
@@ -356,27 +381,53 @@ index a2fa76f..74c584f 100644
 -		case 2:
 -			M_Menu_Setup_f ();
 -			break;
--		}
--	}
--}
--
++			Cvar_SetValue ("cl_forwardspeed", 200);
++			Cvar_SetValue ("cl_backspeed", 200);
++		}
++		else
++		{
++			Cvar_SetValue ("cl_forwardspeed", 400);
++			Cvar_SetValue ("cl_backspeed", 400);
+ 		}
++		break;
++
++	case 4:	// crosshair
++		Cvar_SetValue ("crosshair", !crosshair.value);
++		break;
+ 	}
+ }
+ 
 -//=============================================================================
 -/* SETUP MENU */
 -
 -int		setup_cursor = 4;
 -int		setup_cursor_table[] = {40, 56, 80, 104, 140};
--
+ 
 -char	setup_hostname[16];
 -char	setup_myname[16];
 -int		setup_oldtop;
 -int		setup_oldbottom;
 -int		setup_top;
 -int		setup_bottom;
--
++void M_DrawSlider (int x, int y, float range)
++{
++	int	i;
+ 
 -#define	NUM_SETUP_CMDS	5
--
++	if (range < 0)
++		range = 0;
++	if (range > 1)
++		range = 1;
++	M_DrawCharacter (x-8, y, 128);
++	for (i=0 ; i<SLIDER_RANGE ; i++)
++		M_DrawCharacter (x + i*8, y, 129);
++	M_DrawCharacter (x+i*8, y, 130);
++	M_DrawCharacter (x + (SLIDER_RANGE-1)*8 * range, y, 131);
++}
+ 
 -void M_Menu_Setup_f (void)
--{
++void M_DrawCheckbox (int x, int y, int on)
+ {
 -	key_dest = key_menu;
 -	m_state = m_setup;
 -	m_entersound = true;
@@ -384,21 +435,29 @@ index a2fa76f..74c584f 100644
 -	Q_strcpy(setup_hostname, hostname.string);
 -	setup_top = setup_oldtop = ((int)cl_color.value) >> 4;
 -	setup_bottom = setup_oldbottom = ((int)cl_color.value) & 15;
--}
--
++	if (on)
++		M_Print (x, y, "on");
++	else
++		M_Print (x, y, "off");
+ }
+ 
 -
 -void M_Setup_Draw (void)
--{
--	qpic_t	*p;
--
--	M_DrawTransPic (16, 4, Draw_CachePic ("gfx/qplaque.lmp") );
++void M_Options_Draw (void)
+ {
++	float		r;
+ 	qpic_t	*p;
+ 
+ 	M_DrawTransPic (16, 4, Draw_CachePic ("gfx/qplaque.lmp") );
 -	p = Draw_CachePic ("gfx/p_multi.lmp");
--	M_DrawPic ( (320-p->width)/2, 4, p);
--
++	p = Draw_CachePic ("gfx/p_option.lmp");
+ 	M_DrawPic ( (320-p->width)/2, 4, p);
+ 
 -	M_Print (64, 40, "Hostname");
 -	M_DrawTextBox (160, 32, 16, 1);
 -	M_Print (168, 40, setup_hostname);
--
++	M_Print (16, 32, "     Reset to defaults");
+ 
 -	M_Print (64, 56, "Your name");
 -	M_DrawTextBox (160, 48, 16, 1);
 -	M_Print (168, 56, setup_myname);
@@ -408,48 +467,84 @@ index a2fa76f..74c584f 100644
 -
 -	M_DrawTextBox (64, 140-8, 14, 1);
 -	M_Print (72, 140, "Accept Changes");
--
++	M_Print (16, 40, "            Brightness");
++	r = (1.0 - v_gamma.value) / 0.5;
++	M_DrawSlider (220, 40, r);
+ 
 -	p = Draw_CachePic ("gfx/bigbox.lmp");
 -	M_DrawTransPic (160, 64, p);
 -	p = Draw_CachePic ("gfx/menuplyr.lmp");
 -	M_BuildTranslationTable(setup_top*16, setup_bottom*16);
 -	M_DrawTransPicTranslate (172, 72, p);
--
++	M_Print (16, 48, "          Sound Volume");
++	r = volume.value;
++	M_DrawSlider (220, 48, r);
+ 
 -	M_DrawCharacter (56, setup_cursor_table [setup_cursor], 12+((int)(realtime*4)&1));
--
++	M_Print (16, 56, "            Always Run");
++	M_DrawCheckbox (220, 56, cl_forwardspeed.value > 200);
+ 
 -	if (setup_cursor == 0)
 -		M_DrawCharacter (168 + 8*strlen(setup_hostname), setup_cursor_table [setup_cursor], 10+((int)(realtime*4)&1));
--
++	M_Print (16, 64, "             Crosshair");
++	M_DrawCheckbox (220, 64, crosshair.value);
+ 
 -	if (setup_cursor == 1)
 -		M_DrawCharacter (168 + 8*strlen(setup_myname), setup_cursor_table [setup_cursor], 10+((int)(realtime*4)&1));
--}
--
--
++// cursor
++	M_DrawCharacter (200, 32 + options_cursor*8, 12+((int)(realtime*4)&1));
+ }
+ 
+ 
 -void M_Setup_Key (int k)
--{
++void M_Options_Key (int k)
+ {
 -	int			l;
 -
--	switch (k)
--	{
--	case K_ESCAPE:
+ 	switch (k)
+ 	{
+ 	case K_ESCAPE:
 -		M_Menu_MultiPlayer_f ();
--		break;
--
--	case K_UPARROW:
--		S_LocalSound ("misc/menu1.wav");
++		// the settings are kept right away, a handheld is often just
++		// switched off
++		Host_WriteConfiguration ();
++		M_Menu_Main_f ();
+ 		break;
+ 
++	case K_ENTER:
++		m_entersound = true;
++		switch (options_cursor)
++		{
++		case 0:
++			Cbuf_AddText ("exec default.cfg\n");
++			break;
++		default:
++			M_AdjustSliders (1);
++			break;
++		}
++		return;
++
+ 	case K_UPARROW:
+ 		S_LocalSound ("misc/menu1.wav");
 -		setup_cursor--;
 -		if (setup_cursor < 0)
 -			setup_cursor = NUM_SETUP_CMDS-1;
--		break;
--
--	case K_DOWNARROW:
--		S_LocalSound ("misc/menu1.wav");
++		options_cursor--;
++		if (options_cursor < 0)
++			options_cursor = OPTIONS_ITEMS-1;
+ 		break;
+ 
+ 	case K_DOWNARROW:
+ 		S_LocalSound ("misc/menu1.wav");
 -		setup_cursor++;
 -		if (setup_cursor >= NUM_SETUP_CMDS)
 -			setup_cursor = 0;
--		break;
--
--	case K_LEFTARROW:
++		options_cursor++;
++		if (options_cursor >= OPTIONS_ITEMS)
++			options_cursor = 0;
+ 		break;
+ 
+ 	case K_LEFTARROW:
 -		if (setup_cursor < 2)
 -			return;
 -		S_LocalSound ("misc/menu3.wav");
@@ -485,8 +580,9 @@ index a2fa76f..74c584f 100644
 -			Cbuf_AddText( va ("color %i %i\n", setup_top, setup_bottom) );
 -		m_entersound = true;
 -		M_Menu_MultiPlayer_f ();
--		break;
--
++		M_AdjustSliders (-1);
+ 		break;
+ 
 -	case K_BACKSPACE:
 -		if (setup_cursor == 0)
 -		{
@@ -499,7 +595,9 @@ index a2fa76f..74c584f 100644
 -			if (strlen(setup_myname))
 -				setup_myname[strlen(setup_myname)-1] = 0;
 -		}
--		break;
++	case K_RIGHTARROW:
++		M_AdjustSliders (1);
+ 		break;
 -
 -	default:
 -		if (k < 32 || k > 127)
@@ -522,7 +620,7 @@ index a2fa76f..74c584f 100644
 -				setup_myname[l] = k;
 -			}
 -		}
--	}
+ 	}
 -
 -	if (setup_top > 13)
 -		setup_top = 0;
@@ -532,17 +630,19 @@ index a2fa76f..74c584f 100644
 -		setup_bottom = 0;
 -	if (setup_bottom < 0)
 -		setup_bottom = 13;
--}
--
--//=============================================================================
+ }
+ 
+ //=============================================================================
 -/* NET MENU */
 -
 -int	m_net_cursor;
 -int m_net_items;
 -int m_net_saveHeight;
--
++/* KEYS MENU */
+ 
 -char *net_helpMessage [] =
--{
++char *bindnames[][2] =
+ {
 -/* .........1.........2.... */
 -  "                        ",
 -  " Two computers connected",
@@ -553,45 +653,78 @@ index a2fa76f..74c584f 100644
 -  " Two computers connected",
 -  " by a null-modem cable. ",
 -  "                        ",
--
++{"+attack", 		"attack"},
++{"impulse 10", 		"change weapon"},
++{"+jump", 			"jump / swim up"},
++{"+forward", 		"walk forward"},
++{"+back", 			"backpedal"},
++{"+left", 			"turn left"},
++{"+right", 			"turn right"},
++{"+speed", 			"run"},
++{"+moveleft", 		"step left"},
++{"+moveright", 		"step right"},
++{"+strafe", 		"sidestep"},
++{"+lookup", 		"look up"},
++{"+lookdown", 		"look down"},
++{"centerview", 		"center view"},
++{"+mlook", 			"mouse look"},
++{"+klook", 			"keyboard look"},
++{"+moveup",			"swim up"},
++{"+movedown",		"swim down"}
++};
+ 
 -  " Novell network LANs    ",
 -  " or Windows 95 DOS-box. ",
 -  "                        ",
 -  "(LAN=Local Area Network)",
--
++#define	NUMCOMMANDS	(sizeof(bindnames)/sizeof(bindnames[0]))
+ 
 -  " Commonly used to play  ",
 -  " over the Internet, but ",
 -  " also used on a Local   ",
 -  " Area Network.          "
 -};
--
++int		keys_cursor;
++int		bind_grab;
+ 
 -void M_Menu_Net_f (void)
--{
--	key_dest = key_menu;
++void M_Menu_Keys_f (void)
+ {
+ 	key_dest = key_menu;
 -	m_state = m_net;
--	m_entersound = true;
++	m_state = m_keys;
+ 	m_entersound = true;
 -	m_net_items = 4;
 -
 -	if (m_net_cursor >= m_net_items)
 -		m_net_cursor = 0;
 -	m_net_cursor--;
 -	M_Net_Key (K_DOWNARROW);
--}
--
--
+ }
+ 
+ 
 -void M_Net_Draw (void)
--{
++void M_FindKeysForCommand (char *command, int *twokeys)
+ {
 -	int		f;
 -	qpic_t	*p;
 -
 -	M_DrawTransPic (16, 4, Draw_CachePic ("gfx/qplaque.lmp") );
 -	p = Draw_CachePic ("gfx/p_multi.lmp");
 -	M_DrawPic ( (320-p->width)/2, 4, p);
--
++	int		count;
++	int		j;
++	int		l;
++	char	*b;
+ 
 -	f = 32;
--
++	twokeys[0] = twokeys[1] = -1;
++	l = strlen(command);
++	count = 0;
+ 
 -	if (serialAvailable)
--	{
++	for (j=0 ; j<256 ; j++)
+ 	{
 -		p = Draw_CachePic ("gfx/netmen1.lmp");
 -	}
 -	else
@@ -716,22 +849,24 @@ index a2fa76f..74c584f 100644
 -		goto again;
 -}
 -
- //=============================================================================
- /* OPTIONS MENU */
- 
+-//=============================================================================
+-/* OPTIONS MENU */
+-
 -#ifdef _WIN32
 -#define	OPTIONS_ITEMS	14
 -#else
 -#define	OPTIONS_ITEMS	13
 -#endif
-+#define	OPTIONS_ITEMS	5
- 
- #define	SLIDER_RANGE	10
- 
-@@ -1051,13 +604,6 @@ void M_Menu_Options_f (void)
- 	key_dest = key_menu;
- 	m_state = m_options;
- 	m_entersound = true;
+-
+-#define	SLIDER_RANGE	10
+-
+-int		options_cursor;
+-
+-void M_Menu_Options_f (void)
+-{
+-	key_dest = key_menu;
+-	m_state = m_options;
+-	m_entersound = true;
 -
 -#ifdef _WIN32
 -	if ((options_cursor == 13) && (modestate != MS_WINDOWED))
@@ -739,13 +874,15 @@ index a2fa76f..74c584f 100644
 -		options_cursor = 0;
 -	}
 -#endif
- }
- 
- 
-@@ -1067,15 +613,7 @@ void M_AdjustSliders (int dir)
- 
- 	switch (options_cursor)
- 	{
+-}
+-
+-
+-void M_AdjustSliders (int dir)
+-{
+-	S_LocalSound ("misc/menu3.wav");
+-
+-	switch (options_cursor)
+-	{
 -	case 3:	// screen size
 -		scr_viewsize.value += dir * 10;
 -		if (scr_viewsize.value < 30)
@@ -755,14 +892,13 @@ index a2fa76f..74c584f 100644
 -		Cvar_SetValue ("viewsize", scr_viewsize.value);
 -		break;
 -	case 4:	// gamma
-+	case 1:	// gamma
- 		v_gamma.value -= dir * 0.05;
- 		if (v_gamma.value < 0.5)
- 			v_gamma.value = 0.5;
-@@ -1083,27 +621,7 @@ void M_AdjustSliders (int dir)
- 			v_gamma.value = 1;
- 		Cvar_SetValue ("gamma", v_gamma.value);
- 		break;
+-		v_gamma.value -= dir * 0.05;
+-		if (v_gamma.value < 0.5)
+-			v_gamma.value = 0.5;
+-		if (v_gamma.value > 1)
+-			v_gamma.value = 1;
+-		Cvar_SetValue ("gamma", v_gamma.value);
+-		break;
 -	case 5:	// mouse speed
 -		sensitivity.value += dir * 0.5;
 -		if (sensitivity.value < 1)
@@ -784,28 +920,30 @@ index a2fa76f..74c584f 100644
 -		Cvar_SetValue ("bgmvolume", bgmvolume.value);
 -		break;
 -	case 7:	// sfx volume
-+	case 2:	// sfx volume
- 		volume.value += dir * 0.1;
- 		if (volume.value < 0)
- 			volume.value = 0;
-@@ -1112,7 +630,7 @@ void M_AdjustSliders (int dir)
- 		Cvar_SetValue ("volume", volume.value);
- 		break;
- 
+-		volume.value += dir * 0.1;
+-		if (volume.value < 0)
+-			volume.value = 0;
+-		if (volume.value > 1)
+-			volume.value = 1;
+-		Cvar_SetValue ("volume", volume.value);
+-		break;
+-
 -	case 8:	// allways run
-+	case 3:	// allways run
- 		if (cl_forwardspeed.value > 200)
- 		{
- 			Cvar_SetValue ("cl_forwardspeed", 200);
-@@ -1125,23 +643,9 @@ void M_AdjustSliders (int dir)
- 		}
- 		break;
- 
+-		if (cl_forwardspeed.value > 200)
+-		{
+-			Cvar_SetValue ("cl_forwardspeed", 200);
+-			Cvar_SetValue ("cl_backspeed", 200);
+-		}
+-		else
+-		{
+-			Cvar_SetValue ("cl_forwardspeed", 400);
+-			Cvar_SetValue ("cl_backspeed", 400);
+-		}
+-		break;
+-
 -	case 9:	// invert mouse
 -		Cvar_SetValue ("m_pitch", -m_pitch.value);
-+	case 4:	// crosshair
-+		Cvar_SetValue ("crosshair", !crosshair.value);
- 		break;
+-		break;
 -
 -	case 10:	// lookspring
 -		Cvar_SetValue ("lookspring", !lookspring.value);
@@ -820,41 +958,60 @@ index a2fa76f..74c584f 100644
 -		Cvar_SetValue ("_windowed_mouse", !_windowed_mouse.value);
 -		break;
 -#endif
- 	}
- }
- 
-@@ -1163,12 +667,6 @@ void M_DrawSlider (int x, int y, float range)
- 
- void M_DrawCheckbox (int x, int y, int on)
- {
+-	}
+-}
+-
+-
+-void M_DrawSlider (int x, int y, float range)
+-{
+-	int	i;
+-
+-	if (range < 0)
+-		range = 0;
+-	if (range > 1)
+-		range = 1;
+-	M_DrawCharacter (x-8, y, 128);
+-	for (i=0 ; i<SLIDER_RANGE ; i++)
+-		M_DrawCharacter (x + i*8, y, 129);
+-	M_DrawCharacter (x+i*8, y, 130);
+-	M_DrawCharacter (x + (SLIDER_RANGE-1)*8 * range, y, 131);
+-}
+-
+-void M_DrawCheckbox (int x, int y, int on)
+-{
 -#if 0
 -	if (on)
 -		M_DrawCharacter (x, y, 131);
 -	else
 -		M_DrawCharacter (x, y, 129);
 -#endif
- 	if (on)
- 		M_Print (x, y, "on");
- 	else
-@@ -1184,52 +682,21 @@ void M_Options_Draw (void)
- 	p = Draw_CachePic ("gfx/p_option.lmp");
- 	M_DrawPic ( (320-p->width)/2, 4, p);
- 
+-	if (on)
+-		M_Print (x, y, "on");
+-	else
+-		M_Print (x, y, "off");
+-}
+-
+-void M_Options_Draw (void)
+-{
+-	float		r;
+-	qpic_t	*p;
+-
+-	M_DrawTransPic (16, 4, Draw_CachePic ("gfx/qplaque.lmp") );
+-	p = Draw_CachePic ("gfx/p_option.lmp");
+-	M_DrawPic ( (320-p->width)/2, 4, p);
+-
 -	M_Print (16, 32, "    Customize controls");
 -	M_Print (16, 40, "         Go to console");
 -	M_Print (16, 48, "     Reset to defaults");
-+	M_Print (16, 32, "     Reset to defaults");
- 
+-
 -	M_Print (16, 56, "           Screen size");
 -	r = (scr_viewsize.value - 30) / (120 - 30);
 -	M_DrawSlider (220, 56, r);
 -
 -	M_Print (16, 64, "            Brightness");
-+	M_Print (16, 40, "            Brightness");
- 	r = (1.0 - v_gamma.value) / 0.5;
+-	r = (1.0 - v_gamma.value) / 0.5;
 -	M_DrawSlider (220, 64, r);
-+	M_DrawSlider (220, 40, r);
- 
+-
 -	M_Print (16, 72, "           Mouse Speed");
 -	r = (sensitivity.value - 1)/10;
 -	M_DrawSlider (220, 72, r);
@@ -864,16 +1021,12 @@ index a2fa76f..74c584f 100644
 -	M_DrawSlider (220, 80, r);
 -
 -	M_Print (16, 88, "          Sound Volume");
-+	M_Print (16, 48, "          Sound Volume");
- 	r = volume.value;
+-	r = volume.value;
 -	M_DrawSlider (220, 88, r);
-+	M_DrawSlider (220, 48, r);
- 
+-
 -	M_Print (16, 96,  "            Always Run");
 -	M_DrawCheckbox (220, 96, cl_forwardspeed.value > 200);
-+	M_Print (16, 56, "            Always Run");
-+	M_DrawCheckbox (220, 56, cl_forwardspeed.value > 200);
- 
+-
 -	M_Print (16, 104, "          Invert Mouse");
 -	M_DrawCheckbox (220, 104, m_pitch.value < 0);
 -
@@ -893,25 +1046,25 @@ index a2fa76f..74c584f 100644
 -		M_DrawCheckbox (220, 136, _windowed_mouse.value);
 -	}
 -#endif
-+	M_Print (16, 64, "             Crosshair");
-+	M_DrawCheckbox (220, 64, crosshair.value);
- 
- // cursor
- 	M_DrawCharacter (200, 32 + options_cursor*8, 12+((int)(realtime*4)&1));
-@@ -1241,6 +708,9 @@ void M_Options_Key (int k)
- 	switch (k)
- 	{
- 	case K_ESCAPE:
-+		// the settings are kept right away, a handheld is often just
-+		// switched off
-+		Host_WriteConfiguration ();
- 		M_Menu_Main_f ();
- 		break;
- 
-@@ -1249,18 +719,8 @@ void M_Options_Key (int k)
- 		switch (options_cursor)
- 		{
- 		case 0:
+-
+-// cursor
+-	M_DrawCharacter (200, 32 + options_cursor*8, 12+((int)(realtime*4)&1));
+-}
+-
+-
+-void M_Options_Key (int k)
+-{
+-	switch (k)
+-	{
+-	case K_ESCAPE:
+-		M_Menu_Main_f ();
+-		break;
+-
+-	case K_ENTER:
+-		m_entersound = true;
+-		switch (options_cursor)
+-		{
+-		case 0:
 -			M_Menu_Keys_f ();
 -			break;
 -		case 1:
@@ -919,18 +1072,39 @@ index a2fa76f..74c584f 100644
 -			Con_ToggleConsole_f ();
 -			break;
 -		case 2:
- 			Cbuf_AddText ("exec default.cfg\n");
- 			break;
+-			Cbuf_AddText ("exec default.cfg\n");
+-			break;
 -		case 12:
 -			M_Menu_Video_f ();
 -			break;
- 		default:
- 			M_AdjustSliders (1);
- 			break;
-@@ -1289,24 +749,6 @@ void M_Options_Key (int k)
- 		M_AdjustSliders (1);
- 		break;
- 	}
+-		default:
+-			M_AdjustSliders (1);
+-			break;
+-		}
+-		return;
+-
+-	case K_UPARROW:
+-		S_LocalSound ("misc/menu1.wav");
+-		options_cursor--;
+-		if (options_cursor < 0)
+-			options_cursor = OPTIONS_ITEMS-1;
+-		break;
+-
+-	case K_DOWNARROW:
+-		S_LocalSound ("misc/menu1.wav");
+-		options_cursor++;
+-		if (options_cursor >= OPTIONS_ITEMS)
+-			options_cursor = 0;
+-		break;
+-
+-	case K_LEFTARROW:
+-		M_AdjustSliders (-1);
+-		break;
+-
+-	case K_RIGHTARROW:
+-		M_AdjustSliders (1);
+-		break;
+-	}
 -
 -	if (options_cursor == 12 && vid_menudrawfn == NULL)
 -	{
@@ -949,13 +1123,413 @@ index a2fa76f..74c584f 100644
 -			options_cursor = 0;
 -	}
 -#endif
- }
- 
- //=============================================================================
-@@ -1714,1289 +1156,6 @@ void M_Quit_Draw (void)
- #endif
- }
- 
+-}
+-
+-//=============================================================================
+-/* KEYS MENU */
+-
+-char *bindnames[][2] =
+-{
+-{"+attack", 		"attack"},
+-{"impulse 10", 		"change weapon"},
+-{"+jump", 			"jump / swim up"},
+-{"+forward", 		"walk forward"},
+-{"+back", 			"backpedal"},
+-{"+left", 			"turn left"},
+-{"+right", 			"turn right"},
+-{"+speed", 			"run"},
+-{"+moveleft", 		"step left"},
+-{"+moveright", 		"step right"},
+-{"+strafe", 		"sidestep"},
+-{"+lookup", 		"look up"},
+-{"+lookdown", 		"look down"},
+-{"centerview", 		"center view"},
+-{"+mlook", 			"mouse look"},
+-{"+klook", 			"keyboard look"},
+-{"+moveup",			"swim up"},
+-{"+movedown",		"swim down"}
+-};
+-
+-#define	NUMCOMMANDS	(sizeof(bindnames)/sizeof(bindnames[0]))
+-
+-int		keys_cursor;
+-int		bind_grab;
+-
+-void M_Menu_Keys_f (void)
+-{
+-	key_dest = key_menu;
+-	m_state = m_keys;
+-	m_entersound = true;
+-}
+-
+-
+-void M_FindKeysForCommand (char *command, int *twokeys)
+-{
+-	int		count;
+-	int		j;
+-	int		l;
+-	char	*b;
+-
+-	twokeys[0] = twokeys[1] = -1;
+-	l = strlen(command);
+-	count = 0;
+-
+-	for (j=0 ; j<256 ; j++)
+-	{
+-		b = keybindings[j];
+-		if (!b)
+-			continue;
+-		if (!strncmp (b, command, l) )
+-		{
+-			twokeys[count] = j;
+-			count++;
+-			if (count == 2)
+-				break;
+-		}
+-	}
+-}
+-
+-void M_UnbindCommand (char *command)
+-{
+-	int		j;
+-	int		l;
+-	char	*b;
+-
+-	l = strlen(command);
+-
+-	for (j=0 ; j<256 ; j++)
+-	{
+-		b = keybindings[j];
+-		if (!b)
+-			continue;
+-		if (!strncmp (b, command, l) )
+-			Key_SetBinding (j, "");
+-	}
+-}
+-
+-
+-void M_Keys_Draw (void)
+-{
+-	int		i, l;
+-	int		keys[2];
+-	char	*name;
+-	int		x, y;
+-	qpic_t	*p;
+-
+-	p = Draw_CachePic ("gfx/ttl_cstm.lmp");
+-	M_DrawPic ( (320-p->width)/2, 4, p);
+-
+-	if (bind_grab)
+-		M_Print (12, 32, "Press a key or button for this action");
+-	else
+-		M_Print (18, 32, "Enter to change, backspace to clear");
+-
+-// search for known bindings
+-	for (i=0 ; i<NUMCOMMANDS ; i++)
+-	{
+-		y = 48 + 8*i;
+-
+-		M_Print (16, y, bindnames[i][1]);
+-
+-		l = strlen (bindnames[i][0]);
+-
+-		M_FindKeysForCommand (bindnames[i][0], keys);
+-
+-		if (keys[0] == -1)
+-		{
+-			M_Print (140, y, "???");
+-		}
+-		else
+-		{
+-			name = Key_KeynumToString (keys[0]);
+-			M_Print (140, y, name);
+-			x = strlen(name) * 8;
+-			if (keys[1] != -1)
+-			{
+-				M_Print (140 + x + 8, y, "or");
+-				M_Print (140 + x + 32, y, Key_KeynumToString (keys[1]));
+-			}
+-		}
+-	}
+-
+-	if (bind_grab)
+-		M_DrawCharacter (130, 48 + keys_cursor*8, '=');
+-	else
+-		M_DrawCharacter (130, 48 + keys_cursor*8, 12+((int)(realtime*4)&1));
+-}
+-
+-
+-void M_Keys_Key (int k)
+-{
+-	char	cmd[80];
+-	int		keys[2];
+-
+-	if (bind_grab)
+-	{	// defining a key
+-		S_LocalSound ("misc/menu1.wav");
+-		if (k == K_ESCAPE)
+-		{
+-			bind_grab = false;
+-		}
+-		else if (k != '`')
+-		{
+-			sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), bindnames[keys_cursor][0]);
+-			Cbuf_InsertText (cmd);
+-		}
+-
+-		bind_grab = false;
+-		return;
+-	}
+-
+-	switch (k)
+-	{
+-	case K_ESCAPE:
+-		M_Menu_Options_f ();
+-		break;
+-
+-	case K_LEFTARROW:
+-	case K_UPARROW:
+-		S_LocalSound ("misc/menu1.wav");
+-		keys_cursor--;
+-		if (keys_cursor < 0)
+-			keys_cursor = NUMCOMMANDS-1;
+-		break;
+-
+-	case K_DOWNARROW:
+-	case K_RIGHTARROW:
+-		S_LocalSound ("misc/menu1.wav");
+-		keys_cursor++;
+-		if (keys_cursor >= NUMCOMMANDS)
+-			keys_cursor = 0;
+-		break;
+-
+-	case K_ENTER:		// go into bind mode
+-		M_FindKeysForCommand (bindnames[keys_cursor][0], keys);
+-		S_LocalSound ("misc/menu2.wav");
+-		if (keys[1] != -1)
+-			M_UnbindCommand (bindnames[keys_cursor][0]);
+-		bind_grab = true;
+-		break;
+-
+-	case K_BACKSPACE:		// delete bindings
+-	case K_DEL:				// delete bindings
+-		S_LocalSound ("misc/menu2.wav");
+-		M_UnbindCommand (bindnames[keys_cursor][0]);
+-		break;
+-	}
+-}
+-
+-//=============================================================================
+-/* VIDEO MENU */
+-
+-void M_Menu_Video_f (void)
+-{
+-	key_dest = key_menu;
+-	m_state = m_video;
+-	m_entersound = true;
+-}
+-
+-
+-void M_Video_Draw (void)
+-{
+-	(*vid_menudrawfn) ();
+-}
+-
+-
+-void M_Video_Key (int key)
+-{
+-	(*vid_menukeyfn) (key);
+-}
+-
+-//=============================================================================
+-/* HELP MENU */
+-
+-int		help_page;
+-#define	NUM_HELP_PAGES	6
+-
+-
+-void M_Menu_Help_f (void)
+-{
+-	key_dest = key_menu;
+-	m_state = m_help;
+-	m_entersound = true;
+-	help_page = 0;
+-}
+-
+-
+-
+-void M_Help_Draw (void)
+-{
+-	M_DrawPic (0, 0, Draw_CachePic ( va("gfx/help%i.lmp", help_page)) );
+-}
+-
+-
+-void M_Help_Key (int key)
+-{
+-	switch (key)
+-	{
+-	case K_ESCAPE:
+-		M_Menu_Main_f ();
+-		break;
+-
+-	case K_UPARROW:
+-	case K_RIGHTARROW:
+-		m_entersound = true;
+-		if (++help_page >= NUM_HELP_PAGES)
+-			help_page = 0;
+-		break;
+-
+-	case K_DOWNARROW:
+-	case K_LEFTARROW:
+-		m_entersound = true;
+-		if (--help_page < 0)
+-			help_page = NUM_HELP_PAGES-1;
+-		break;
+-	}
+-
+-}
+-
+-//=============================================================================
+-/* QUIT MENU */
+-
+-int		msgNumber;
+-int		m_quit_prevstate;
+-qboolean	wasInMenus;
+-
+-#ifndef	_WIN32
+-char *quitMessage [] = 
+-{
+-/* .........1.........2.... */
+-  "  Are you gonna quit    ",
+-  "  this game just like   ",
+-  "   everything else?     ",
+-  "                        ",
+- 
+-  " Milord, methinks that  ",
+-  "   thou art a lowly     ",
+-  " quitter. Is this true? ",
+-  "                        ",
+-
+-  " Do I need to bust your ",
+-  "  face open for trying  ",
+-  "        to quit?        ",
+-  "                        ",
+-
+-  " Man, I oughta smack you",
+-  "   for trying to quit!  ",
+-  "     Press A to get     ",
+-  "      smacked out.      ",
+- 
+-  " Press A to quit like a ",
+-  "   big loser in life.   ",
+-  "  Press B to stay proud ",
+-  "    and successful!     ",
+- 
+-  "   If you press A to    ",
+-  "  quit, I will summon   ",
+-  "  Satan all over your   ",
+-  "      hard drive!       ",
+- 
+-  "  Um, Asmodeus dislikes ",
+-  " his children trying to ",
+-  " quit. Press A to return",
+-  "   to your Tinkertoys.  ",
+- 
+-  "  If you quit now, I'll ",
+-  "  throw a blanket-party ",
+-  "   for you next time!   ",
+-  "                        "
+-};
+-#endif
+-
+-void M_Menu_Quit_f (void)
+-{
+-	if (m_state == m_quit)
+-		return;
+-	wasInMenus = (key_dest == key_menu);
+-	key_dest = key_menu;
+-	m_quit_prevstate = m_state;
+-	m_state = m_quit;
+-	m_entersound = true;
+-	msgNumber = rand()&7;
+-}
+-
+-
+-void M_Quit_Key (int key)
+-{
+-	switch (key)
+-	{
+-	case K_ESCAPE:
+-	case 'n':
+-	case 'N':
+-		if (wasInMenus)
+-		{
+-			m_state = m_quit_prevstate;
+-			m_entersound = true;
+-		}
+-		else
+-		{
+-			key_dest = key_game;
+-			m_state = m_none;
+-		}
+-		break;
+-
+-	case 'Y':
+-	case 'y':
+-	case K_ENTER:
+-		key_dest = key_console;
+-		Host_Quit_f ();
+-		break;
+-
+-	default:
+-		break;
+-	}
+-
+-}
+-
+-
+-void M_Quit_Draw (void)
+-{
+-	if (wasInMenus)
+-	{
+-		m_state = m_quit_prevstate;
+-		m_recursiveDraw = true;
+-		M_Draw ();
+-		m_state = m_quit;
+-	}
+-
+-#ifdef _WIN32
+-	M_DrawTextBox (0, 0, 38, 23);
+-	M_PrintWhite (16, 12,  "  Quake version 1.09 by id Software\n\n");
+-	M_PrintWhite (16, 28,  "Programming        Art \n");
+-	M_Print (16, 36,  " John Carmack       Adrian Carmack\n");
+-	M_Print (16, 44,  " Michael Abrash     Kevin Cloud\n");
+-	M_Print (16, 52,  " John Cash          Paul Steed\n");
+-	M_Print (16, 60,  " Dave 'Zoid' Kirsch\n");
+-	M_PrintWhite (16, 68,  "Design             Biz\n");
+-	M_Print (16, 76,  " John Romero        Jay Wilbur\n");
+-	M_Print (16, 84,  " Sandy Petersen     Mike Wilson\n");
+-	M_Print (16, 92,  " American McGee     Donna Jackson\n");
+-	M_Print (16, 100,  " Tim Willits        Todd Hollenshead\n");
+-	M_PrintWhite (16, 108, "Support            Projects\n");
+-	M_Print (16, 116, " Barrett Alexander  Shawn Green\n");
+-	M_PrintWhite (16, 124, "Sound Effects\n");
+-	M_Print (16, 132, " Trent Reznor and Nine Inch Nails\n\n");
+-	M_PrintWhite (16, 140, "Quake is a trademark of Id Software,\n");
+-	M_PrintWhite (16, 148, "inc., (c)1996 Id Software, inc. All\n");
+-	M_PrintWhite (16, 156, "rights reserved. NIN logo is a\n");
+-	M_PrintWhite (16, 164, "registered trademark licensed to\n");
+-	M_PrintWhite (16, 172, "Nothing Interactive, Inc. All rights\n");
+-	M_PrintWhite (16, 180, "reserved. Press y to exit\n");
+-#else
+-	M_DrawTextBox (56, 76, 24, 4);
+-	M_Print (64, 84,  quitMessage[msgNumber*4+0]);
+-	M_Print (64, 92,  quitMessage[msgNumber*4+1]);
+-	M_Print (64, 100, quitMessage[msgNumber*4+2]);
+-	M_Print (64, 108, quitMessage[msgNumber*4+3]);
+-#endif
+-}
+-
 -//=============================================================================
 -
 -/* SERIAL CONFIG MENU */
@@ -1414,32 +1988,54 @@ index a2fa76f..74c584f 100644
 -				modemConfig_hangup[l] = key;
 -			}
 -		}
--	}
--}
--
++		b = keybindings[j];
++		if (!b)
++			continue;
++		if (!strncmp (b, command, l) )
++		{
++			twokeys[count] = j;
++			count++;
++			if (count == 2)
++				break;
++		}
+ 	}
+ }
+ 
 -//=============================================================================
 -/* LAN CONFIG MENU */
 -
 -int		lanConfig_cursor = -1;
 -int		lanConfig_cursor_table [] = {72, 92, 124};
 -#define NUM_LANCONFIG_CMDS	3
--
++void M_UnbindCommand (char *command)
++{
++	int		j;
++	int		l;
++	char	*b;
+ 
 -int 	lanConfig_port;
 -char	lanConfig_portname[6];
 -char	lanConfig_joinname[22];
--
++	l = strlen(command);
+ 
 -void M_Menu_LanConfig_f (void)
 -{
 -	key_dest = key_menu;
 -	m_state = m_lanconfig;
 -	m_entersound = true;
 -	if (lanConfig_cursor == -1)
--	{
++	for (j=0 ; j<256 ; j++)
+ 	{
 -		if (JoiningGame && TCPIPConfig)
 -			lanConfig_cursor = 2;
 -		else
 -			lanConfig_cursor = 1;
--	}
++		b = keybindings[j];
++		if (!b)
++			continue;
++		if (!strncmp (b, command, l) )
++			Key_SetBinding (j, "");
+ 	}
 -	if (StartingGame && lanConfig_cursor == 2)
 -		lanConfig_cursor = 1;
 -	lanConfig_port = DEFAULTnet_hostport;
@@ -1447,12 +2043,17 @@ index a2fa76f..74c584f 100644
 -
 -	m_return_onerror = false;
 -	m_return_reason[0] = 0;
--}
--
--
+ }
+ 
+ 
 -void M_LanConfig_Draw (void)
--{
--	qpic_t	*p;
++void M_Keys_Draw (void)
+ {
++	int		i, l;
++	int		keys[2];
++	char	*name;
++	int		x, y;
+ 	qpic_t	*p;
 -	int		basex;
 -	char	*startJoin;
 -	char	*protocol;
@@ -1478,11 +2079,13 @@ index a2fa76f..74c584f 100644
 -		M_Print (basex+9*8, 52, my_ipx_address);
 -	else
 -		M_Print (basex+9*8, 52, my_tcpip_address);
--
+ 
 -	M_Print (basex, lanConfig_cursor_table[0], "Port");
 -	M_DrawTextBox (basex+8*8, lanConfig_cursor_table[0]-8, 6, 1);
 -	M_Print (basex+9*8, lanConfig_cursor_table[0], lanConfig_portname);
--
++	p = Draw_CachePic ("gfx/ttl_cstm.lmp");
++	M_DrawPic ( (320-p->width)/2, 4, p);
+ 
 -	if (JoiningGame)
 -	{
 -		M_Print (basex, lanConfig_cursor_table[1], "Search for local games...");
@@ -1490,7 +2093,9 @@ index a2fa76f..74c584f 100644
 -		M_DrawTextBox (basex+8, lanConfig_cursor_table[2]-8, 22, 1);
 -		M_Print (basex+16, lanConfig_cursor_table[2], lanConfig_joinname);
 -	}
--	else
++	if (bind_grab)
++		M_Print (12, 32, "Press a key or button for this action");
+ 	else
 -	{
 -		M_DrawTextBox (basex, lanConfig_cursor_table[1]-8, 2, 1);
 -		M_Print (basex+8, lanConfig_cursor_table[1], "OK");
@@ -1512,9 +2117,12 @@ index a2fa76f..74c584f 100644
 -void M_LanConfig_Key (int key)
 -{
 -	int		l;
--
++		M_Print (18, 32, "Enter to change, backspace to clear");
+ 
 -	switch (key)
--	{
++// search for known bindings
++	for (i=0 ; i<NUMCOMMANDS ; i++)
+ 	{
 -	case K_ESCAPE:
 -		M_Menu_Net_f ();
 -		break;
@@ -1563,48 +2171,61 @@ index a2fa76f..74c584f 100644
 -		}
 -
 -		break;
--
++		y = 48 + 8*i;
+ 
 -	case K_BACKSPACE:
 -		if (lanConfig_cursor == 0)
 -		{
 -			if (strlen(lanConfig_portname))
 -				lanConfig_portname[strlen(lanConfig_portname)-1] = 0;
 -		}
--
++		M_Print (16, y, bindnames[i][1]);
+ 
 -		if (lanConfig_cursor == 2)
 -		{
 -			if (strlen(lanConfig_joinname))
 -				lanConfig_joinname[strlen(lanConfig_joinname)-1] = 0;
 -		}
 -		break;
--
++		l = strlen (bindnames[i][0]);
+ 
 -	default:
 -		if (key < 32 || key > 127)
 -			break;
--
++		M_FindKeysForCommand (bindnames[i][0], keys);
+ 
 -		if (lanConfig_cursor == 2)
--		{
++		if (keys[0] == -1)
+ 		{
 -			l = strlen(lanConfig_joinname);
 -			if (l < 21)
 -			{
 -				lanConfig_joinname[l+1] = 0;
 -				lanConfig_joinname[l] = key;
 -			}
--		}
++			M_Print (140, y, "???");
+ 		}
 -
 -		if (key < '0' || key > '9')
 -			break;
 -		if (lanConfig_cursor == 0)
--		{
++		else
+ 		{
 -			l = strlen(lanConfig_portname);
 -			if (l < 5)
--			{
++			name = Key_KeynumToString (keys[0]);
++			M_Print (140, y, name);
++			x = strlen(name) * 8;
++			if (keys[1] != -1)
+ 			{
 -				lanConfig_portname[l+1] = 0;
 -				lanConfig_portname[l] = key;
--			}
--		}
--	}
--
++				M_Print (140 + x + 8, y, "or");
++				M_Print (140 + x + 32, y, Key_KeynumToString (keys[1]));
+ 			}
+ 		}
+ 	}
+ 
 -	if (StartingGame && lanConfig_cursor == 2)
 -		if (key == K_UPARROW)
 -			lanConfig_cursor = 1;
@@ -1614,7 +2235,9 @@ index a2fa76f..74c584f 100644
 -	l =  Q_atoi(lanConfig_portname);
 -	if (l > 65535)
 -		l = lanConfig_port;
--	else
++	if (bind_grab)
++		M_DrawCharacter (130, 48 + keys_cursor*8, '=');
+ 	else
 -		lanConfig_port = l;
 -	sprintf(lanConfig_portname, "%u", lanConfig_port);
 -}
@@ -1781,15 +2404,17 @@ index a2fa76f..74c584f 100644
 -		maxplayers = svs.maxclients;
 -	if (maxplayers < 2)
 -		maxplayers = svs.maxclientslimit;
--}
--
--
++		M_DrawCharacter (130, 48 + keys_cursor*8, 12+((int)(realtime*4)&1));
+ }
+ 
+ 
 -int gameoptions_cursor_table[] = {40, 56, 64, 72, 80, 88, 96, 112, 120};
 -#define	NUM_GAMEOPTIONS	9
 -int		gameoptions_cursor;
 -
 -void M_GameOptions_Draw (void)
--{
++void M_Keys_Key (int k)
+ {
 -	qpic_t	*p;
 -	int		x;
 -
@@ -1892,7 +2517,9 @@ index a2fa76f..74c584f 100644
 -
 -// line cursor
 -	M_DrawCharacter (144, gameoptions_cursor_table[gameoptions_cursor], 12+((int)(realtime*4)&1));
--
++	char	cmd[80];
++	int		keys[2];
+ 
 -	if (m_serverInfoMessage)
 -	{
 -		if ((realtime - m_serverInfoMessageTime) < 5.0)
@@ -1906,9 +2533,14 @@ index a2fa76f..74c584f 100644
 -			M_Print (x, 170, "   see techinfo.txt.    ");
 -		}
 -		else
--		{
++	if (bind_grab)
++	{	// defining a key
++		S_LocalSound ("misc/menu1.wav");
++		if (k == K_ESCAPE)
+ 		{
 -			m_serverInfoMessage = false;
--		}
++			bind_grab = false;
+ 		}
 -	}
 -}
 -
@@ -1922,11 +2554,14 @@ index a2fa76f..74c584f 100644
 -	case 1:
 -		maxplayers += dir;
 -		if (maxplayers > svs.maxclientslimit)
--		{
++		else if (k != '`')
+ 		{
 -			maxplayers = svs.maxclientslimit;
 -			m_serverInfoMessage = true;
 -			m_serverInfoMessageTime = realtime;
--		}
++			sprintf (cmd, "bind \"%s\" \"%s\"\n", Key_KeynumToString (k), bindnames[keys_cursor][0]);
++			Cbuf_InsertText (cmd);
+ 		}
 -		if (maxplayers < 2)
 -			maxplayers = 2;
 -		break;
@@ -1988,7 +2623,7 @@ index a2fa76f..74c584f 100644
 -
 -		if (startepisode < 0)
 -			startepisode = count - 1;
--
+ 
 -		if (startepisode >= count)
 -			startepisode = 0;
 -
@@ -2012,25 +2647,33 @@ index a2fa76f..74c584f 100644
 -		if (startlevel >= count)
 -			startlevel = 0;
 -		break;
--	}
++		bind_grab = false;
++		return;
+ 	}
 -}
--
+ 
 -void M_GameOptions_Key (int key)
 -{
 -	switch (key)
--	{
--	case K_ESCAPE:
++	switch (k)
+ 	{
+ 	case K_ESCAPE:
 -		M_Menu_Net_f ();
--		break;
--
--	case K_UPARROW:
--		S_LocalSound ("misc/menu1.wav");
++		M_Menu_Options_f ();
+ 		break;
+ 
++	case K_LEFTARROW:
+ 	case K_UPARROW:
+ 		S_LocalSound ("misc/menu1.wav");
 -		gameoptions_cursor--;
 -		if (gameoptions_cursor < 0)
 -			gameoptions_cursor = NUM_GAMEOPTIONS-1;
--		break;
--
--	case K_DOWNARROW:
++		keys_cursor--;
++		if (keys_cursor < 0)
++			keys_cursor = NUMCOMMANDS-1;
+ 		break;
+ 
+ 	case K_DOWNARROW:
 -		S_LocalSound ("misc/menu1.wav");
 -		gameoptions_cursor++;
 -		if (gameoptions_cursor >= NUM_GAMEOPTIONS)
@@ -2044,15 +2687,21 @@ index a2fa76f..74c584f 100644
 -		M_NetStart_Change (-1);
 -		break;
 -
--	case K_RIGHTARROW:
+ 	case K_RIGHTARROW:
 -		if (gameoptions_cursor == 0)
 -			break;
 -		S_LocalSound ("misc/menu3.wav");
 -		M_NetStart_Change (1);
--		break;
--
++		S_LocalSound ("misc/menu1.wav");
++		keys_cursor++;
++		if (keys_cursor >= NUMCOMMANDS)
++			keys_cursor = 0;
+ 		break;
+ 
 -	case K_ENTER:
--		S_LocalSound ("misc/menu2.wav");
++	case K_ENTER:		// go into bind mode
++		M_FindKeysForCommand (bindnames[keys_cursor][0], keys);
+ 		S_LocalSound ("misc/menu2.wav");
 -		if (gameoptions_cursor == 0)
 -		{
 -			if (sv.active)
@@ -2070,21 +2719,31 @@ index a2fa76f..74c584f 100644
 -
 -			return;
 -		}
--
++		if (keys[1] != -1)
++			M_UnbindCommand (bindnames[keys_cursor][0]);
++		bind_grab = true;
++		break;
+ 
 -		M_NetStart_Change (1);
--		break;
--	}
--}
--
--//=============================================================================
++	case K_BACKSPACE:		// delete bindings
++	case K_DEL:				// delete bindings
++		S_LocalSound ("misc/menu2.wav");
++		M_UnbindCommand (bindnames[keys_cursor][0]);
+ 		break;
+ 	}
+ }
+ 
+ //=============================================================================
 -/* SEARCH MENU */
 -
 -qboolean	searchComplete = false;
 -double		searchCompleteTime;
--
++/* VIDEO MENU */
+ 
 -void M_Menu_Search_f (void)
--{
--	key_dest = key_menu;
++void M_Menu_Video_f (void)
+ {
+ 	key_dest = key_menu;
 -	m_state = m_search;
 -	m_entersound = false;
 -	slistSilent = true;
@@ -2092,11 +2751,14 @@ index a2fa76f..74c584f 100644
 -	searchComplete = false;
 -	NET_Slist_f();
 -
--}
--
--
++	m_state = m_video;
++	m_entersound = true;
+ }
+ 
+ 
 -void M_Search_Draw (void)
--{
++void M_Video_Draw (void)
+ {
 -	qpic_t	*p;
 -	int x;
 -
@@ -2129,31 +2791,41 @@ index a2fa76f..74c584f 100644
 -		return;
 -
 -	M_Menu_LanConfig_f ();
--}
--
--
++	(*vid_menudrawfn) ();
+ }
+ 
+ 
 -void M_Search_Key (int key)
--{
--}
--
--//=============================================================================
++void M_Video_Key (int key)
+ {
++	(*vid_menukeyfn) (key);
+ }
+ 
+ //=============================================================================
 -/* SLIST MENU */
--
++/* HELP MENU */
+ 
 -int		slist_cursor;
 -qboolean slist_sorted;
--
++int		help_page;
++#define	NUM_HELP_PAGES	6
+ 
 -void M_Menu_ServerList_f (void)
--{
--	key_dest = key_menu;
++
++void M_Menu_Help_f (void)
+ {
+ 	key_dest = key_menu;
 -	m_state = m_slist;
--	m_entersound = true;
++	m_state = m_help;
+ 	m_entersound = true;
 -	slist_cursor = 0;
 -	m_return_onerror = false;
 -	m_return_reason[0] = 0;
 -	slist_sorted = false;
--}
--
--
++	help_page = 0;
+ }
+ 
+ 
 -void M_ServerList_Draw (void)
 -{
 -	int		n;
@@ -2189,41 +2861,144 @@ index a2fa76f..74c584f 100644
 -		M_Print (16, 32 + 8*n, string);
 -	}
 -	M_DrawCharacter (0, 32 + slist_cursor*8, 12+((int)(realtime*4)&1));
--
+ 
 -	if (*m_return_reason)
 -		M_PrintWhite (16, 148, m_return_reason);
--}
--
--
++void M_Help_Draw (void)
++{
++	M_DrawPic (0, 0, Draw_CachePic ( va("gfx/help%i.lmp", help_page)) );
+ }
+ 
+ 
 -void M_ServerList_Key (int k)
--{
++void M_Help_Key (int key)
+ {
 -	switch (k)
--	{
--	case K_ESCAPE:
++	switch (key)
+ 	{
+ 	case K_ESCAPE:
 -		M_Menu_LanConfig_f ();
--		break;
--
++		M_Menu_Main_f ();
+ 		break;
+ 
 -	case K_SPACE:
 -		M_Menu_Search_f ();
--		break;
--
++	case K_UPARROW:
++	case K_RIGHTARROW:
++		m_entersound = true;
++		if (++help_page >= NUM_HELP_PAGES)
++			help_page = 0;
+ 		break;
+ 
 -	case K_UPARROW:
--	case K_LEFTARROW:
++	case K_DOWNARROW:
+ 	case K_LEFTARROW:
 -		S_LocalSound ("misc/menu1.wav");
 -		slist_cursor--;
 -		if (slist_cursor < 0)
 -			slist_cursor = hostCacheCount - 1;
--		break;
--
++		m_entersound = true;
++		if (--help_page < 0)
++			help_page = NUM_HELP_PAGES-1;
+ 		break;
++	}
+ 
 -	case K_DOWNARROW:
 -	case K_RIGHTARROW:
 -		S_LocalSound ("misc/menu1.wav");
 -		slist_cursor++;
 -		if (slist_cursor >= hostCacheCount)
 -			slist_cursor = 0;
--		break;
--
--	case K_ENTER:
++}
++
++//=============================================================================
++/* QUIT MENU */
++
++int		msgNumber;
++int		m_quit_prevstate;
++qboolean	wasInMenus;
++
++#ifndef	_WIN32
++char *quitMessage [] = 
++{
++/* .........1.........2.... */
++  "  Are you gonna quit    ",
++  "  this game just like   ",
++  "   everything else?     ",
++  "                        ",
++ 
++  " Milord, methinks that  ",
++  "   thou art a lowly     ",
++  " quitter. Is this true? ",
++  "                        ",
++
++  " Do I need to bust your ",
++  "  face open for trying  ",
++  "        to quit?        ",
++  "                        ",
++
++  " Man, I oughta smack you",
++  "   for trying to quit!  ",
++  "     Press A to get     ",
++  "      smacked out.      ",
++ 
++  " Press A to quit like a ",
++  "   big loser in life.   ",
++  "  Press B to stay proud ",
++  "    and successful!     ",
++ 
++  "   If you press A to    ",
++  "  quit, I will summon   ",
++  "  Satan all over your   ",
++  "      hard drive!       ",
++ 
++  "  Um, Asmodeus dislikes ",
++  " his children trying to ",
++  " quit. Press A to return",
++  "   to your Tinkertoys.  ",
++ 
++  "  If you quit now, I'll ",
++  "  throw a blanket-party ",
++  "   for you next time!   ",
++  "                        "
++};
++#endif
++
++void M_Menu_Quit_f (void)
++{
++	if (m_state == m_quit)
++		return;
++	wasInMenus = (key_dest == key_menu);
++	key_dest = key_menu;
++	m_quit_prevstate = m_state;
++	m_state = m_quit;
++	m_entersound = true;
++	msgNumber = rand()&7;
++}
++
++
++void M_Quit_Key (int key)
++{
++	switch (key)
++	{
++	case K_ESCAPE:
++	case 'n':
++	case 'N':
++		if (wasInMenus)
++		{
++			m_state = m_quit_prevstate;
++			m_entersound = true;
++		}
++		else
++		{
++			key_dest = key_game;
++			m_state = m_none;
++		}
+ 		break;
+ 
++	case 'Y':
++	case 'y':
+ 	case K_ENTER:
 -		S_LocalSound ("misc/menu2.wav");
 -		m_return_state = m_state;
 -		m_return_onerror = true;
@@ -2231,14 +3006,58 @@ index a2fa76f..74c584f 100644
 -		key_dest = key_game;
 -		m_state = m_none;
 -		Cbuf_AddText ( va ("connect \"%s\"\n", hostcache[slist_cursor].cname) );
--		break;
--
--	default:
--		break;
--	}
--
--}
--
++		key_dest = key_console;
++		Host_Quit_f ();
+ 		break;
+ 
+ 	default:
+@@ -2997,6 +1113,49 @@ void M_ServerList_Key (int k)
+ 
+ }
+ 
++
++void M_Quit_Draw (void)
++{
++	if (wasInMenus)
++	{
++		m_state = m_quit_prevstate;
++		m_recursiveDraw = true;
++		M_Draw ();
++		m_state = m_quit;
++	}
++
++#ifdef _WIN32
++	M_DrawTextBox (0, 0, 38, 23);
++	M_PrintWhite (16, 12,  "  Quake version 1.09 by id Software\n\n");
++	M_PrintWhite (16, 28,  "Programming        Art \n");
++	M_Print (16, 36,  " John Carmack       Adrian Carmack\n");
++	M_Print (16, 44,  " Michael Abrash     Kevin Cloud\n");
++	M_Print (16, 52,  " John Cash          Paul Steed\n");
++	M_Print (16, 60,  " Dave 'Zoid' Kirsch\n");
++	M_PrintWhite (16, 68,  "Design             Biz\n");
++	M_Print (16, 76,  " John Romero        Jay Wilbur\n");
++	M_Print (16, 84,  " Sandy Petersen     Mike Wilson\n");
++	M_Print (16, 92,  " American McGee     Donna Jackson\n");
++	M_Print (16, 100,  " Tim Willits        Todd Hollenshead\n");
++	M_PrintWhite (16, 108, "Support            Projects\n");
++	M_Print (16, 116, " Barrett Alexander  Shawn Green\n");
++	M_PrintWhite (16, 124, "Sound Effects\n");
++	M_Print (16, 132, " Trent Reznor and Nine Inch Nails\n\n");
++	M_PrintWhite (16, 140, "Quake is a trademark of Id Software,\n");
++	M_PrintWhite (16, 148, "inc., (c)1996 Id Software, inc. All\n");
++	M_PrintWhite (16, 156, "rights reserved. NIN logo is a\n");
++	M_PrintWhite (16, 164, "registered trademark licensed to\n");
++	M_PrintWhite (16, 172, "Nothing Interactive, Inc. All rights\n");
++	M_PrintWhite (16, 180, "reserved. Press y to exit\n");
++#else
++	M_DrawTextBox (56, 76, 24, 4);
++	M_Print (64, 84,  quitMessage[msgNumber*4+0]);
++	M_Print (64, 92,  quitMessage[msgNumber*4+1]);
++	M_Print (64, 100, quitMessage[msgNumber*4+2]);
++	M_Print (64, 108, quitMessage[msgNumber*4+3]);
++#endif
++}
++
  //=============================================================================
  /* Menu Subsystem */
  

@@ -213,24 +213,18 @@ of main RAM on a 16-bit bus at half its clock.
   sound effects on hardware channels 0-7, which do the resampling, volume and
   stereo panning.
 - [0030](patches/0030-Use-single-precision-and-reduce-floating-point-work.patch):
-  Float settings are read and written in thousandths without the C
-  library's float code, the mouse math is single precision, and the music
-  reuses sine samples across harmonics and normalizes with one division per
-  wave.
-- [0031](patches/0031-Leave-scanf-and-the-float-printf-out.patch): Numbers
-  are read with `strtoul` and the settings file line by line, the timedemo
-  result is shown in thousandths: the small C library of the toolchain has
-  no `fscanf` and no exact float printf.
-- [0032](patches/0032-Skip-the-WAD-checksum-only-netgames-use.patch): The
+  The mouse math is single precision, and the music reuses sine samples
+  across harmonics and normalizes with one division per wave.
+- [0031](patches/0031-Skip-the-WAD-checksum-only-netgames-use.patch): The
   WAD directory's SHA-1, only used by the network client that isn't built,
   isn't worked out at startup.
-- [0033](patches/0033-Build-the-trig-tables-at-startup.patch): `finesine`,
+- [0032](patches/0032-Build-the-trig-tables-at-startup.patch): `finesine`,
   `finetangent` and `tantoangle` are built at startup from a quarter, a
   half and the shrinking steps, the same to the bit (demos stay in sync),
   51 KiB less ROM for 14 KiB more RAM.
-- [0034](patches/0034-Pack-the-states-into-20-bytes.patch): `state_t`
+- [0033](patches/0033-Pack-the-states-into-20-bytes.patch): `state_t`
   uses shorts for its small fields, 20 bytes a state instead of 28.
-- [0035](patches/0035-Add-the-DS-Rumble-Pak.patch): `i_ndsinput.c`
+- [0034](patches/0034-Add-the-DS-Rumble-Pak.patch): `i_ndsinput.c`
   rumbles a Rumble Pak in the GBA slot through `I_Tactile`, on taking
   damage and firing, switching it at 60 Hz from a tick task. Options gets
   Rumble On/Off, kept as `rumble` in the config. Its label is cut from the

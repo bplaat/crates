@@ -18,7 +18,7 @@ those keys from the second start on.
  2 files changed, 11 insertions(+), 8 deletions(-)
 
 diff --git a/doomgeneric/m_config.c b/doomgeneric/m_config.c
-index 588b64d..b9a8421 100644
+index fb7c59d..c016a6f 100644
 --- a/doomgeneric/m_config.c
 +++ b/doomgeneric/m_config.c
 @@ -1608,7 +1608,6 @@ static const int scantokey[128] =

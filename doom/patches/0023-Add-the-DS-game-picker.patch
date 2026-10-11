@@ -15,15 +15,15 @@ thread with a 64 KiB stack in main RAM: DTCM is mostly taken by the
 light tables, and Doom's deepest recursion grows with the size of a map.
 Also the doomgeneric interface: timing from the calico tick counter.
 ---
- doomgeneric/doomgeneric_nds.c | 657 ++++++++++++++++++++++++++++++++++++++++
- doomgeneric/doomgeneric_nds.h | 31 +++++++++++++++++++++++++++++++
+ doomgeneric/doomgeneric_nds.c | 657 ++++++++++++++++++++++++++++++++++
+ doomgeneric/doomgeneric_nds.h |  31 ++
  2 files changed, 688 insertions(+)
  create mode 100644 doomgeneric/doomgeneric_nds.c
  create mode 100644 doomgeneric/doomgeneric_nds.h
 
 diff --git a/doomgeneric/doomgeneric_nds.c b/doomgeneric/doomgeneric_nds.c
 new file mode 100644
-index 0000000..066921d
+index 0000000..d88634f
 --- /dev/null
 +++ b/doomgeneric/doomgeneric_nds.c
 @@ -0,0 +1,657 @@

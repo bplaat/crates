@@ -58,7 +58,7 @@ index 7c59ee9..959dfd8 100644
  	
  
 diff --git a/WinQuake/common.c b/WinQuake/common.c
-index 37f3770..c814284 100644
+index c9925a6..544bb0a 100644
 --- a/WinQuake/common.c
 +++ b/WinQuake/common.c
 @@ -350,7 +350,7 @@ int Q_atoi (char *str)

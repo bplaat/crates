@@ -13,10 +13,10 @@ source files are put there by the build.
  3 files changed, 9 insertions(+), 5 deletions(-)
 
 diff --git a/doomgeneric/am_map.c b/doomgeneric/am_map.c
-index 2525041..8f93afc 100644
+index 5e321e1..d00b688 100644
 --- a/doomgeneric/am_map.c
 +++ b/doomgeneric/am_map.c
-@@ -863,7 +863,7 @@ void AM_clearFB(int color)
+@@ -865,7 +865,7 @@ void AM_clearFB(int color)
  // faster reject and precalculated slopes.  If the speed is needed,
  // use a hash algorithm to handle  the common cases.
  //
@@ -25,7 +25,7 @@ index 2525041..8f93afc 100644
  AM_clipMline
  ( mline_t*	ml,
    fline_t*	fl )
-@@ -1007,7 +1007,7 @@ AM_clipMline
+@@ -1010,7 +1010,7 @@ AM_clipMline
  //
  // Classic Bresenham w/ whatever optimizations needed for speed
  //
@@ -34,7 +34,7 @@ index 2525041..8f93afc 100644
  AM_drawFline
  ( fline_t*	fl,
    int		color )
-@@ -1085,7 +1085,7 @@ AM_drawFline
+@@ -1088,7 +1088,7 @@ AM_drawFline
  //
  // Clip lines, draw visible part sof lines.
  //
@@ -43,7 +43,7 @@ index 2525041..8f93afc 100644
  AM_drawMline
  ( mline_t*	ml,
    int		color )
-@@ -1147,7 +1147,7 @@ void AM_drawGrid(int color)
+@@ -1150,7 +1150,7 @@ void AM_drawGrid(int color)
  // Determines visible lines, draws them.
  // This is LineDef based, not LineSeg based.
  //

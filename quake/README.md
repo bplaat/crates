@@ -184,10 +184,11 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
 - [0019](patches/0019-Leave-freed-hunk-memory-as-it-is.patch): Freed hunk
   memory isn't cleared, allocations clear their own, which saves clearing
   every temporary file buffer while a level loads.
-- [0020](patches/0020-Parse-text-without-scanf-and-strtod.patch):
-  Savegames, their comments for the menu and point files are read a word at
-  a time (`COM_ReadWord`) and numbers with `Q_atof`, the small C library of
-  the [toolchain](../toolchain) has neither `fscanf` nor `strtod`.
+- [0020](patches/0020-Stop-loading-broken-savegames-safely.patch): A
+  savegame with its light styles cut short, or more entities than the
+  console has room for, stops loading with an error instead of reading past
+  its end or writing past the entities, and one whose map fails to load is
+  closed.
 
 ### The DS platform
 

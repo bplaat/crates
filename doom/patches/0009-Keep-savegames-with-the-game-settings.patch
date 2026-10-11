@@ -10,7 +10,7 @@ a separate directory for each game or mod, keeping their slots apart.
  1 file changed, 1 insertion(+), 1 deletion(-)
 
 diff --git a/doomgeneric/m_config.c b/doomgeneric/m_config.c
-index 865e168..588b64d 100644
+index 865e168..fb7c59d 100644
 --- a/doomgeneric/m_config.c
 +++ b/doomgeneric/m_config.c
 @@ -2115,7 +2115,7 @@ char *M_GetSaveGameDir(char *iwadname)

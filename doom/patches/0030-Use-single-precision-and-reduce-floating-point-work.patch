@@ -4,14 +4,12 @@ Date: Tue, 6 Oct 2026 12:00:00 +0200
 Subject: [PATCH] Use single precision and reduce floating point work
 
 Reuse a periodic sine table across harmonics and instruments, and divide
-once per waveform when normalizing instead of once per sample. Read and
-write float settings without the C library's float parsing and printing,
-in thousandths, and use float math in the mouse speed widget.
+once per waveform when normalizing instead of once per sample, and use
+float math in the mouse speed widget.
 ---
  doomgeneric/i_ndsmusic.c | 10 ++++++++--
- doomgeneric/m_config.c   | 33 +++++++++++++++++++++++++++++++--
  doomgeneric/v_video.c    |  2 +-
- 3 files changed, 40 insertions(+), 5 deletions(-)
+ 2 files changed, 9 insertions(+), 3 deletions(-)
 
 diff --git a/doomgeneric/i_ndsmusic.c b/doomgeneric/i_ndsmusic.c
 index ecdde69..6721585 100644
@@ -46,71 +44,6 @@ index ecdde69..6721585 100644
 +            waves[w][i] = Clamp8(buf[i] * scale);
      }
      DC_FlushRange(waves, sizeof(waves));
- }
-diff --git a/doomgeneric/m_config.c b/doomgeneric/m_config.c
-index c016a6f..9ef6c8b 100644
---- a/doomgeneric/m_config.c
-+++ b/doomgeneric/m_config.c
-@@ -1610,6 +1610,7 @@ static void SaveDefaultCollection(default_collection_t *collection)
- {
-     default_t *defaults;
-     int i, v;
-+    float f_value;
-     FILE *f;
- 	
-     f = fopen (collection->filename, "w");
-@@ -1695,7 +1696,10 @@ static void SaveDefaultCollection(default_collection_t *collection)
-                 break;
- 
-             case DEFAULT_FLOAT:
--                fprintf(f, "%f", * (float *) defaults[i].location);
-+                // in thousandths, without the C library's float printing
-+                f_value = * (float *) defaults[i].location * 1000;
-+                v = f_value + (f_value < 0 ? -0.5f : 0.5f);
-+                fprintf(f, "%s%i.%03i", v < 0 ? "-" : "", abs(v) / 1000, abs(v) % 1000);
-                 break;
- 
-             case DEFAULT_STRING:
-@@ -1723,6 +1727,31 @@ static int ParseIntParameter(char *strparm)
-     return parm;
- }
- 
-+// Parses float values in the configuration file, without the C library's
-+// float parsing
-+
-+static float ParseFloatParameter(char *strparm)
-+{
-+    float sign = 1, parm = 0, scale = 1;
-+
-+    if (*strparm == '-')
-+    {
-+        sign = -1;
-+        ++strparm;
-+    }
-+
-+    for (; isdigit((unsigned char) *strparm); ++strparm)
-+        parm = parm * 10 + (*strparm - '0');
-+
-+    if (*strparm == '.')
-+    {
-+        for (++strparm; isdigit((unsigned char) *strparm); ++strparm)
-+            parm += (*strparm - '0') * (scale *= 0.1f);
-+    }
-+
-+    return sign * parm;
-+}
-+
- static void SetVariable(default_t *def, char *value)
- {
-     int intparm;
-@@ -1765,7 +1794,7 @@ static void SetVariable(default_t *def, char *value)
-             break;
- 
-         case DEFAULT_FLOAT:
--            * (float *) def->location = (float) atof(value);
-+            * (float *) def->location = ParseFloatParameter(value);
-             break;
-     }
  }
 diff --git a/doomgeneric/v_video.c b/doomgeneric/v_video.c
 index 273e008..9859ebc 100644

@@ -254,10 +254,10 @@ index f735d50..deeb858 100644
  	int			r;
  	float		front, back, frac;
 diff --git a/WinQuake/r_part.c b/WinQuake/r_part.c
-index 59842d8..a40bb74 100644
+index f949418..ab789fa 100644
 --- a/WinQuake/r_part.c
 +++ b/WinQuake/r_part.c
-@@ -647,7 +647,7 @@ R_DrawParticles
+@@ -646,7 +646,7 @@ R_DrawParticles
  */
  extern	cvar_t	sv_gravity;
  

@@ -133,7 +133,7 @@ index c3daa17..d4b021c 100644
  // restores all button and position states to defaults
  
 diff --git a/WinQuake/menu.c b/WinQuake/menu.c
-index abb4e56..e4d2ccf 100644
+index 6a1027f..811054b 100644
 --- a/WinQuake/menu.c
 +++ b/WinQuake/menu.c
 @@ -63,6 +63,7 @@ qboolean	m_entersound;		// play after drawing a frame, so caching
@@ -144,7 +144,7 @@ index abb4e56..e4d2ccf 100644
  
  // While M_PageChanged measures the page the draw functions only hash what
  // they would draw
-@@ -630,7 +631,7 @@ void M_Save_Key (int k)
+@@ -631,7 +632,7 @@ void M_Save_Key (int k)
  //=============================================================================
  /* OPTIONS MENU */
  
@@ -153,7 +153,7 @@ index abb4e56..e4d2ccf 100644
  
  #define	SLIDER_RANGE	10
  
-@@ -683,6 +684,11 @@ void M_AdjustSliders (int dir)
+@@ -684,6 +685,11 @@ void M_AdjustSliders (int dir)
  	case 4:	// crosshair
  		Cvar_SetValue ("crosshair", !crosshair.value);
  		break;
@@ -165,7 +165,7 @@ index abb4e56..e4d2ccf 100644
  	}
  }
  
-@@ -734,6 +740,9 @@ void M_Options_Draw (void)
+@@ -735,6 +741,9 @@ void M_Options_Draw (void)
  	M_Print (16, 64, "             Crosshair");
  	M_DrawCheckbox (220, 64, crosshair.value);
  

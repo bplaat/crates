@@ -29,10 +29,10 @@ player is named after the user of the DS settings.
  create mode 100644 WinQuake/sys_nds.c
 
 diff --git a/WinQuake/common.c b/WinQuake/common.c
-index 9a6a41c..37f3770 100644
+index 38f631c..c9925a6 100644
 --- a/WinQuake/common.c
 +++ b/WinQuake/common.c
-@@ -1750,6 +1750,26 @@ void COM_AddGameDirectory (char *dir)
+@@ -1728,6 +1728,26 @@ void COM_AddGameDirectory (char *dir)
  
  }
  
@@ -59,7 +59,7 @@ index 9a6a41c..37f3770 100644
  /*
  ================
  COM_InitFilesystem
-@@ -1800,12 +1820,12 @@ void COM_InitFilesystem (void)
+@@ -1778,12 +1798,12 @@ void COM_InitFilesystem (void)
  //
  // start up with GAMENAME by default (id1)
  //
@@ -75,7 +75,7 @@ index 9a6a41c..37f3770 100644
  
  //
  // -game <gamedir>
-@@ -1815,7 +1835,7 @@ void COM_InitFilesystem (void)
+@@ -1793,7 +1813,7 @@ void COM_InitFilesystem (void)
  	if (i && i < com_argc-1)
  	{
  		com_modified = true;

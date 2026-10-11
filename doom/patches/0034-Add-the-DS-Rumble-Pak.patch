@@ -162,7 +162,7 @@ index 214e17a..2403c17 100644
  
  // Schedule a function to be called when the program exits.
 diff --git a/doomgeneric/m_config.c b/doomgeneric/m_config.c
-index 4366169..c9dd9ef 100644
+index c016a6f..2f63684 100644
 --- a/doomgeneric/m_config.c
 +++ b/doomgeneric/m_config.c
 @@ -827,6 +827,12 @@ static default_t extra_defaults_list[] =
