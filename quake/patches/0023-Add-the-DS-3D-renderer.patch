@@ -74,10 +74,10 @@ particles on the top screen.
  WinQuake/model.c          |   17 +
  WinQuake/model.h          |   15 +-
  WinQuake/r_light.c        |   77 +-
- WinQuake/r_nds.c          | 2817 +++++++++++++++++++++++++++++++++++++
+ WinQuake/r_nds.c          | 2826 +++++++++++++++++++++++++++++++++++++
  WinQuake/vid.h            |    3 +
  WinQuake/view.c           |    7 -
- 7 files changed, 3043 insertions(+), 57 deletions(-)
+ 7 files changed, 3052 insertions(+), 57 deletions(-)
  create mode 100644 WinQuake/anorm_dots_nds.h
  create mode 100644 WinQuake/r_nds.c
 
@@ -488,10 +488,10 @@ index deeb858..1baa3ee 100644
  		r = 0;
 diff --git a/WinQuake/r_nds.c b/WinQuake/r_nds.c
 new file mode 100644
-index 0000000..017f3df
+index 0000000..783a744
 --- /dev/null
 +++ b/WinQuake/r_nds.c
-@@ -0,0 +1,2817 @@
+@@ -0,0 +1,2826 @@
 +/*
 +Copyright (C) 1996-1997 Id Software, Inc.
 +
@@ -1810,7 +1810,6 @@ index 0000000..017f3df
 +			mod->planes[i].inormal[j] = mod->planes[i].normal[j] * 16384;
 +		mod->planes[i].idist = mod->planes[i].dist * (VERTEX_SCALE * 16384);
 +	}
-+
 +	for (i = 0, tex = mod->texinfo; i < mod->numtexinfo; i++, tex++)
 +	{
 +		for (j = 0; j < 2; j++)
@@ -2012,35 +2011,44 @@ index 0000000..017f3df
 +
 +static void R_EmitSurface (model_t *mod, gxsurf_t *gx, u16 *color, unsigned *st);
 +
-+// The vertex colors of a surface from its light styles and the dynamic lights
++// r_fullbright for this frame, without a float compare for every surface
++static qboolean r_fullbright_on;
++
++// The vertex colors of a surface from its light styles and the dynamic lights.
++// Most have one style and no dynamic light, their light goes to the color
++// table straight away.
 +HOT_CODE static void R_SurfaceColors (model_t *mod, msurface_t *surf, u16 *color)
 +{
 +	gxsurf_t	*gx = surf->gx;
 +	int			n = gx->numverts, i, k, l, sv[MAXLIGHTMAPS], vlight[MAX_SURFVERTS];
-+	byte		*light;
++	byte		*light = GX_LIGHT (gx);
++	// the world's surfaces are marked by R_PushDlights
++	qboolean	dlit = surf->dlightframe == r_framecount && mod == cl.worldmodel;
 +
-+	if (surf->flags & SURF_DRAWTILED || r_fullbright.value)
++	if (surf->flags & SURF_DRAWTILED || r_fullbright_on)
 +	{
 +		for (i = 0; i < n; i++)
 +			color[i] = GRAY (GX_NORMAL_LIGHT);
++		return;
 +	}
-+	else
++	for (k = 0; k < gx->numstyles; k++)
++		sv[k] = d_lightstylevalue[surf->styles[k]];
++	if (gx->numstyles == 1 && !dlit)
 +	{
-+		for (k = 0; k < gx->numstyles; k++)
-+			sv[k] = d_lightstylevalue[surf->styles[k]];
 +		for (i = 0; i < n; i++)
-+		{
-+			l = 0;
-+			for (k = 0, light = GX_LIGHT (gx) + i; k < gx->numstyles; k++, light += n)
-+				l += *light * sv[k];
-+			vlight[i] = l >> 8;
-+		}
-+		// the world's surfaces are marked by R_PushDlights
-+		if (surf->dlightframe == r_framecount && mod == cl.worldmodel)
-+			R_AddDynamicLights (mod, surf, vlight);
-+		for (i = 0; i < n; i++)
-+			color[i] = gx_light[MIN (vlight[i], 511)];
++			color[i] = gx_light[MIN (light[i] * sv[0] >> 8, 511)];
++		return;
 +	}
++	for (i = 0; i < n; i++)
++	{
++		for (k = 0, l = 0; k < gx->numstyles; k++)
++			l += light[k * n + i] * sv[k];
++		vlight[i] = l >> 8;
++	}
++	if (dlit)
++		R_AddDynamicLights (mod, surf, vlight);
++	for (i = 0; i < n; i++)
++		color[i] = gx_light[MIN (vlight[i], 511)];
 +}
 +
 +static void R_DrawGXSurface (model_t *mod, msurface_t *surf)
@@ -3158,6 +3166,7 @@ index 0000000..017f3df
 +
 +	if (!r_worldentity.model || !cl.worldmodel)
 +		Sys_Error ("R_RenderView: NULL worldmodel");
++	r_fullbright_on = r_fullbright.value != 0;
 +
 +	if (r_speeds.value)
 +		time1 = Sys_FloatTime ();

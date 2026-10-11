@@ -234,9 +234,10 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   so the cache has room for every shareware level's models and sounds. The world traversal, culling,
   lighting, alias models and particles run from ITCM. The world's vertex
   colors are worked out while the hardware still waits to show the last
-  frame. The light under a model is found in fixed point, with the planes
-  and texture vectors of the renderer, without soft float. A level reads
-  each alias model's file once, for its skins and the model.
+  frame, straight from the light of the surfaces with one style and no
+  dynamic light. The light under a model is found in fixed point, with the
+  planes and texture vectors of the renderer, without soft float. A level
+  reads each alias model's file once, for its skins and the model.
 - [0024](patches/0024-Add-DS-video.patch): `vid_nds.c` shows the 3D view
   on the top screen with a text layer over it, Quake's font and the loading
   plaque as tiles. Edge marking fills the polygon edges. The touch screen shows the
