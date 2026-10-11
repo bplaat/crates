@@ -8,22 +8,23 @@ level name, time, kills, items and secrets, and 2 rows of stone cells:
 the weapons with their pickup pictures (the fist and pistol as held,
 scaled down), slot numbers and ammo, which select them when tapped, and
 the status bar's ammo table. The map is redrawn every other frame, Doom
-runs at 35 tics a second. Outside of a level and with the settings open
+runs at 35 tics a second, its texts are on a background layer of their
+own over it, drawn only when they change. Outside of a level and with the settings open
 it shows the logo and the controls. Changed rows are copied to VRAM by
 DMA.
 ---
- doomgeneric/i_ndstouch.c | 717 +++++++++++++++++++++++++++++++++++++++
+ doomgeneric/i_ndstouch.c | 755 +++++++++++++++++++++++++++++++++++++++
  doomgeneric/m_menu.c     |   6 +
  doomgeneric/m_menu.h     |   3 +
- 3 files changed, 726 insertions(+)
+ 3 files changed, 764 insertions(+)
  create mode 100644 doomgeneric/i_ndstouch.c
 
 diff --git a/doomgeneric/i_ndstouch.c b/doomgeneric/i_ndstouch.c
 new file mode 100644
-index 0000000..d8fec07
+index 0000000..9ace8fa
 --- /dev/null
 +++ b/doomgeneric/i_ndstouch.c
-@@ -0,0 +1,717 @@
+@@ -0,0 +1,755 @@
 +//
 +// Nintendo DS touch screen
 +//
@@ -107,6 +108,16 @@ index 0000000..d8fec07
 +
 +
 +static byte sub_fb[SUB_WIDTH * SUB_HEIGHT] __attribute__((aligned(32)));
++// The texts over the map are on a layer of their own, drawn only when they
++// change rather than with every map: the level name and time in a strip at
++// its top, the percentages in one at its bottom
++#define TEXT_H      12
++#define TEXT_VRAM   ((byte *) BG_BMP_RAM_SUB(4))
++static byte text_fb[2 * TEXT_H * SUB_WIDTH] __attribute__((aligned(32)));
++static unsigned texts_hash;
++// What DrawPatch draws into
++static byte *draw_fb = sub_fb;
++static int draw_h = SUB_HEIGHT;
 +static byte stbar[SCREENWIDTH * SBAR_HEIGHT];     // the STBAR picture
 +static byte xlat_white[256], xlat_gold[256], xlat_gray[256];
 +static unsigned sbar_hash, weapons_hash;
@@ -338,6 +349,8 @@ index 0000000..d8fec07
 +
 +    videoSetModeSub(MODE_5_2D);
 +    bgInitSub(3, BgType_Bmp8, BgSize_B8_256x256, 0, 0);
++    bgInitSub(2, BgType_Bmp8, BgSize_B8_256x256, 4, 0);
++    memset(TEXT_VRAM, 0, SUB_WIDTH * SUB_HEIGHT);
 +    memset(sub_fb, 0, sizeof(sub_fb));
 +    sbar_hash = weapons_hash = 0;
 +    help_shown = false;
@@ -348,7 +361,7 @@ index 0000000..d8fec07
 +static void DrawPatch(int x, int y, const patch_t *patch, const byte *xlat)
 +{
 +    if (patch != NULL)
-+        NDS_DrawPatch(sub_fb, SUB_WIDTH, SUB_HEIGHT, x, y, patch, xlat);
++        NDS_DrawPatch(draw_fb, SUB_WIDTH, draw_h, x, y, patch, xlat);
 +}
 +
 +static int TextWidth(const char *s)
@@ -551,16 +564,31 @@ index 0000000..d8fec07
 +
 +// Drawn over the map each time it redraws: the level name, the time, the
 +// kills, items and secrets
-+static void DrawMapOverlay(void)
++static unsigned MapTextsHash(void)
++{
++    player_t *player = &players[consoleplayer];
++    unsigned h = (uintptr_t) HU_LevelTitle();
++
++    h = h * 33 + leveltime / TICRATE;
++    h = (h * 33 + player->killcount) * 33 + totalkills;
++    h = (h * 33 + player->itemcount) * 33 + totalitems;
++    h = (h * 33 + player->secretcount) * 33 + totalsecret;
++    return h | 1;
++}
++
++static void DrawMapTexts(void)
 +{
 +    player_t *player = &players[consoleplayer];
 +    char buf[48];
 +    int secs = leveltime / TICRATE, time_x;
 +
++    memset(text_fb, 0, sizeof(text_fb));
++    draw_fb = text_fb;
++    draw_h = 2 * TEXT_H;
 +    snprintf(buf, sizeof(buf), "%d:%02d", secs / 60, secs % 60);
 +    time_x = SUB_WIDTH - 4 - TextWidth(buf);
-+    DrawText(time_x, MAP_Y + 3, buf, xlat_white, SUB_WIDTH);
-+    DrawText(4, MAP_Y + 3, HU_LevelTitle(), xlat_gold, time_x - 8);
++    DrawText(time_x, 3, buf, xlat_white, SUB_WIDTH);
++    DrawText(4, 3, HU_LevelTitle(), xlat_gold, time_x - 8);
 +
 +    // The three percentages of the intermission, spread over the width
 +    {
@@ -583,11 +611,13 @@ index 0000000..d8fec07
 +        }
 +        for (i = 0; i < 3; ++i)
 +        {
-+            DrawText(x, MAP_Y + MAP_HEIGHT - 10, labels[i], xlat_gold, SUB_WIDTH);
-+            DrawText(x + widths[i] - TextWidth(values[i]), MAP_Y + MAP_HEIGHT - 10, values[i], xlat_white, SUB_WIDTH);
++            DrawText(x, 2 * TEXT_H - 10, labels[i], xlat_gold, SUB_WIDTH);
++            DrawText(x + widths[i] - TextWidth(values[i]), 2 * TEXT_H - 10, values[i], xlat_white, SUB_WIDTH);
 +            x += widths[i] + (SUB_WIDTH - 8 - total) / 2;
 +        }
 +    }
++    draw_fb = sub_fb;
++    draw_h = SUB_HEIGHT;
 +}
 +
 +// The view border's flat at a light level of COLORMAP
@@ -682,13 +712,16 @@ index 0000000..d8fec07
 +    dmaBusyWait(VRAM_DMA);
 +}
 +
-+static void CopyToVRAM(int y, int h)
++static void CopyRows(const byte *src, byte *dst, int h)
 +{
-+    const byte *src = sub_fb + y * SUB_WIDTH;
-+
 +    dmaBusyWait(VRAM_DMA);
 +    DC_FlushRange(src, h * SUB_WIDTH);
-+    dmaCopyWordsAsynch(VRAM_DMA, src, (byte *) BG_BMP_RAM_SUB(0) + y * SUB_WIDTH, h * SUB_WIDTH);
++    dmaCopyWordsAsynch(VRAM_DMA, src, dst, h * SUB_WIDTH);
++}
++
++static void CopyToVRAM(int y, int h)
++{
++    CopyRows(sub_fb + y * SUB_WIDTH, (byte *) BG_BMP_RAM_SUB(0) + y * SUB_WIDTH, h);
 +}
 +
 +void NDS_UpdateSubScreen(void)
@@ -700,10 +733,11 @@ index 0000000..d8fec07
 +    {
 +        if (!help_shown)
 +        {
++            REG_DISPCNT_SUB &= ~DISPLAY_BG2_ACTIVE;
 +            DrawHelpScreen();
 +            CopyToVRAM(0, SUB_HEIGHT);
 +            help_shown = true;
-+            sbar_hash = weapons_hash = 0;
++            sbar_hash = weapons_hash = texts_hash = 0;
 +        }
 +        return;
 +    }
@@ -720,11 +754,16 @@ index 0000000..d8fec07
 +    if (!automapactive)
 +        AM_Start();
 +    else if (!am_skipdraw)
-+    {
-+        DrawMapOverlay();
 +        CopyToVRAM(MAP_Y, MAP_HEIGHT);
-+    }
 +    am_skipdraw = !am_skipdraw;
++    if ((hash = MapTextsHash()) != texts_hash)
++    {
++        texts_hash = hash;
++        DrawMapTexts();
++        CopyRows(text_fb, TEXT_VRAM + MAP_Y * SUB_WIDTH, TEXT_H);
++        CopyRows(text_fb + TEXT_H * SUB_WIDTH, TEXT_VRAM + (MAP_Y + MAP_HEIGHT - TEXT_H) * SUB_WIDTH, TEXT_H);
++        REG_DISPCNT_SUB |= DISPLAY_BG2_ACTIVE;
++    }
 +
 +    if ((hash = StatusBarHash()) != sbar_hash)
 +    {

@@ -203,9 +203,10 @@ of main RAM on a 16-bit bus at half its clock.
   buttons to game keys while playing and to menu keys in the menus.
 - [0027](patches/0027-Add-the-DS-touch-screen.patch): `i_ndstouch.c` draws
   the status bar, automap and weapon cells from the WAD's own graphics, copies
-  them to VRAM by DMA and selects a weapon when its cell is tapped. It keeps
-  copies of the lumps it draws, Doom makes cached lumps purgeable again when
-  it uses them itself.
+  them to VRAM by DMA and selects a weapon when its cell is tapped. The
+  texts over the map are a layer of their own, drawn only when they change.
+  It keeps copies of the lumps it draws, Doom makes cached lumps purgeable
+  again when it uses them itself.
 - [0028](patches/0028-Add-DS-music.patch): `i_ndsmusic.c` plays MUS and
   MIDI on a wavetable synth on hardware channels 8-15, with waveforms per
   instrument family and synthesized drums, sequenced by a 140 Hz thread.
