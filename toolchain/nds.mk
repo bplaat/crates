@@ -4,6 +4,8 @@
 #   NAME          builds $(NAME).elf and $(NAME).nds
 #   SOURCES       the C and assembly files without extension, Thumb code in main RAM
 #   ITCM_SOURCES  the same for ARM code in ITCM, the fast memory for hot code
+#   ARM7_SOURCES  the same for ARM code on the ARM7 in its WRAM (optional), linked with the default
+#                 ARM7 program as $(NAME)7.elf, which calls their arm7PortInit before its main loop
 #   OFILES        other objects to link (optional)
 #   GAME_TITLE, GAME_SUBTITLE1 and GAME_SUBTITLE2  the three lines of the title in the DS menu
 #   HEADER_TITLE  the up to 12 character title in the header, GAME_TITLE by default
@@ -31,18 +33,35 @@ CFLAGS := --target=armv5te-none-eabi -mcpu=arm946e-s -mthumb -DARM9 -D__NDS__ -n
 	-I$(TOOLCHAIN_TARGET)/libdvm/include
 LIBS := $(addprefix $(TOOLCHAIN_TARGET)/,libnds9.a libdvm.a libcalico9.a libc9.a libcompiler-rt9.a)
 
+# The ARM7 is an ARM7TDMI (ARMv4T), which can't switch between ARM and Thumb code in a direct call,
+# so its calls are long calls through a register
+ARM7_CFLAGS := --target=armv4t-none-eabi -mcpu=arm7tdmi -marm -mlong-calls -DARM7 -D__NDS__ \
+	-nostdlibinc -ffunction-sections -fdata-sections -g -O2 -Wall -I$(TOOLCHAIN)/libc/include \
+	-I$(TOOLCHAIN_TARGET)/calico/include
+ARM7_LIBS := $(addprefix $(TOOLCHAIN_TARGET)/,libcalico7.a libc7.a libcompiler-rt7.a)
+ARM7_OFILES := $(addprefix $(BUILD)/,$(addsuffix .arm7.o,$(ARM7_SOURCES)))
+ARM7_ELF := $(if $(ARM7_SOURCES),$(NAME)7.elf,$(TOOLCHAIN_TARGET)/ds7.elf)
+
 HEADER_TITLE ?= $(GAME_TITLE)
 ICON ?= $(TOOLCHAIN_TARGET)/calico/share/nds-icon.bmp
 
 # Homebrew has no game code
-$(NAME).nds: $(NAME).elf $(TOOLCHAIN_TARGET)/ds7.elf $(ICON) $(if $(NITRO_DIR),$(shell find $(NITRO_DIR) -type f))
-	$(TOOLCHAIN_TARGET)/bin/ndstool -c $@ -9 $< -7 $(TOOLCHAIN_TARGET)/ds7.elf -b $(ICON) \
+$(NAME).nds: $(NAME).elf $(ARM7_ELF) $(ICON) $(if $(NITRO_DIR),$(shell find $(NITRO_DIR) -type f))
+	$(TOOLCHAIN_TARGET)/bin/ndstool -c $@ -9 $< -7 $(ARM7_ELF) -b $(ICON) \
 		"$(GAME_TITLE);$(GAME_SUBTITLE1);$(GAME_SUBTITLE2)" -g "####" 00 "$(HEADER_TITLE)" \
 		$(if $(NITRO_DIR),-d $(NITRO_DIR))
 
 $(NAME).elf: $(OFILES) $(LIBS)
 	$(LD) -T $(TOOLCHAIN_TARGET)/calico/share/ds9.ld --gc-sections --nmagic -Map $(NAME).map \
 		$(OFILES) --start-group $(LIBS) --end-group -o $@
+
+$(NAME)7.elf: $(TOOLCHAIN_TARGET)/objects/ds7/arm7_main.o $(ARM7_OFILES) $(ARM7_LIBS)
+	$(LD) -T $(TOOLCHAIN_TARGET)/calico/share/ds7.ld --gc-sections --nmagic --section-start=.main=0x02ff0000 \
+		$(TOOLCHAIN_TARGET)/objects/ds7/arm7_main.o $(ARM7_OFILES) $(ARM7_LIBS) -o $@
+
+$(BUILD)/%.arm7.o: %.c
+	@mkdir -p $(dir $@)
+	$(CC) $(ARM7_CFLAGS) -MMD -MP -c $< -o $@
 
 # The ITCM rules come first, make 3.81 takes the first pattern rule that matches
 $(BUILD)/%.itcm.o: CFLAGS += -marm
@@ -67,8 +86,8 @@ run: $(NAME).nds
 	$(TOOLCHAIN)/run.sh $<
 
 clean:
-	rm -rf $(BUILD) $(NAME).elf $(NAME).map $(NAME).nds
+	rm -rf $(BUILD) $(NAME).elf $(NAME)7.elf $(NAME).map $(NAME).nds
 
 .PHONY: run clean
 
--include $(OFILES:.o=.d)
+-include $(OFILES:.o=.d) $(ARM7_OFILES:.o=.d)

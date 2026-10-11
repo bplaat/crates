@@ -33,7 +33,8 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
   `scanf` families, `strtof`, float math, time and `setjmp`. Floats are single precision
   throughout, `strtod` and `atof` too, nothing does double precision math. `stdin` is always
   empty. It only uses the calico functions in `libc/calico.h`.
-- `nds.mk` has the make rules for the ports' `Makefile.nds`, at `-O3`
+- `nds.mk` has the make rules for the ports' `Makefile.nds`, at `-O3`. A port's own ARM7 code
+  (`ARM7_SOURCES`) is linked with the default ARM7 program, which calls its `arm7PortInit`
 - `run.sh` starts a program in melonDS, `make run` uses it
 - `desmume/runner.c` runs a `.nds` headless in [DeSmuME](https://github.com/TASEmulators/desmume)'s
   interface library, frame exact, for scripts and agents: it presses buttons, touches the touch
@@ -63,6 +64,7 @@ to write the commits back.
 
 - calico: unified assembly syntax for LLVM, no newlib glue, linker scripts that work with lld
 - libnds: builds with clang and without newlib, with a pregenerated `libversion.h`
+- default-arm7: calls `arm7PortInit`, which does nothing by default, before its main loop
 - desmume: returning from an interrupt to Thumb code at an address that isn't a multiple of 4,
   like calico does with `ldm sp!, {..., pc}^`, ran the instruction before it again, the ARM9
   cycles are counted per instruction address for `profile` of the runner and the sound can be
