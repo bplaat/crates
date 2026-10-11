@@ -169,7 +169,8 @@ it uses, in `nds/`, so its own code is barely changed.
 - [0014](patches/0014-Add-the-DS-startup.patch): `wl_nds.c` switches the
   ARM9 to 134 MHz in DSi mode, finds the game data in NitroFS and on the SD
   card, keeps config and saves in `/data/wolf3d/<extension>/` and reads
-  `/data/wolf3d/args.txt`.
+  `/data/wolf3d/args.txt`. Without an SD card the config folder is the root
+  of NitroFS, so the game runs without saving.
   The touch screen shows a startup like DOOM's and Quake's, in blue, naming
   the game it loads, the full game or the shareware. As
   soon as the data is found, it shows the title on the top screen while the

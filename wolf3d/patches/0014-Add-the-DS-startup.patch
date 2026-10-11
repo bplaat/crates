@@ -18,19 +18,19 @@ incomplete title pictures are rejected. Errors are shown on the
 touch screen console, failed assertions too. wl_nds.h is the glue
 between the SDL implementation and the game.
 ---
- nds/wl_nds.c | 337 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ nds/wl_nds.c | 343 +++++++++++++++++++++++++++++++++++++++++++++++++++
  nds/wl_nds.h |  46 +++++++
  wl_main.c    |   2 +
- 3 files changed, 385 insertions(+)
+ 3 files changed, 391 insertions(+)
  create mode 100644 nds/wl_nds.c
  create mode 100644 nds/wl_nds.h
 
 diff --git a/nds/wl_nds.c b/nds/wl_nds.c
 new file mode 100644
-index 0000000..f23d205
+index 0000000..86bafa4
 --- /dev/null
 +++ b/nds/wl_nds.c
-@@ -0,0 +1,337 @@
+@@ -0,0 +1,343 @@
 +//
 +// Starts Wolf4SDL on the Nintendo DS
 +//
@@ -326,8 +326,14 @@ index 0000000..f23d205
 +    ShowTitle (games[i].ext);
 +    LoadingStep ();
 +    args[n++] = *argc > 0 ? (*argv)[0] : "wolf3d";
-+    snprintf (configdir, sizeof(configdir), "%s/%s", datadir, games[i].ext);
-+    mkdir (configdir, 0777);
++    // NitroFS is read-only and has no folder per version, Wolf4SDL quits when it can't make one
++    if (strcmp (datadir, "nitro:") == 0)
++        strcpy (configdir, "nitro:/");
++    else
++    {
++        snprintf (configdir, sizeof(configdir), "%s/%s", datadir, games[i].ext);
++        mkdir (configdir, 0777);
++    }
 +    args[n++] = "--configdir";
 +    args[n++] = configdir;
 +    // Extra arguments (eg. --tedlevel 3 --hard) from args.txt
