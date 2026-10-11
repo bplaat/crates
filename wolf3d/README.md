@@ -18,9 +18,16 @@ source port of id Software's Wolfenstein 3D, to the Nintendo DS and DSi.
 
 The title shows while the game loads and stays with its music until you
 press a button, then the main menu shows: New Game, Load Game, Save Game,
-View Scores, Back to Demo (or B), which shows the title and the demos, and
-Quit. In a game End Game takes the place of Quit.
-All the sound is always on, the DS volume slider sets the loudness.
+View Scores, Back to Demo (or B), which shows the title and the demos, Sound,
+Control and Quit. In a game End Game takes the place of View Scores and there
+is no Quit. Sound has the sound effects, digitized sounds and music, each
+Disabled or Enabled, all enabled by default, the DS volume slider sets the
+loudness.
+
+Control has Rumble Enabled and Always Run. A Rumble Pak in the GBA slot of a
+DS rumbles when you take damage and when you fire a gun, unless Rumble
+Enabled is turned off, without one nothing changes. With Always Run, holding
+Y walks.
 
 The top screen shows the view at 1:1, the menus and pictures are scaled to
 fit. The touch screen looks like the status bar: the status bar itself at the
@@ -113,9 +120,11 @@ code is written for the DS only, without `__NDS__` checks.
 - [0007](patches/0007-Trim-the-menus-for-a-handheld-console.patch): No
   Read This! (keyboard help) or Change View, New Game is selected first and
   the episodes the shareware lacks say where the full game goes. There is
-  no Control menu, the buttons are the joystick, without mouse or keyboard,
-  and no Sound menu, all the sound is on. In a game there is no Quit. B
-  leaves the main menu like Back to Game/Demo instead of asking to quit.
+  no Control menu, the buttons are the joystick, without mouse or keyboard.
+  Sound moves down above Quit, with each sound just Disabled or Enabled,
+  kept in the config once it is left. In a
+  game there is no Quit. B leaves the main menu like Back to Game/Demo
+  instead of asking to quit.
 - [0008](patches/0008-Start-in-the-main-menu.patch): The game starts with
   the title and its music until a button is pressed, then the main menu,
   without the signon screen and its "Press a key" or the PG13 screen, and
@@ -202,3 +211,9 @@ it uses, in `nds/`, so its own code is barely changed.
   share the direction-to-angle conversion and replace its division with
   multiplication. Sprite rotation and the audio buffer size are worked out in
   integers, no double math is left.
+- [0022](patches/0022-Add-the-DS-Rumble-Pak.patch): `wl_nds.c` rumbles a
+  Rumble Pak in the GBA slot on taking damage and firing a gun, switching it
+  at 60 Hz from a tick task. The main menu has Control again, between Sound
+  and Quit, with only Rumble Enabled, kept at the end of the config.
+- [0023](patches/0023-Add-Always-Run.patch): Control gets Always Run, the
+  run button then walks, also kept at the end of the config.

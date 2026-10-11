@@ -421,7 +421,7 @@ index 0000000..8292139
 +
 +#endif
 diff --git a/wl_main.c b/wl_main.c
-index 1cd7cd0..543f2bb 100644
+index 9337c5d..e65e957 100644
 --- a/wl_main.c
 +++ b/wl_main.c
 @@ -9,6 +9,7 @@
@@ -432,7 +432,7 @@ index 1cd7cd0..543f2bb 100644
  
  
  /*
-@@ -1774,6 +1775,7 @@ void CheckParameters(int argc, char *argv[])
+@@ -1776,6 +1777,7 @@ void CheckParameters(int argc, char *argv[])
  
  int main (int argc, char *argv[])
  {

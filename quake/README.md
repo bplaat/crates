@@ -27,7 +27,9 @@ you die, the map makes way for the kills, secrets and time.
 The game starts in the main menu, which is on the top screen over the demos.
 The main menu has New Game, Load, Save, Options and Quit, which in a game ends
 it and goes back to the main menu, like End Game in DOOM. Options has Reset to
-defaults, Brightness, Sound Volume, Always Run and Crosshair. While a menu is
+defaults, Brightness, Sound Volume, Always Run, Crosshair and Rumble. A
+Rumble Pak in the GBA slot of a DS rumbles when you take damage and when you
+fire, unless Rumble is turned off, without one nothing changes. While a menu is
 open the touch screen keeps showing the game, with the options and while no
 game runs it shows the controls, centered on the console background. While
 Quake starts the touch screen shows its title in brown and loading dots like
@@ -269,3 +271,7 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   timers) are floats instead of doubles, so the physics, view and particle
   code works in single precision, several times faster in software. A float
   clock still resolves a millisecond after more than four hours.
+- [0029](patches/0029-Add-the-DS-Rumble-Pak.patch): `in_nds.c` rumbles a
+  Rumble Pak in the GBA slot on taking damage and on the kick of firing,
+  switching it at 60 Hz from a tick task. Options gets Rumble, kept as the
+  `rumble` cvar in `config.cfg`.

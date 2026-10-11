@@ -13,10 +13,10 @@ without their directory.
  2 files changed, 18 insertions(+), 5 deletions(-)
 
 diff --git a/WinQuake/common.c b/WinQuake/common.c
-index e07e6ce..76503b6 100644
+index a958d95..6a21f32 100644
 --- a/WinQuake/common.c
 +++ b/WinQuake/common.c
-@@ -1673,7 +1673,7 @@ pack_t *COM_LoadPackFile (char *packfile)
+@@ -1675,7 +1675,7 @@ pack_t *COM_LoadPackFile (char *packfile)
  	pack->numfiles = numpackfiles;
  	pack->files = newfiles;
  	

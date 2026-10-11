@@ -211,7 +211,7 @@ index 0000000..4300f62
 +    return button >= 0 && button < SDL_JoystickNumButtons (joystick) && (keys_held & joy_buttons[button]);
 +}
 diff --git a/wl_def.h b/wl_def.h
-index edde473..8398cdf 100644
+index bd2ca34..ee86da6 100644
 --- a/wl_def.h
 +++ b/wl_def.h
 @@ -1057,8 +1057,9 @@ void    UpdateSoundLoc (void);
@@ -227,10 +227,10 @@ index edde473..8398cdf 100644
  #define JOYSCALE    2
  
 diff --git a/wl_main.c b/wl_main.c
-index 543f2bb..8152b0e 100644
+index e65e957..36f19be 100644
 --- a/wl_main.c
 +++ b/wl_main.c
-@@ -192,8 +192,8 @@ void ReadConfig(void)
+@@ -199,8 +199,8 @@ void ReadConfig(void)
  
          if (!MousePresent)
              mouseenabled = false;

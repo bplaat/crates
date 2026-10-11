@@ -12,16 +12,17 @@ when it changes: M_PageChanged first runs M_Draw with the draw functions
 hashing what they would draw. Every page is shown in the middle of the
 screen (VID_MoveMenu), like DOOM's menus on the DS, leaving out the
 cursor, which moves and spins, so the page doesn't wobble with it. The
-Quake plaque on the left is left out.
+Quake plaque on the left is left out. The quit question over a menu
+leaves that menu where it is and goes in the middle of the screen.
 ---
- WinQuake/menu.c   | 140 +++++++++++++++++++++++++++++++++++++++-------
+ WinQuake/menu.c   | 165 +++++++++++++++++++++++++++++++++++++++-------
  WinQuake/menu.h   |   2 +
- WinQuake/screen.c |  22 ++++++--
- WinQuake/vid.h    |   7 +++
- 4 files changed, 147 insertions(+), 24 deletions(-)
+ WinQuake/screen.c |  22 +++++--
+ WinQuake/vid.h    |   7 ++
+ 4 files changed, 167 insertions(+), 29 deletions(-)
 
 diff --git a/WinQuake/menu.c b/WinQuake/menu.c
-index e2929f8..b5c0be2 100644
+index e2929f8..3a3cdae 100644
 --- a/WinQuake/menu.c
 +++ b/WinQuake/menu.c
 @@ -64,6 +64,18 @@ qboolean	m_recursiveDraw;
@@ -156,7 +157,46 @@ index e2929f8..b5c0be2 100644
  }
  
  
-@@ -1177,6 +1213,81 @@ void M_Init (void)
+@@ -1023,6 +1059,10 @@ int		msgNumber;
+ int		m_quit_prevstate;
+ qboolean	wasInMenus;
+ 
++// Where M_CenterPage moved the page, a quit question over a menu leaves
++// that menu where it is and is drawn in the middle of the screen
++static int	m_pagedx, m_pagedy;
++
+ #ifndef	_WIN32
+ char *quitMessage [] = 
+ {
+@@ -1117,6 +1157,8 @@ void M_Quit_Key (int key)
+ 
+ void M_Quit_Draw (void)
+ {
++	int	dx, dy;
++
+ 	if (wasInMenus)
+ 	{
+ 		m_state = m_quit_prevstate;
+@@ -1149,11 +1191,13 @@ void M_Quit_Draw (void)
+ 	M_PrintWhite (16, 172, "Nothing Interactive, Inc. All rights\n");
+ 	M_PrintWhite (16, 180, "reserved. Press y to exit\n");
+ #else
+-	M_DrawTextBox (56, 76, 24, 4);
+-	M_Print (64, 84,  quitMessage[msgNumber*4+0]);
+-	M_Print (64, 92,  quitMessage[msgNumber*4+1]);
+-	M_Print (64, 100, quitMessage[msgNumber*4+2]);
+-	M_Print (64, 108, quitMessage[msgNumber*4+3]);
++	dx = wasInMenus ? -m_pagedx : 0;
++	dy = wasInMenus ? (vid.height - 200) / 2 - m_pagedy : 0;
++	M_DrawTextBox (56 + dx, 76 + dy, 24, 4);
++	M_Print (64 + dx, 84 + dy,  quitMessage[msgNumber*4+0]);
++	M_Print (64 + dx, 92 + dy,  quitMessage[msgNumber*4+1]);
++	M_Print (64 + dx, 100 + dy, quitMessage[msgNumber*4+2]);
++	M_Print (64 + dx, 108 + dy, quitMessage[msgNumber*4+3]);
+ #endif
+ }
+ 
+@@ -1177,6 +1221,88 @@ void M_Init (void)
  }
  
  
@@ -178,6 +218,9 @@ index e2929f8..b5c0be2 100644
 +{
 +	int		x, y, top = -1, bottom = 0, left = vid.width, right = 0;
 +	byte	*row;
++
++	if (m_state == m_quit && wasInMenus)
++		return;
 +
 +	// the first and last pixel of the page on each row, over the background
 +	// four at a time
@@ -205,9 +248,13 @@ index e2929f8..b5c0be2 100644
 +	}
 +	cursor_w = cursor_h = 0;
 +	if (top < 0)
-+		VID_MoveMenu (0, 0);
++		m_pagedx = m_pagedy = 0;
 +	else
-+		VID_MoveMenu ((vid.width - (right - left + 1)) / 2 - left, (vid.height - (bottom - top + 1)) / 2 - top);
++	{
++		m_pagedx = (vid.width - (right - left + 1)) / 2 - left;
++		m_pagedy = (vid.height - (bottom - top + 1)) / 2 - top;
++	}
++	VID_MoveMenu (m_pagedx, m_pagedy);
 +}
 +
 +/*
@@ -238,7 +285,7 @@ index e2929f8..b5c0be2 100644
  void M_Draw (void)
  {
  	if (m_state == m_none || key_dest != key_menu)
-@@ -1186,17 +1297,8 @@ void M_Draw (void)
+@@ -1186,17 +1312,8 @@ void M_Draw (void)
  	{
  		scr_copyeverything = 1;
  

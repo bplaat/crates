@@ -14,7 +14,7 @@ the same field of view, so nothing looks squashed.
  3 files changed, 20 insertions(+), 11 deletions(-)
 
 diff --git a/wl_def.h b/wl_def.h
-index 95d7888..2f025de 100644
+index 559036b..fc0be48 100644
 --- a/wl_def.h
 +++ b/wl_def.h
 @@ -185,6 +185,11 @@ typedef uint8_t tiletype;
@@ -30,10 +30,10 @@ index 95d7888..2f025de 100644
      #define LRpack      8       // # of levels to store in endgame
  #else
 diff --git a/wl_main.c b/wl_main.c
-index 0b453a6..612e518 100644
+index 7dba608..9de9b73 100644
 --- a/wl_main.c
 +++ b/wl_main.c
-@@ -781,7 +781,7 @@ void CalcProjection (int32_t focal)
+@@ -783,7 +783,7 @@ void CalcProjection (int32_t focal)
      // divide heightnumerator by a posts distance to get the posts height for
      // the heightbuffer.  The pixel height is height>>2
      //

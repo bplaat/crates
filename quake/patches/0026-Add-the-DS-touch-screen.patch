@@ -38,10 +38,10 @@ when it changes.
  create mode 100644 WinQuake/sbar_nds.c
 
 diff --git a/WinQuake/menu.c b/WinQuake/menu.c
-index 9a72ecc..abb4e56 100644
+index c1ff98a..f97ffb0 100644
 --- a/WinQuake/menu.c
 +++ b/WinQuake/menu.c
-@@ -1212,6 +1212,12 @@ void M_Init (void)
+@@ -1220,6 +1220,12 @@ void M_Init (void)
  }
  
  

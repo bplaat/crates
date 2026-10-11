@@ -15,10 +15,10 @@ the game loads, so the platform can show a picture meanwhile.
  1 file changed, 14 insertions(+), 17 deletions(-)
 
 diff --git a/wl_main.c b/wl_main.c
-index 44e1e4e..0b453a6 100644
+index 1b69819..7dba608 100644
 --- a/wl_main.c
 +++ b/wl_main.c
-@@ -839,8 +839,6 @@ void SetupWalls (void)
+@@ -841,8 +841,6 @@ void SetupWalls (void)
  void SignonScreen (void)                        // VGA version
  {
      VL_SetVGAPlaneMode ();
@@ -27,7 +27,7 @@ index 44e1e4e..0b453a6 100644
  }
  
  
-@@ -1227,8 +1225,6 @@ static void InitGame()
+@@ -1229,8 +1227,6 @@ static void InitGame()
  
      SignonScreen ();
  
@@ -36,7 +36,7 @@ index 44e1e4e..0b453a6 100644
      VH_Startup ();
      IN_Startup ();
      PM_Startup ();
-@@ -1299,10 +1295,6 @@ static void InitGame()
+@@ -1301,10 +1297,6 @@ static void InitGame()
  // initialize variables
  //
      InitRedShifts ();
@@ -47,7 +47,7 @@ index 44e1e4e..0b453a6 100644
  
  #ifdef NOTYET
      vdisp = (byte *) (0xa0000+PAGE1START);
-@@ -1476,8 +1468,6 @@ static void DemoLoop()
+@@ -1478,8 +1470,6 @@ static void DemoLoop()
          #ifndef GOODTIMES
          #ifndef SPEAR
          #ifndef JAPAN
@@ -56,7 +56,7 @@ index 44e1e4e..0b453a6 100644
          #endif
          #else
              #ifndef GOODTIMES
-@@ -1491,18 +1481,22 @@ static void DemoLoop()
+@@ -1493,18 +1483,22 @@ static void DemoLoop()
          #endif
      #endif
  
@@ -86,7 +86,7 @@ index 44e1e4e..0b453a6 100644
          {
  //
  // title page
-@@ -1562,6 +1556,7 @@ static void DemoLoop()
+@@ -1564,6 +1558,7 @@ static void DemoLoop()
                  VL_ClearScreen(0);
              StartCPMusic(INTROSONG);
          }
@@ -94,7 +94,7 @@ index 44e1e4e..0b453a6 100644
  
          VW_FadeOut ();
  
-@@ -1577,6 +1572,8 @@ static void DemoLoop()
+@@ -1579,6 +1574,8 @@ static void DemoLoop()
          if (startgame || loadedgame)
          {
              GameLoop ();

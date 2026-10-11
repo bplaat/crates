@@ -394,10 +394,10 @@ index b372b61..a5dd4b0 100644
          {0, "??:??"},           // Boss 3
          {6, "06:00"},
 diff --git a/wl_main.c b/wl_main.c
-index 8152b0e..409202b 100644
+index 36f19be..9285b92 100644
 --- a/wl_main.c
 +++ b/wl_main.c
-@@ -719,7 +719,7 @@ void BuildTables (void)
+@@ -721,7 +721,7 @@ void BuildTables (void)
      int i;
      for(i=0;i<FINEANGLES/8;i++)
      {
@@ -406,7 +406,7 @@ index 8152b0e..409202b 100644
          finetangent[i]=(int32_t)(tang*GLOBAL1);
          finetangent[FINEANGLES/4-1-i]=(int32_t)((1/tang)*GLOBAL1);
      }
-@@ -733,7 +733,7 @@ void BuildTables (void)
+@@ -735,7 +735,7 @@ void BuildTables (void)
      float anglestep=(float)(PI/2/ANGLEQUAD);
      for(i=0; i<ANGLEQUAD; i++)
      {
@@ -415,7 +415,7 @@ index 8152b0e..409202b 100644
          sintable[i]=sintable[i+ANGLES]=sintable[ANGLES/2-i]=value;
          sintable[ANGLES-i]=sintable[ANGLES/2+i]=-value;
          angle+=anglestep;
-@@ -764,9 +764,9 @@ void CalcProjection (int32_t focal)
+@@ -766,9 +766,9 @@ void CalcProjection (int32_t focal)
      int     i;
      int    intang;
      float   angle;
@@ -427,7 +427,7 @@ index 8152b0e..409202b 100644
  
      focallength = focal;
      facedist = focal+MINDIST;
-@@ -792,7 +792,7 @@ void CalcProjection (int32_t focal)
+@@ -794,7 +794,7 @@ void CalcProjection (int32_t focal)
      {
          // start 1/2 pixel over, so viewangle bisects two middle pixels
          tang = (int32_t)i*VIEWGLOBAL/viewwidth/facedist;

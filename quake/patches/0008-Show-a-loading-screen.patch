@@ -102,7 +102,7 @@ diff --git a/WinQuake/screen.c b/WinQuake/screen.c
 index 8b1c6dc..db253ab 100644
 --- a/WinQuake/screen.c
 +++ b/WinQuake/screen.c
-@@ -462,14 +462,12 @@ void SCR_DrawPause (void)
+@@ -462,14 +462,12 @@ SCR_DrawLoading
  */
  void SCR_DrawLoading (void)
  {

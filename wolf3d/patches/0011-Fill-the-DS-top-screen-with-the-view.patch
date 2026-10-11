@@ -69,7 +69,7 @@ index 0678042..7ba957d 100644
  
      IN_UserInput(300);
 diff --git a/wl_def.h b/wl_def.h
-index 2f025de..3ac7e4e 100644
+index fc0be48..02c3902 100644
 --- a/wl_def.h
 +++ b/wl_def.h
 @@ -185,6 +185,11 @@ typedef uint8_t tiletype;
@@ -137,10 +137,10 @@ index 6c6ee7d..b372b61 100644
      VW_FadeIn ();
  
 diff --git a/wl_main.c b/wl_main.c
-index 612e518..1cd7cd0 100644
+index 9de9b73..9337c5d 100644
 --- a/wl_main.c
 +++ b/wl_main.c
-@@ -1319,14 +1319,7 @@ boolean SetViewSize (unsigned width, unsigned height)
+@@ -1321,14 +1321,7 @@ boolean SetViewSize (unsigned width, unsigned height)
      centerx = viewwidth/2-1;
      centery = viewheight / 2;
      shootdelta = viewwidth/10;
@@ -156,7 +156,7 @@ index 612e518..1cd7cd0 100644
  
  //
  // calculate trace angles and projection constants
-@@ -1370,13 +1363,9 @@ void ShowViewSize (int width)
+@@ -1372,13 +1365,9 @@ void ShowViewSize (int width)
  
  void NewViewSize (int width)
  {
