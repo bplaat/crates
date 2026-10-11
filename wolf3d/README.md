@@ -156,10 +156,12 @@ code is written for the DS only, without `__NDS__` checks.
   floor where not every wall post covers the row, the wall posts and the
   sprite columns over them, then copied into the frame a row of four words
   at a time. The texture steps in fixed point, four pixels per loop.
+- [0013](patches/0013-Inline-FixedMul.patch): `FixedMul` is inline, the
+  ray caster and the scaler multiply for every column.
 
 ### Sound
 
-- [0013](patches/0013-Skip-the-PC-speaker-while-it-is-silent.patch): The
+- [0014](patches/0014-Skip-the-PC-speaker-while-it-is-silent.patch): The
   PC speaker mixer added silence to every sample of the stream when no sound
   played, it returns at once instead.
 
@@ -168,13 +170,13 @@ code is written for the DS only, without `__NDS__` checks.
 Wolf4SDL runs on a small implementation of the parts of SDL 2 and SDL_mixer
 it uses, in `nds/`, so its own code is barely changed.
 
-- [0014](patches/0014-Add-a-Nintendo-DS-build.patch): `Makefile.nds`
+- [0015](patches/0015-Add-a-Nintendo-DS-build.patch): `Makefile.nds`
   builds the `.nds` with the [toolchain](../toolchain), with the Apogee v1.4
   graphics layout. The ray caster, the scaler and the fixed point math run
   from ITCM as ARM code, the AdLib on the ARM7, the rest is Thumb code in main RAM, the cold parts
   optimized for size. The Tab debug keys, which need a keyboard, are left
   out.
-- [0015](patches/0015-Add-the-DS-startup.patch): `wl_nds.c` switches the
+- [0016](patches/0016-Add-the-DS-startup.patch): `wl_nds.c` switches the
   ARM9 to 134 MHz in DSi mode, finds the game data in NitroFS and on the SD
   card, keeps config and saves in `/data/wolf3d/<extension>/` and reads
   `/data/wolf3d/args.txt`. Without an SD card the config folder is the root
@@ -184,9 +186,9 @@ it uses, in `nds/`, so its own code is barely changed.
   soon as the data is found, it shows the title on the top screen while the
   game loads, expanding only its chunk of the graphics. Errors are shown on
   the touch screen.
-- [0016](patches/0016-Add-the-SDL-core-on-the-DS.patch): `sdl.c` and the
+- [0017](patches/0017-Add-the-SDL-core-on-the-DS.patch): `sdl.c` and the
   SDL headers: initialization, time and message boxes.
-- [0017](patches/0017-Add-DS-video.patch): `sdl_video.c` page flips two
+- [0018](patches/0018-Add-DS-video.patch): `sdl_video.c` page flips two
   8bpp VRAM backgrounds on vblank. DMA copies each frame there while the game
   draws the next one, a row at a time chained by interrupts, only the view
   while the screen shows it, at 1:1. A whole new view reaches the screen
@@ -194,11 +196,11 @@ it uses, in `nds/`, so its own code is barely changed.
   Other frames use the affine background hardware to scale, smoothed by a
   second layer half a pixel further that is alpha blended on top. The game
   palette is the hardware palette, so fades and flashes cost nothing.
-- [0018](patches/0018-Add-DS-buttons.patch): `sdl_input.c` makes START the
+- [0019](patches/0019-Add-DS-buttons.patch): `sdl_input.c` makes START the
   escape key and the other buttons Wolfenstein's joystick, which is always
   enabled. The d-pad turns slower than it moves, at half speed for the first
   tics so a tap can aim.
-- [0019](patches/0019-Add-the-DS-touch-screen.patch): `wl_touch.c` draws
+- [0020](patches/0020-Add-the-DS-touch-screen.patch): `wl_touch.c` draws
   the status bar, the map and the weapon cells from the game's own graphics,
   the weapons from their sprites (the machine guns as picked up, the knife
   and pistol as held), copies the parts that changed to VRAM by DMA, selects the weapon tapped
@@ -206,11 +208,11 @@ it uses, in `nds/`, so its own code is barely changed.
   its own, scrolled by the hardware to follow the player and shown in its
   panel by a window, so only the tiles that change are drawn. The tiles in
   view are merged into it half of the level a frame.
-- [0020](patches/0020-Add-DS-sound.patch): `sdl_mixer.c` plays the digitized
+- [0021](patches/0021-Add-DS-sound.patch): `sdl_mixer.c` plays the digitized
   sounds as they are on hardware channels 0-5, with the positional stereo of
   Wolf4SDL, and mixes the music hook and the PC speaker into a stream on
   channel 6 from a 700 Hz thread.
-- [0021](patches/0021-Play-the-AdLib-on-the-DS-sound-hardware.patch):
+- [0022](patches/0022-Play-the-AdLib-on-the-DS-sound-hardware.patch):
   `opl7.c` plays the OPL2 register writes on the sound hardware from the
   ARM7 instead of emulating the chip sample by sample, which took most of
   the ARM9: every OPL channel is a hardware channel looping one period of the
@@ -220,14 +222,14 @@ it uses, in `nds/`, so its own code is barely changed.
   from it, each in a loop for one case only. `opl.c` on the ARM9 works out
   the tables, which take floating point, and sends the register writes over
   PXI.
-- [0022](patches/0022-Use-single-precision-and-reduce-floating-point-work.patch):
+- [0023](patches/0023-Use-single-precision-and-reduce-floating-point-work.patch):
   Use single-precision trig, projection and AdLib tables (without `powf`);
   share the direction-to-angle conversion and replace its division with
   multiplication. Sprite rotation and the audio buffer size are worked out in
   integers, no double math is left.
-- [0023](patches/0023-Add-the-DS-Rumble-Pak.patch): `wl_nds.c` rumbles a
+- [0024](patches/0024-Add-the-DS-Rumble-Pak.patch): `wl_nds.c` rumbles a
   Rumble Pak in the GBA slot on taking damage and firing a gun, switching it
   at 60 Hz from a tick task. The main menu has Control again, between Sound
   and Quit, with only Rumble Enabled, kept at the end of the config.
-- [0024](patches/0024-Add-Always-Run.patch): Control gets Always Run, the
+- [0025](patches/0025-Add-Always-Run.patch): Control gets Always Run, the
   run button then walks, also kept at the end of the config.

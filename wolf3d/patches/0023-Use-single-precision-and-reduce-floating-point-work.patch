@@ -193,7 +193,7 @@ index 7ba957d..e7bbdcf 100644
      //
      // try to position as close as possible without being in a wall
 diff --git a/wl_def.h b/wl_def.h
-index ee86da6..f09494b 100644
+index 90dfee5..47c6859 100644
 --- a/wl_def.h
 +++ b/wl_def.h
 @@ -183,7 +183,7 @@ typedef uint8_t tiletype;
@@ -215,10 +215,10 @@ index ee86da6..f09494b 100644
  
  #define GLOBAL1         (1l<<16)
 diff --git a/wl_draw.c b/wl_draw.c
-index 3b42520..2ca68d8 100644
+index d9fff10..7d3fb60 100644
 --- a/wl_draw.c
 +++ b/wl_draw.c
-@@ -676,7 +676,8 @@ int CalcRotate (objtype *ob)
+@@ -686,7 +686,8 @@ int CalcRotate (objtype *ob)
      // but it is close enough with only eight rotations
  
  #ifdef FIXCALCROTATE
@@ -437,10 +437,10 @@ index 36f19be..9285b92 100644
          pixelangle[halfview-1-i] = intang;
          pixelangle[halfview+i] = -intang;
 diff --git a/wl_utils.c b/wl_utils.c
-index fe14d16..40638ea 100644
+index e2502d1..fa5afb4 100644
 --- a/wl_utils.c
 +++ b/wl_utils.c
-@@ -38,6 +38,18 @@ fixed FixedDiv (fixed a, fixed b)
+@@ -33,6 +33,18 @@ fixed FixedDiv (fixed a, fixed b)
  	return div64((int64_t)a << FRACBITS, b);
  }
  
@@ -460,14 +460,14 @@ index fe14d16..40638ea 100644
  {
      unsigned value;
 diff --git a/wl_utils.h b/wl_utils.h
-index 2013e21..c545d3e 100644
+index db957d5..229ebde 100644
 --- a/wl_utils.h
 +++ b/wl_utils.h
-@@ -11,6 +11,7 @@
+@@ -10,6 +10,7 @@
+ 
  void     *safe_malloc (size_t size, const char *fname, uint32_t line);
- fixed    FixedMul (fixed a, fixed b);
  fixed    FixedDiv (fixed a, fixed b);
 +int      VectorAngle (int32_t y, int32_t x);
  
- uint16_t ReadShort (void *ptr);
- uint32_t ReadLong (void *ptr);
+ // Inline, the ray caster and the sprites multiply for every column
+ static inline fixed FixedMul (fixed a, fixed b)
