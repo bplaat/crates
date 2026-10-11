@@ -28,11 +28,11 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
 
 ## Files
 
-- `libc/` replaces newlib: word copying `memcpy`/`memset`/`memcmp` in ITCM (VRAM safe), a first-fit
-  `malloc`, buffered `stdio` on the devoptab devices (SD card, NitroFS, console), the `printf` and
-  `scanf` families, `strtof`, float math, time and `setjmp`. Floats are single precision
-  throughout, `strtod` and `atof` too, nothing does double precision math. `stdin` is always
-  empty. It only uses the calico functions in `libc/calico.h`.
+- `libc/` replaces newlib: word copying `memcpy`/`memset`/`memcmp` in ITCM (VRAM safe, `memset`
+  stores 32 bytes per two `stm`), a first-fit `malloc`, buffered `stdio` on the devoptab devices
+  (SD card, NitroFS, console), the `printf` and `scanf` families, `strtof`, float math, time and
+  `setjmp`. Floats are single precision throughout, `strtod` and `atof` too, nothing does double
+  precision math. `stdin` is always empty. It only uses the calico functions in `libc/calico.h`.
 - `nds.mk` has the make rules for the ports' `Makefile.nds`, at `-O3`. A port's own ARM7 code
   (`ARM7_SOURCES`) is linked with the default ARM7 program, which calls its `arm7PortInit`
 - `run.sh` starts a program in melonDS, `make run` uses it

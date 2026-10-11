@@ -103,8 +103,18 @@ void* memset(void* dst, int value, size_t size) {
         d += 2, size -= 2;
     }
     word* dw = (word*)d;
-    for (; size >= 16; size -= 16, dw += 4)
-        dw[0] = fill, dw[1] = fill, dw[2] = fill, dw[3] = fill;
+    if (size >= 32) {
+        // Two stm of four registers store 32 bytes, the compiler would keep the fill in one register
+        // and store a word at a time. The registers are outputs too, so they aren't set again for
+        // every loop
+        register word a __asm__("r4") = fill, b __asm__("r5") = fill, c __asm__("r6") = fill,
+                      e __asm__("r7") = fill;
+        for (; size >= 32; size -= 32)
+            __asm__ volatile("stmia %0!, {%1, %2, %3, %4}\n\tstmia %0!, {%1, %2, %3, %4}"
+                             : "+r"(dw), "+r"(a), "+r"(b), "+r"(c), "+r"(e)
+                             :
+                             : "memory");
+    }
     for (; size >= 4; size -= 4)
         *dw++ = fill;
     d = (uint8_t*)dw;
