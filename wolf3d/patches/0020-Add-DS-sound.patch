@@ -17,10 +17,10 @@ sequences the AdLib music and sounds, and the PC speaker.
  create mode 100644 nds/sdl_mixer.c
 
 diff --git a/id_sd.c b/id_sd.c
-index 5ea7ec6..bbd47b0 100644
+index 4ad0be6..4667fc3 100644
 --- a/id_sd.c
 +++ b/id_sd.c
-@@ -406,8 +406,6 @@ Sint16 GetSample(float csample, byte *samples, int size)
+@@ -415,8 +415,6 @@ Sint16 GetSample(float csample, byte *samples, int size)
  
  boolean SD_PrepareSound(int which)
  {
@@ -29,7 +29,7 @@ index 5ea7ec6..bbd47b0 100644
      if(DigiList == NULL)
          Quit("SD_PrepareSound(%i): DigiList not initialized!\n", which);
  
-@@ -422,37 +420,10 @@ boolean SD_PrepareSound(int which)
+@@ -431,37 +429,10 @@ boolean SD_PrepareSound(int which)
      if(origsamples + size >= PM_GetPageEnd())
          return false;
  

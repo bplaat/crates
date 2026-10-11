@@ -22,10 +22,10 @@ scan instead of the double log2. No double math is left.
  10 files changed, 85 insertions(+), 87 deletions(-)
 
 diff --git a/id_sd.c b/id_sd.c
-index bbd47b0..355c9e2 100644
+index 4667fc3..cdc3151 100644
 --- a/id_sd.c
 +++ b/id_sd.c
-@@ -869,7 +869,7 @@ SD_Startup(void)
+@@ -878,7 +878,7 @@ SD_Startup(void)
          if (!param_samplerate || param_samplerate > 44100)
              Quit ("Divide by zero caused by invalid samplerate!");
  
