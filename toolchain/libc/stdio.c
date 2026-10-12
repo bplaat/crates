@@ -148,8 +148,9 @@ size_t fread(void* restrict buffer, size_t size, size_t count, FILE* restrict fi
             done += part;
             continue;
         }
-        // Big reads go straight to the destination
-        bool direct = total - done >= file->size;
+        // Big reads go straight to destinations in main RAM, the drivers may copy bytes, which
+        // VRAM and the RAM of the GBA slot ignore
+        bool direct = total - done >= file->size && (uintptr_t)b >> 24 == 0x02;
         ssize_t read_count = read(file->fd, direct ? b + done : file->buffer, direct ? total - done : file->size);
         if (read_count <= 0) {
             file->flags |= read_count == 0 ? FILE_EOF : FILE_ERROR;

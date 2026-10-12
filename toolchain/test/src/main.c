@@ -254,6 +254,13 @@ static void test_memory(void) {
     CHECK(vram[36] == 2 && vram[39] == 5);
     memset(vram + 2, 0x77, 30);
     CHECK(vram[2] == 0x77 && vram[31] == 0x77 && vram[32] == 0);
+    // the bytes at odd ends go with their halfword, the other byte stays
+    memcpy(vram + 41, source + 1, 4);
+    CHECK(vram[40] == 0 && vram[41] == 1 && vram[44] == 4 && vram[45] == 0);
+    memset(vram + 49, 0x55, 3);
+    CHECK(vram[48] == 0 && vram[49] == 0x55 && vram[51] == 0x55 && vram[52] == 0);
+    memmove(vram + 53, vram + 41, 3);
+    CHECK(vram[52] == 0 && vram[53] == 1 && vram[55] == 3 && vram[56] == 0);
 }
 
 static void test_math(void) {

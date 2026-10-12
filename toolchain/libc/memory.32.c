@@ -1,7 +1,7 @@
 // memcpy, memmove, memset and memcmp as ARM code, which the ARM9 runs from ITCM: they move
-// words, eight at a time, or halfwords when only those line up. VRAM ignores byte writes, so
-// bytes are only used at odd addresses, everything halfword aligned is copied and filled with at
-// least halfwords.
+// words, eight at a time, or halfwords when only those line up. VRAM and the RAM of the GBA slot,
+// like a Memory Expansion Pak's, ignore byte writes, so the bytes at the ends of a copy or fill
+// are written with their halfword there.
 
 #include <stdint.h>
 #include <string.h>
@@ -9,12 +9,23 @@
 typedef uint32_t __attribute__((may_alias)) word;
 typedef uint16_t __attribute__((may_alias)) half;
 
+// A byte in main RAM, or with the other byte of its halfword in VRAM and the GBA slot
+static inline void put_byte(uint8_t* p, uint8_t value) {
+    if ((uintptr_t)p < 0x04000000) {
+        *p = value;
+        return;
+    }
+    // volatile, else the compiler sees it's a byte and stores that
+    volatile half* h = (volatile half*)((uintptr_t)p & ~1u);
+    *h = (uintptr_t)p & 1 ? (half)((*h & 0x00ff) | value << 8) : (half)((*h & 0xff00) | value);
+}
+
 void* memcpy(void* restrict dst, const void* restrict src, size_t size) {
     uint8_t* d = dst;
     const uint8_t* s = src;
     if ((((uintptr_t)d ^ (uintptr_t)s) & 1) == 0) {
         if ((uintptr_t)d & 1 && size) {
-            *d++ = *s++;
+            put_byte(d++, *s++);
             size--;
         }
         if ((((uintptr_t)d ^ (uintptr_t)s) & 3) == 0) {
@@ -38,14 +49,14 @@ void* memcpy(void* restrict dst, const void* restrict src, size_t size) {
     } else {
         // Only one of them is odd: the halfwords are put together from bytes
         if ((uintptr_t)d & 1 && size) {
-            *d++ = *s++;
+            put_byte(d++, *s++);
             size--;
         }
         for (; size >= 2; size -= 2, d += 2, s += 2)
             *(half*)d = (half)(s[0] | s[1] << 8);
     }
     while (size--)
-        *d++ = *s++;
+        put_byte(d++, *s++);
     return dst;
 }
 
@@ -57,7 +68,7 @@ void* memmove(void* dst, const void* src, size_t size) {
     const uint8_t* s = (const uint8_t*)src + size;
     if ((((uintptr_t)d ^ (uintptr_t)s) & 1) == 0) {
         if ((uintptr_t)d & 1 && size) {
-            *--d = *--s;
+            put_byte(--d, *--s);
             size--;
         }
         if ((((uintptr_t)d ^ (uintptr_t)s) & 3) == 0) {
@@ -78,7 +89,7 @@ void* memmove(void* dst, const void* src, size_t size) {
         }
     } else {
         if ((uintptr_t)d & 1 && size) {
-            *--d = *--s;
+            put_byte(--d, *--s);
             size--;
         }
         for (; size >= 2; size -= 2) {
@@ -86,8 +97,10 @@ void* memmove(void* dst, const void* src, size_t size) {
             *(half*)d = (half)(s[0] | s[1] << 8);
         }
     }
-    while (size--)
-        *--d = *--s;
+    while (size--) {
+        --d;
+        put_byte(d, *--s);
+    }
     return dst;
 }
 
@@ -95,7 +108,7 @@ void* memset(void* dst, int value, size_t size) {
     uint8_t* d = dst;
     word fill = (uint8_t)value * 0x01010101u;
     if ((uintptr_t)d & 1 && size) {
-        *d++ = (uint8_t)value;
+        put_byte(d++, (uint8_t)value);
         size--;
     }
     if ((uintptr_t)d & 2 && size >= 2) {
@@ -123,7 +136,7 @@ void* memset(void* dst, int value, size_t size) {
         d += 2, size -= 2;
     }
     if (size)
-        *d = (uint8_t)value;
+        put_byte(d, (uint8_t)value);
     return dst;
 }
 
