@@ -26,6 +26,8 @@ float cosf(float x);
 float tanf(float x);
 float atanf(float x);
 float atan2f(float y, float x);
+float asinf(float x);
+float acosf(float x);
 float tanhf(float x);
 float expf(float x);
 float exp2f(float x);

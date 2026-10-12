@@ -191,6 +191,15 @@ float atan2f(float y, float x) {
     return __builtin_signbit(x) ? pi : y;
 }
 
+// The angles of the sides of a right triangle with hypotenuse 1, nan outside [-1, 1]
+float asinf(float x) {
+    return fabsf(x) > 1.0f ? NAN : atan2f(x, sqrtf((1.0f - x) * (1.0f + x)));
+}
+
+float acosf(float x) {
+    return fabsf(x) > 1.0f ? NAN : atan2f(sqrtf((1.0f - x) * (1.0f + x)), x);
+}
+
 // 2^x as 2^i * e^(f * ln 2), the fraction is done with a Taylor series of e^x
 float exp2f(float x) {
     if (isnan(x))

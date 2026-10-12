@@ -275,6 +275,9 @@ static void test_math(void) {
     CHECK_FLOAT(atanf(2.0f), 1.10714872f);
     CHECK_FLOAT(atan2f(1.0f, -1.0f), 2.35619449f);
     CHECK_EXACT(atan2f(-0.0f, -1.0f), -3.14159265f);
+    CHECK_FLOAT(asinf(0.5f), 0.52359878f);
+    CHECK_FLOAT(acosf(-0.5f), 2.09439510f);
+    CHECK(isnan(acosf(1.5f)));
     CHECK_FLOAT(expf(1.0f), 2.71828183f);
     CHECK_FLOAT(exp2f(10.5f), 1448.15468f);
     CHECK_FLOAT(log2f(10.0f), 3.32192809f);
