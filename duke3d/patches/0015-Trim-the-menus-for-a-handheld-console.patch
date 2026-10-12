@@ -15,7 +15,7 @@ the DS screen, where their text can't be read.
  1 file changed, 58 insertions(+), 233 deletions(-)
 
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index eb58992..cc9cbea 100644
+index 92d3929..87d4d2c 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -30,11 +30,9 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms

@@ -52,7 +52,7 @@ index 556e124..7748a43 100644
     SCRIPT_PutNumber( scripthandle, "Misc", "ShowCinematics",ud.showcinematics,false,false);
     SCRIPT_PutNumber( scripthandle, "Misc", "HideWeapon",ud.hideweapon,false,false);
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index 38502a7..6e9866a 100644
+index a2bb979..d9cee79 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -32,6 +32,7 @@ Prepared for public release: 03/21/2003 - Charlie Wiederhold, 3D Realms

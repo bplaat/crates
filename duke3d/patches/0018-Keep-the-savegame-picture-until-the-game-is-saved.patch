@@ -12,7 +12,7 @@ saved black.
  1 file changed, 9 insertions(+)
 
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index b41cbb4..d6073da 100644
+index 66ef960..8f5e5c6 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -608,7 +608,14 @@ int saveplayer(int8_t spot)

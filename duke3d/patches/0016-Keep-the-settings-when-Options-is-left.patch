@@ -24,7 +24,7 @@ index 3b299a6..24eb98c 100644
     }
  
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index cc9cbea..d771150 100644
+index 87d4d2c..7335293 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -2404,7 +2404,11 @@ else

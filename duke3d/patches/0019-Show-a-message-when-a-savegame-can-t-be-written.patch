@@ -9,7 +9,7 @@ Without an SD card saving silently did nothing, it says so now.
  1 file changed, 6 insertions(+), 1 deletion(-)
 
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index d6073da..38502a7 100644
+index 8f5e5c6..a2bb979 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -597,7 +597,12 @@ int saveplayer(int8_t spot)

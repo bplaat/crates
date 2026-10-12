@@ -10,7 +10,7 @@ level, also when it replaces an older one.
  1 file changed, 5 insertions(+), 1 deletion(-)
 
 diff --git a/Game/src/menues.c b/Game/src/menues.c
-index d771150..b41cbb4 100644
+index 7335293..66ef960 100644
 --- a/Game/src/menues.c
 +++ b/Game/src/menues.c
 @@ -3117,7 +3117,11 @@ else
