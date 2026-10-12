@@ -39,6 +39,9 @@ The first load keeps this startup screen. Later loads show the brown console
 background and version on the bottom screen. Nothing asks you to type: savegames are named after
 the level and kills, and the player after the user name of the DS settings.
 
+There is no looking up and down: like in DOOM, firing aims at an enemy in
+sight above or below you.
+
 Closing the lid puts the console to sleep. L+R+START+SELECT, or the DSi power
 button, quits.
 
@@ -195,9 +198,19 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   its end or writing past the entities, and one whose map fails to load is
   closed.
 
+### Controls
+
+- [0021](patches/0021-Aim-at-enemies-above-and-below-like-DOOM.patch):
+  Nothing looks up and down on the DS, and the shots were only aimed at an
+  enemy within 21.6 degrees of the view, up and down as much as to the side,
+  so enemies on stairs, ledges and in pits were missed. Like in DOOM only
+  the angle to the side counts, an enemy in sight above or below is hit.
+  Only the thunderbolt still fires straight ahead, the game code doesn't
+  aim it.
+
 ### The DS platform
 
-- [0021](patches/0021-Add-a-Nintendo-DS-build.patch): `Makefile.nds`
+- [0022](patches/0022-Add-a-Nintendo-DS-build.patch): `Makefile.nds`
   builds a DSi enhanced `.nds` with the [toolchain](../toolchain). The
   collision code and compiler-rt's software floating point, taken out of
   compiler-rt, run from ITCM as ARM code, `HOT_CODE` puts single functions
@@ -205,7 +218,7 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   Float comparisons come from `fcmp_nds.s`, without the two calls of
   compiler-rt's. Constants are single precision, so they don't drag
   expressions to double.
-- [0022](patches/0022-Add-the-DS-system-layer.patch): `sys_nds.c` switches
+- [0023](patches/0023-Add-the-DS-system-layer.patch): `sys_nds.c` switches
   the ARM9 to 134 MHz in DSi mode, runs Quake in a thread with its stack in
   main RAM (Quake keeps arrays of up to 32 KiB on the stack, the ARM9 stack
   is in the 16 KiB DTCM), gives the hunk all RAM that is left, reads
@@ -214,7 +227,7 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   touch screen. The game data in the ROM
   is searched before the SD card, which gets the written files. The player is
   named after the user of the DS settings.
-- [0023](patches/0023-Add-the-DS-3D-renderer.patch): `r_nds.c` draws the
+- [0024](patches/0024-Add-the-DS-3D-renderer.patch): `r_nds.c` draws the
   world, brush and alias models, sprites and particles with the geometry
   engine. Vertices are 16-bit fixed point world coordinates and surfaces are
   quad strips zig-zagging across their polygons. Textures stay 8-bit in VRAM
@@ -243,7 +256,7 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   dynamic light. The light under a model is found in fixed point, with the
   planes and texture vectors of the renderer, without soft float. A level
   reads each alias model's file once, for its skins and the model.
-- [0024](patches/0024-Add-DS-video.patch): `vid_nds.c` shows the 3D view
+- [0025](patches/0025-Add-DS-video.patch): `vid_nds.c` shows the 3D view
   on the top screen with a text layer over it, Quake's font and the loading
   plaque as tiles. Edge marking fills the polygon edges. The touch screen shows the
   320x200 2D drawing scaled by the affine background hardware, smoothed by a
@@ -254,10 +267,10 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   screen, scrolled to the middle, only the tiles with something on them take
   VRAM and only the ones that changed are written, to slots the shown menu
   doesn't use, its new map shows at the next vblank so nothing tears.
-- [0025](patches/0025-Add-DS-buttons.patch): `in_nds.c` maps the buttons
+- [0026](patches/0026-Add-DS-buttons.patch): `in_nds.c` maps the buttons
   to Quake's keys and taps to the weapons and handles the lid and power
   button.
-- [0026](patches/0026-Add-the-DS-touch-screen.patch): `sbar_nds.c` draws
+- [0027](patches/0027-Add-the-DS-touch-screen.patch): `sbar_nds.c` draws
   the map, stats and weapon cells below the status bar with Quake's own
   graphics, redrawn only where they changed. The weapons are drawn from their
   models when the game starts, textured and lit. The map is a line for each
@@ -266,7 +279,7 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   time in the intermission's big numbers instead. With the options and while
   no game runs behind the menu it shows the controls in a dark inset in the
   middle of the console background. When you die the time stops.
-- [0027](patches/0027-Add-DS-sound.patch): `snd_nds.c` plays every sound
+- [0028](patches/0028-Add-DS-sound.patch): `snd_nds.c` plays every sound
   channel on a hardware channel of its own, which does the resampling,
   volume and stereo panning, instead of mixing them in software: the
   ambient and entity sounds on channels 0-11, the four loudest static
@@ -275,12 +288,12 @@ with 32 KiB of ITCM for code and 16 KiB of DTCM for data at full speed.
   ambient ones only near water or sky, so the models aren't pushed out of
   it. The volume cvar is read once for each update, the channel volumes
   are integers.
-- [0028](patches/0028-Keep-the-time-in-single-precision.patch): The clocks
+- [0029](patches/0029-Keep-the-time-in-single-precision.patch): The clocks
   (`realtime`, `host_frametime`, `cl.time`, `sv.time` and the network
   timers) are floats instead of doubles, so the physics, view and particle
   code works in single precision, several times faster in software. A float
   clock still resolves a millisecond after more than four hours.
-- [0029](patches/0029-Add-the-DS-Rumble-Pak.patch): `in_nds.c` rumbles a
+- [0030](patches/0030-Add-the-DS-Rumble-Pak.patch): `in_nds.c` rumbles a
   Rumble Pak in the GBA slot on taking damage and on the kick of firing,
   switching it at 60 Hz from a tick task. Options gets Rumble, kept as the
   `rumble` cvar in `config.cfg`.
