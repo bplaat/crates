@@ -126,7 +126,7 @@ build() {
         mkdir -p "$(dirname "$dest")"
         cp "$ASSETS_DIR/$file" "$dest"
     done < <(cd "$ASSETS_DIR" && find . -type f ! -name '.*' | sed 's|^\./||')
-    msg "Embedding $(cd "$nitro" && find . -type f | sed 's|^\./||' | tr '\n' ' ')"
+    msg "Embedding $(cd "$nitro" && find . -type f | sed 's|^\./||' | sort | xargs)"
     make -C "$SRC_DIR/WinQuake" -f Makefile.nds -j"$(getconf _NPROCESSORS_ONLN)" \
         TOOLCHAIN="$TOOLCHAIN_DIR" ICON="$PORT_DIR/icon.bmp" NITRO_DIR="$nitro"
     cp "$SRC_DIR/WinQuake/quake.nds" "$BUILD_DIR/quake.nds"
