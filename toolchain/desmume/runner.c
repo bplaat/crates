@@ -18,6 +18,7 @@
 //   profile stop              stop counting
 //   wav <file>, wav stop      record the sound to a WAV file, stop recording
 //   pak                       put a Memory Expansion Pak in the GBA slot, before the first wait
+//   peek <address> [words]    print "peek <address> <word>..." of the ARM9's memory, in hex
 //   quit                      stop, also the end of the commands
 // Keys are a, b, x, y, l, r, start, select, up, down, left and right, joined by +, like up+a.
 
@@ -48,6 +49,7 @@ BOOL desmume_wav_begin(const char* file_name);
 void desmume_wav_end(void);
 void desmume_memory_register_exec(int address, int size, BOOL (*callback)(unsigned address, int size));
 BOOL desmume_insert_expansion_pak(void);
+unsigned long desmume_memory_read_long(int address);
 
 #define WIDTH 256
 #define HEIGHT 384
@@ -266,6 +268,16 @@ static int command(char** words) {
             desmume_wav_end();
         else if (!desmume_wav_begin(words[1]))
             die("Can't write %s", words[1]);
+    } else if (strcmp(name, "peek") == 0) {
+        char* end;
+        unsigned long address = words[1] != NULL ? strtoul(words[1], &end, 16) : 0;
+        if (words[1] == NULL || *end != '\0') die("Expected a hex address");
+        int count = words[2] != NULL ? parse_number(words[2]) : 1;
+        printf("peek %08lx", address);
+        for (int i = 0; i < count; i++)
+            printf(" %08lx", desmume_memory_read_long((int)(address + i * 4)) & 0xffffffffUL);
+        printf("\n");
+        fflush(stdout);
     } else if (strcmp(name, "pak") == 0) {
         desmume_insert_expansion_pak();
     } else if (strcmp(name, "quit") == 0) {

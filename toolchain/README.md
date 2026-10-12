@@ -55,8 +55,8 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
   `profile start`, `busy`, the share of the ARM9's time not waiting, `profile save <file>`, the
   ARM9 cycles per instruction address with their cache misses, `profile stop`, `wav <file>` and
   `wav stop`, which record the sound, `pak`, which puts a Memory Expansion Pak in the GBA slot
-  before the first `wait`, and `quit`, keys like `up+a`. DeSmuME has no SD card here, the ports
-  read their data from NitroFS.
+  before the first `wait`, `peek <address> [words]`, which prints words of memory, and `quit`,
+  keys like `up+a`. DeSmuME has no SD card here, the ports read their data from NitroFS.
 - `test/` is a DS program that checks the startup code, the C library, compiler-rt, threads, ITCM,
   FAT and NitroFS. `./build.sh test` runs it in melonDS with an SD card in `test/target/sd/` and
   fails when a check fails or it doesn't finish.
