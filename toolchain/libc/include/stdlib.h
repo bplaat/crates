@@ -26,10 +26,18 @@ void qsort(void* base, size_t count, size_t size, int (*compare)(const void*, co
 void* bsearch(const void* key, const void* base, size_t count, size_t size, int (*compare)(const void*, const void*));
 int rand(void);
 void srand(unsigned seed);
-// There is no environment
+// There is no environment, nothing can be added to it
 static inline char* getenv(const char* name) {
     (void)name;
     return NULL;
+}
+static inline int putenv(char* string) {
+    (void)string;
+    return -1;
+}
+static inline int setenv(const char* name, const char* value, int overwrite) {
+    (void)name, (void)value, (void)overwrite;
+    return -1;
 }
 int atexit(void (*function)(void));
 void exit(int status) __attribute__((noreturn));
