@@ -29,6 +29,12 @@ top, so the upstream code stays untouched in this repository.
     </a>
 </td>
 <td width="100" align="center">
+    <a href="./quake2">
+        <img src="quake2/docs/icon.png" alt="Quake II icon" width="48" height="48"/><br/>
+        Quake II
+    </a>
+</td>
+<td width="100" align="center">
     <a href="./wolf3d">
         <img src="wolf3d/docs/icon.png" alt="Wolfenstein 3D icon" width="48" height="48"/><br/>
         Wolfenstein 3D
@@ -40,6 +46,8 @@ top, so the upstream code stays untouched in this repository.
 - [DOOM](doom) Based on [doomgeneric](https://github.com/ozkl/doomgeneric) (Chocolate Doom based)
 - [Duke Nukem 3D](duke3d) Based on [Chocolate Duke3D](https://github.com/fabiensanglard/chocolate_duke3D) (BUILD engine)
 - [Quake](quake) Based on [id Software's Quake](https://github.com/id-Software/Quake) (WinQuake)
+- [Quake II](quake2) Based on [id Software's Quake II](https://github.com/id-Software/Quake-2),
+  needs the Memory Expansion Pak on a DS (work in progress)
 - [Wolfenstein 3D](wolf3d) Based on [Wolf4SDL](https://github.com/KS-Presto/Wolf4SDL)
 
 ## Port layout
@@ -60,9 +68,9 @@ Every port is a self-contained directory:
 All ports keep settings and savegames directly in
 `/data/<port>/<version>/` on the SD card: Doom uses the WAD filename,
 Duke Nukem 3D the GRP version (`shareware`, `registered` or `atomic`),
-Quake the game folder (such as `id1`), and Wolf3D the data extension
-(`wl1`, `wl3` or `wl6`). Shared startup files such as `args.txt` stay in
-`/data/<port>/`.
+Quake the game folder (such as `id1`), Quake II `baseq2`, and Wolf3D the
+data extension (`wl1`, `wl3` or `wl6`). Shared startup files such as
+`args.txt` stay in `/data/<port>/`.
 
 ## Getting Started
 
