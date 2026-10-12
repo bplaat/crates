@@ -402,6 +402,23 @@ static void test_heap(void) {
     rest = malloc(left - 32 * 1024);
     CHECK(rest != NULL);
     free(rest);
+    // A far heap is used first by far_malloc(), which falls back to the main RAM when it is full,
+    // and realloc() gives back the end of a block it shrinks
+    static char far_memory[64 * 1024];
+    far_heap_init(far_memory, sizeof(far_memory));
+    char* far = far_malloc(60000);
+    CHECK(far >= far_memory && far < far_memory + sizeof(far_memory));
+    char* near = far_malloc(30000);
+    CHECK(near && (near < far_memory || near >= far_memory + sizeof(far_memory)));
+    CHECK(realloc(far, 100) == far);
+    char* tail = far_malloc(50000);
+    CHECK(tail >= far_memory && tail < far_memory + sizeof(far_memory));
+    free(tail);
+    free(near);
+    free(far);
+    near = malloc(100);
+    CHECK(near < far_memory || near >= far_memory + sizeof(far_memory));
+    free(near);
 }
 
 // calico threads, each with its own thread local storage
