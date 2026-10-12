@@ -54,8 +54,9 @@ named `*.32.o` or `*.itcm.o` (a port's `ITCM_SOURCES`), which are ARM code in fa
   and `count`, which count the executions of a function such as a renderer's for frame rates,
   `profile start`, `busy`, the share of the ARM9's time not waiting, `profile save <file>`, the
   ARM9 cycles per instruction address with their cache misses, `profile stop`, `wav <file>` and
-  `wav stop`, which record the sound, and `quit`, keys like `up+a`. DeSmuME has no SD card here,
-  the ports read their data from NitroFS.
+  `wav stop`, which record the sound, `pak`, which puts a Memory Expansion Pak in the GBA slot
+  before the first `wait`, and `quit`, keys like `up+a`. DeSmuME has no SD card here, the ports
+  read their data from NitroFS.
 - `test/` is a DS program that checks the startup code, the C library, compiler-rt, threads, ITCM,
   FAT and NitroFS. `./build.sh test` runs it in melonDS with an SD card in `test/target/sd/` and
   fails when a check fails or it doesn't finish.
@@ -73,6 +74,7 @@ to write the commits back.
 - desmume: returning from an interrupt to Thumb code at an address that isn't a multiple of 4,
   like calico does with `ldm sp!, {..., pc}^`, ran the instruction before it again, the ARM9
   cycles are counted per instruction address for `profile` of the runner and the sound can be
-  recorded for `wav`
+  recorded for `wav`, the runner can put a Memory Expansion Pak in the GBA slot for `pak`, which
+  ignores byte writes like in melonDS
 - compiler-rt: the optimized float functions for ARMv5TE, divisions that return to Thumb on
   ARMv4T

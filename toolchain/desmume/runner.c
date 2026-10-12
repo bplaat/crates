@@ -17,6 +17,7 @@
 //   profile save <file>       write "<address> <cycles>" lines so far, the busiest first
 //   profile stop              stop counting
 //   wav <file>, wav stop      record the sound to a WAV file, stop recording
+//   pak                       put a Memory Expansion Pak in the GBA slot, before the first wait
 //   quit                      stop, also the end of the commands
 // Keys are a, b, x, y, l, r, start, select, up, down, left and right, joined by +, like up+a.
 
@@ -46,6 +47,7 @@ void desmume_profile_stop(void);
 BOOL desmume_wav_begin(const char* file_name);
 void desmume_wav_end(void);
 void desmume_memory_register_exec(int address, int size, BOOL (*callback)(unsigned address, int size));
+BOOL desmume_insert_expansion_pak(void);
 
 #define WIDTH 256
 #define HEIGHT 384
@@ -264,6 +266,8 @@ static int command(char** words) {
             desmume_wav_end();
         else if (!desmume_wav_begin(words[1]))
             die("Can't write %s", words[1]);
+    } else if (strcmp(name, "pak") == 0) {
+        desmume_insert_expansion_pak();
     } else if (strcmp(name, "quit") == 0) {
         return 0;
     } else {
