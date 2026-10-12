@@ -66,7 +66,9 @@ Edit and commit in `target/<name>/`, run `./build.sh` to try it and `./build.sh 
 to write the commits back.
 
 - calico: unified assembly syntax for LLVM, no newlib glue, linker scripts that work with lld
-- libnds: builds with clang and without newlib, with a pregenerated `libversion.h`
+- libnds: builds with clang and without newlib, with a pregenerated `libversion.h`, and
+  `ramPakInit` in `nds/arm9/rampak.h` unlocks the 8 MiB RAM of the DS Browser's Memory Expansion
+  Pak in the GBA slot and maps it data cached
 - default-arm7: calls `arm7PortInit`, which does nothing by default, before its main loop
 - desmume: returning from an interrupt to Thumb code at an address that isn't a multiple of 4,
   like calico does with `ldm sp!, {..., pc}^`, ran the instruction before it again, the ARM9

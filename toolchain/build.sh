@@ -79,7 +79,7 @@ CALICO7_SOURCES=(
 # libnds without the on-screen keyboard, its graphics need grit
 LIBNDS_SOURCES=(
     arm9/{background,boxtest,console,decompress,dynamicArray,exceptionDefault,gl2d,guitarGrip}.c
-    arm9/{gurumeditation,heapfuncs,image,keys,linkedlist,paddle,pcx,piano,rumble,sassert}.c
+    arm9/{gurumeditation,heapfuncs,image,keys,linkedlist,paddle,pcx,piano,rampak,rumble,sassert}.c
     arm9/{shadowRegs,sound,sprite,sprite_alloc,system,trig,video,videoGL,videoGL_base,window}.c
     arm9/exceptionEntry.s arm9/system/cpu_clock.s
     common/{card,cardEeprom,dldi,rsa,sha1,timers}.c
