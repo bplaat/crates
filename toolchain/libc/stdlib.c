@@ -178,7 +178,16 @@ double strtod(const char* restrict str, char** restrict end) {
     return strtof(str, end);
 }
 
+// A word at a time when the elements are word aligned, like structs
 static void swap(char* a, char* b, size_t size) {
+    if ((((uintptr_t)a | (uintptr_t)b | size) & 3) == 0) {
+        for (uint32_t *x = (uint32_t*)a, *y = (uint32_t*)b; size; size -= 4) {
+            uint32_t c = *x;
+            *x++ = *y;
+            *y++ = c;
+        }
+        return;
+    }
     while (size--) {
         char c = *a;
         *a++ = *b;

@@ -140,6 +140,10 @@ static void test_format(void) {
     CHECK(sscanf("", "%d", &a) == EOF && sscanf("  ", "%s", word) == EOF);
 }
 
+static int compare_chars(const void* a, const void* b) {
+    return *(const char*)a - *(const char*)b;
+}
+
 static int compare_ints(const void* a, const void* b) {
     return *(const int*)a - *(const int*)b;
 }
@@ -189,6 +193,10 @@ static void test_stdlib(void) {
     CHECK(sorted);
     int key = 50;
     CHECK(bsearch(&key, numbers, 100, sizeof(int), compare_ints) != NULL);
+    // elements that aren't word sized are swapped a byte at a time
+    char triples[] = "zzzyyyxxxaaa";
+    qsort(triples, 4, 3, compare_chars);
+    CHECK(!strcmp(triples, "aaaxxxyyyzzz"));
 
     char text[32] = "a,b,,c";
     CHECK(!strcmp(strtok(text, ","), "a") && !strcmp(strtok(NULL, ","), "b") && !strcmp(strtok(NULL, ","), "c") &&
