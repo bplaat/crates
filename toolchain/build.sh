@@ -165,8 +165,8 @@ patch() {
     msg "Applying $name patches"
     # git am keeps the authors of the patches, but needs a committer identity
     if [ -z "$(git -C "$dir" config user.email || true)" ]; then
-        git -C "$dir" config user.name nds-ports
-        git -C "$dir" config user.email nds-ports@localhost
+        git -C "$dir" config user.name "Bastiaan van der Plaat"
+        git -C "$dir" config user.email bastiaan.v.d.plaat@gmail.com
     fi
     git -C "$dir" config commit.gpgsign false
     git -C "$dir" tag -f upstream "$commit" > /dev/null

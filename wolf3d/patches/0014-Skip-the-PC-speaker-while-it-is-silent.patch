@@ -1,5 +1,5 @@
 From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
-From: nds-ports <nds-ports@localhost>
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
 Date: Sun, 11 Oct 2026 15:12:12 +0200
 Subject: [PATCH] Skip the PC speaker while it is silent
 

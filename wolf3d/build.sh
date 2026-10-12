@@ -91,8 +91,8 @@ patch() {
     msg "Applying patches"
     git_src init -q
     # Deterministic identity so patch commits are reproducible
-    git_src config user.name nds-ports
-    git_src config user.email nds-ports@localhost
+    git_src config user.name "Bastiaan van der Plaat"
+    git_src config user.email bastiaan.v.d.plaat@gmail.com
     git_src config commit.gpgsign false
     git_src add -A -f
     git_src commit -q -m "Upstream $version"
