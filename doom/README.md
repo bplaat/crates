@@ -58,7 +58,13 @@ The freely redistributable shareware (episode 1, v1.9) is fetched from
 archive.org, checksum verified and embedded in the ROM through NitroFS, so the
 `.nds` is always playable, even without an SD card. Add your own retail WADs
 next to it in `assets/` to embed them, or put them in `/data/doom/` on the SD
-card (the folder next to the `.nds` and the SD root also work).
+card (the folder next to the `.nds` and the SD root also work). The shareware
+isn't embedded next to `doom.wad`, which has its episode too.
+
+With GOG's The Ultimate DOOM installer (`setup_*.exe`) next to `build.sh`,
+its `doom.wad` is extracted to `assets/` with
+[innoextract](https://constexpr.org/innoextract/) instead, the shareware is only
+downloaded when that fails.
 
 Every `.wad` found is listed in a picker that shows each game's title screen.
 IWADs are games, other WADs are mods (PWADs) and start on a matching IWAD:

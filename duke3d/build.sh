@@ -47,15 +47,42 @@ download() {
     echo "$sha  $dest" | shasum -a 256 -c --status || { rm -f "$dest"; die "Checksum mismatch for $url"; }
 }
 
+# Extracts the given files (lowercase, under prefix in the installer) from a
+# GOG setup_*.exe next to this script into assets/ with innoextract, fails
+# without the installer or innoextract
+gog_extract() {
+    local prefix="$1" setup dir="$BUILD_DIR/gog" file includes=()
+    shift
+    setup="$(compgen -G "$PORT_DIR/setup_*.exe" | head -n 1)" || return 1
+    command -v innoextract > /dev/null || { msg "Install innoextract to use $(basename "$setup")"; return 1; }
+    for file in "$@"; do includes+=(-I "/$prefix$file"); done
+    msg "Extracting $(basename "$setup")"
+    rm -rf "$dir"
+    innoextract -s -L -d "$dir" "${includes[@]}" "$setup" || { rm -rf "$dir"; msg "Failed to extract $(basename "$setup")"; return 1; }
+    for file in "$@"; do
+        [ -f "$dir/$prefix$file" ] || { msg "No $file in $(basename "$setup")"; rm -rf "$dir"; return 1; }
+    done
+    for file in "$@"; do
+        mkdir -p "$(dirname "$ASSETS_DIR/$file")"
+        mv "$dir/$prefix$file" "$ASSETS_DIR/$file"
+    done
+    rm -rf "$dir"
+}
+
 fetch() {
-    local archive="$BUILD_DIR/$(basename "$source_url")" entry sha file
+    local archive="$BUILD_DIR/$(basename "$source_url")" grp="$ASSETS_DIR/duke3d.grp" entry sha file
     download "$source_url" "$source_sha256" "$archive"
     if [ ! -d "$SRC_DIR" ]; then
         msg "Extracting $(basename "$archive")"
         tar -xf "$archive" -C "$BUILD_DIR"
     fi
 
-    [ -f "$ASSETS_DIR/duke3d.grp" ] && return
+    # The full game's duke3d.grp replaces the shareware one
+    if [ -f "$grp" ] && ! echo "${shareware_files[0]%% *}  $grp" | shasum -a 256 -c --status; then
+        return
+    fi
+    gog_extract '' duke3d.grp && { msg "Added the Duke Nukem 3D Atomic Edition duke3d.grp to assets/"; return; }
+    [ -f "$grp" ] && return
     archive="$BUILD_DIR/$(basename "$shareware_url")"
     download "$shareware_url" "$shareware_sha256" "$archive"
     unzip -p "$archive" DN3DSW13.SHR > "$BUILD_DIR/DN3DSW13.SHR"

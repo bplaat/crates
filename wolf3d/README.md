@@ -74,8 +74,13 @@ full game (`audiohed`, `audiot`, `gamemaps`, `maphead`, `vgadict`,
 `vgagraph`, `vgahead` and `vswap`) to `assets/` to embed them, or put them
 in `/data/wolf3d/` on the SD card (the folder next to the `.nds` and the SD
 root also work). The full game is played when it is found, it has the
-shareware episode too. Spear of Destiny needs a build of its own and isn't
-supported.
+shareware episode too, so the shareware isn't embedded next to it. Spear of
+Destiny needs a build of its own and isn't supported.
+
+With GOG's Wolfenstein 3D installer (`setup_*.exe`) next to `build.sh`, its
+`*.wl6` files are extracted to `assets/` with
+[innoextract](https://constexpr.org/innoextract/), the shareware is only
+downloaded when that fails.
 
 With an SD card the config and savegames go to `/data/wolf3d/<extension>/`:
 `wl6/`, `wl3/` or `wl1/` for the loaded version. Without one you can still

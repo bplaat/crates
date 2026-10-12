@@ -70,6 +70,11 @@ Put your own retail `duke3d.grp` in `assets/` instead to embed it, or in
 `/data/duke3d/` on the SD card, which is used first. The shareware demos
 are left out, no port of the source release can play them.
 
+With GOG's Duke Nukem 3D Atomic Edition installer (`setup_*.exe`) next to
+`build.sh`, its `duke3d.grp` is extracted to `assets/` with
+[innoextract](https://constexpr.org/innoextract/) instead, the shareware is only
+downloaded when that fails.
+
 With an SD card the settings (`duke3d.cfg`) and savegames go to
 `/data/duke3d/<version>/`, `shareware/`, `registered/` or `atomic/`, after
 the size of the GRP. Without one you can still play, saving then shows a

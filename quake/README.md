@@ -67,6 +67,11 @@ always playable, even without an SD card. Add your own `pak1.pak` next to it
 in `assets/id1/` to embed it, or put it in `/data/quake/id1/` on the SD card.
 Both are searched, the SD card last.
 
+With GOG's Quake installer (`setup_*.exe`) next to `build.sh`, its
+`id1/pak0.pak` and `id1/pak1.pak` are extracted to `assets/` with
+[innoextract](https://constexpr.org/innoextract/) instead, the shareware is only
+downloaded when that fails.
+
 With an SD card the config and savegames go to `/data/quake/<game>/`
 (`id1/` for the base game, or the mission pack or mod folder), in Quake's
 own format, named after the level, also when they replace an older one.

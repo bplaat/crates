@@ -43,6 +43,28 @@ download() {
     echo "$sha  $dest" | shasum -a 256 -c --status || { rm -f "$dest"; die "Checksum mismatch for $url"; }
 }
 
+# Extracts the given files (lowercase, under prefix in the installer) from a
+# GOG setup_*.exe next to this script into assets/ with innoextract, fails
+# without the installer or innoextract
+gog_extract() {
+    local prefix="$1" setup dir="$BUILD_DIR/gog" file includes=()
+    shift
+    setup="$(compgen -G "$PORT_DIR/setup_*.exe" | head -n 1)" || return 1
+    command -v innoextract > /dev/null || { msg "Install innoextract to use $(basename "$setup")"; return 1; }
+    for file in "$@"; do includes+=(-I "/$prefix$file"); done
+    msg "Extracting $(basename "$setup")"
+    rm -rf "$dir"
+    innoextract -s -L -d "$dir" "${includes[@]}" "$setup" || { rm -rf "$dir"; msg "Failed to extract $(basename "$setup")"; return 1; }
+    for file in "$@"; do
+        [ -f "$dir/$prefix$file" ] || { msg "No $file in $(basename "$setup")"; rm -rf "$dir"; return 1; }
+    done
+    for file in "$@"; do
+        mkdir -p "$(dirname "$ASSETS_DIR/$file")"
+        mv "$dir/$prefix$file" "$ASSETS_DIR/$file"
+    done
+    rm -rf "$dir"
+}
+
 fetch() {
     local archive
     archive="$BUILD_DIR/$(basename "$source_url")"
@@ -52,6 +74,8 @@ fetch() {
         tar -xf "$archive" -C "$BUILD_DIR"
     fi
 
+    [ -f "$ASSETS_DIR/doom.wad" ] && return
+    gog_extract '' doom.wad && { msg "Added The Ultimate DOOM doom.wad to assets/"; return; }
     [ -f "$ASSETS_DIR/doom1.wad" ] && return
     archive="$BUILD_DIR/$(basename "$shareware_url")"
     download "$shareware_url" "$shareware_sha256" "$archive"
@@ -95,6 +119,8 @@ build() {
     for wad in "$ASSETS_DIR"/*.[wW][aA][dD]; do
         [ -f "$wad" ] && cp "$wad" "$nitro/$(basename "$wad" | tr '[:upper:]' '[:lower:]')"
     done
+    # The full game has the shareware episode too
+    [ -f "$nitro/doom.wad" ] && rm -f "$nitro/doom1.wad"
     msg "Embedding $(cd "$nitro" && echo *)"
     make -C "$SRC_DIR/doomgeneric" -f Makefile.nds -j"$(getconf _NPROCESSORS_ONLN)" \
         TOOLCHAIN="$TOOLCHAIN_DIR" ICON="$PORT_DIR/icon.bmp" NITRO_DIR="$nitro"

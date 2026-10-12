@@ -46,15 +46,16 @@ top, so the upstream code stays untouched in this repository.
 
 Every port is a self-contained directory:
 
-| Path        | Contents                                                    |
-| ----------- | ----------------------------------------------------------- |
-| `README.md` | Game data, controls and how the port works                  |
-| `build.sh`  | Fetches, patches and builds `target/<port>.nds`             |
-| `icon.bmp`  | The 32x32 icon shown in DS menus                            |
-| `docs/`     | Screenshot and README icon                                  |
-| `patches/`  | The patch series on top of upstream                         |
-| `assets/`   | Game data embedded in the ROM (gitignored, never commit it) |
-| `target/`   | Sources, work files and the resulting ROM (gitignored)      |
+| Path          | Contents                                                            |
+| ------------- | ------------------------------------------------------------------- |
+| `README.md`   | Game data, controls and how the port works                          |
+| `build.sh`    | Fetches, patches and builds `target/<port>.nds`                     |
+| `icon.bmp`    | The 32x32 icon shown in DS menus                                    |
+| `docs/`       | Screenshot and README icon                                          |
+| `patches/`    | The patch series on top of upstream                                 |
+| `assets/`     | Game data embedded in the ROM (gitignored, never commit it)         |
+| `setup_*.exe` | Optional GOG installer the game data is extracted from (gitignored) |
+| `target/`     | Sources, work files and the resulting ROM (gitignored)              |
 
 All ports keep settings and savegames directly in
 `/data/<port>/<version>/` on the SD card: Doom uses the WAD filename,
@@ -73,11 +74,11 @@ builds them the first time you build a port. Install LLVM and the
 
 ```sh
 # macOS
-brew install llvm lld
+brew install llvm lld innoextract
 brew install --cask melonds
 
 # Ubuntu 24.04 or newer, older releases need a newer clang from apt.llvm.org
-sudo apt install clang lld llvm g++ make git curl unzip melonds
+sudo apt install clang lld llvm g++ make git curl unzip innoextract melonds
 ```
 
 - Build a port with its `build.sh`, the ROM ends up in `target/<port>.nds`,
