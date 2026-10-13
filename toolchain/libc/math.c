@@ -68,8 +68,13 @@ float fabsf(float x) {
 }
 
 float sqrtf(float x) {
-    if (x <= 0.0f || isinf(x))
-        return x == 0.0f || isinf(x) ? x : __builtin_nanf("");
+    if (x < 0.0f)
+        return __builtin_nanf("");
+    if (x == 0.0f || !isfinite(x))
+        return x;
+    // Normalize subnormals so the Newton steps do not underflow.
+    if (x < 0x1p-125f)
+        return sqrtf(x * 0x1p24f) * 0x1p-12f;
     // Estimate 1 / sqrt(x) to 5 bits, three Newton steps make that 24 bits, x / sqrt(x) = sqrt(x)
     float y;
     __asm__("frsqrte %0,%1" : "=f"(y) : "f"(x));
@@ -83,6 +88,8 @@ float hypotf(float x, float y) {
     // Infinite even when the other side is NaN
     if (isinf(x) || isinf(y))
         return __builtin_inff();
+    if (isnan(x) || isnan(y))
+        return x + y;
     // Divide by the biggest side, so squaring doesn't overflow or underflow
     x = fabsf(x);
     y = fabsf(y);
@@ -144,7 +151,7 @@ float atanf(float x) {
                                            x2 * (0.0964200441f + x2 * (-0.0559098861f +
                                                                        x2 * (0.0218612288f + x2 * -0.0040540580f)))))));
     if (invert)
-        y = (x > 0.0f ? PI / 2.0f : -PI / 2.0f) - y;
+        y = (__builtin_signbit(x) ? -PI / 2.0f : PI / 2.0f) - y;
     return y;
 }
 
@@ -153,6 +160,8 @@ float atan2f(float y, float x) {
         return x + y;
     // The sign of y picks the half, also for -0
     float pi = __builtin_signbit(y) ? -PI : PI;
+    if (isinf(x) && isinf(y))
+        return __builtin_signbit(x) ? pi * 0.75f : pi * 0.25f;
     if (x > 0.0f)
         return atanf(y / x);
     if (x < 0.0f)
@@ -168,8 +177,21 @@ float exp2f(float x) {
         return x;
     if (x >= 128.0f)
         return __builtin_inff();
-    if (x < -126.0f)
+    if (x <= -150.0f)
         return 0.0f;
+    if (x < -126.0f) {
+        // PowerPC single-precision arithmetic flushes subnormal results. Build the
+        // significand directly, rounding to nearest with ties to even.
+        union {
+            float f;
+            uint32_t i;
+        } bits = {exp2f(x + 126.0f)};
+        uint32_t shift = 127 - ((bits.i >> 23) & 255);
+        uint32_t significand = (bits.i & 0x007fffffu) | 0x00800000u;
+        uint32_t halfway = 1u << (shift - 1);
+        bits.i = (significand + halfway - 1 + ((significand >> shift) & 1)) >> shift;
+        return bits.f;
+    }
     float i = floorf(x + 0.5f);
     float f = (x - i) * 0.69314718f;
     float y =
@@ -219,14 +241,25 @@ float log2f(float x) {
 float powf(float x, float y) {
     if (y == 0.0f || x == 1.0f)
         return 1.0f;
-    if (x == 0.0f)
-        return y > 0.0f ? 0.0f : __builtin_inff();
-    if (x < 0.0f) {
-        // Only integer powers of negative numbers are real
-        if (floorf(y) != y)
-            return __builtin_nanf("");
-        float result = powf(-x, y);
-        return fabsf(fmodf(y, 2.0f)) == 1.0f ? -result : result;
+    if (isnan(x) || isnan(y))
+        return x + y;
+    float magnitude = fabsf(x);
+    if (isinf(y)) {
+        if (magnitude == 1.0f)
+            return 1.0f;
+        return (magnitude > 1.0f) == (y > 0.0f) ? __builtin_inff() : 0.0f;
     }
-    return exp2f(y * log2f(x));
+    bool odd = __builtin_signbit(x) && fabsf(fmodf(y, 2.0f)) == 1.0f;
+    float result;
+    if (x == 0.0f)
+        result = y > 0.0f ? 0.0f : __builtin_inff();
+    else if (isinf(x))
+        result = y > 0.0f ? __builtin_inff() : 0.0f;
+    else {
+        // Only integer powers of negative finite numbers are real.
+        if (x < 0.0f && floorf(y) != y)
+            return __builtin_nanf("");
+        result = exp2f(y * log2f(magnitude));
+    }
+    return odd ? -result : result;
 }

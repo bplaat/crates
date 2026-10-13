@@ -18,9 +18,10 @@ void build_argv(struct __argv* args) {
         arg += size;
         length -= size;
     }
+    argv[argc] = NULL;
     args->argc = argc;
     args->argv = argv;
-    args->endARGV = &argv[argc];
+    args->endARGV = &argv[argc + 1];
 }
 
 void __crtmain(void) {

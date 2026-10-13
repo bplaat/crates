@@ -17,6 +17,11 @@ static void put(Output* out, char c) {
     out->length++;
 }
 
+static void put_repeat(Output* out, char c, size_t count) {
+    for (size_t i = 0; i < count; i++)
+        put(out, c);
+}
+
 static void put_padded(Output* out, const char* str, size_t length, int width, bool left, char pad) {
     if (!left) {
         for (int i = (int)length; i < width; i++)
@@ -87,26 +92,29 @@ int vsnprintf(char* restrict buffer, size_t size, const char* restrict format, v
                 const char* hex = *c == 'X' ? "0123456789ABCDEF" : "0123456789abcdef";
                 for (; value; value /= base)
                     *--start = hex[value % base];
-                // A precision turns off zero padding, at most 20 digits fit in the buffer
-                if (precision >= 0)
+                // Emit precision zeros separately so precision is not limited by the digit buffer.
+                if (precision >= 0 || left)
                     pad = ' ';
-                else
+                if (precision < 0)
                     precision = 1;
-                while (end - start < precision && end - start < 20)
-                    *--start = '0';
+                size_t length = end - start;
+                size_t zeros = (size_t)precision > length ? (size_t)precision - length : 0;
+                size_t total = length + zeros + negative + (*c == 'p' ? 2 : 0);
+                size_t padding = width > 0 && (size_t)width > total ? (size_t)width - total : 0;
+                if (!left && pad == ' ')
+                    put_repeat(&out, ' ', padding);
+                if (negative)
+                    put(&out, '-');
                 if (*c == 'p') {
-                    *--start = 'x';
-                    *--start = '0';
+                    put(&out, '0');
+                    put(&out, 'x');
                 }
-                if (negative) {
-                    if (pad == '0') {
-                        put(&out, '-');
-                        width--;
-                    } else {
-                        *--start = '-';
-                    }
-                }
-                put_padded(&out, start, end - start, width, left, pad);
+                if (!left && pad == '0')
+                    put_repeat(&out, '0', padding);
+                put_repeat(&out, '0', zeros);
+                put_padded(&out, start, length, 0, false, ' ');
+                if (left)
+                    put_repeat(&out, ' ', padding);
                 break;
             }
             case 's': {

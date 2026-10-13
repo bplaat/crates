@@ -60,7 +60,9 @@ static void check(bool ok, int line, const char* text) {
 
 // There is no %f, so floats are shown as their bits
 static void check_float(float actual, float expected, float tolerance, int line, const char* text) {
-    bool ok = isnan(expected) ? isnan(actual) : fabsf(actual - expected) <= tolerance * fabsf(expected) + 1e-30f;
+    bool ok = isnan(expected) ? isnan(actual)
+                              : actual == expected || (isfinite(actual) && isfinite(expected) &&
+                                                       fabsf(actual - expected) <= tolerance * fabsf(expected));
     if (!ok) {
         failures++;
         report("  line %d: %s = %08x, expected %08x\n", line, text, float_bits(actual), float_bits(expected));
@@ -91,6 +93,25 @@ static int data_value = 1234;
 static int bss_values[256];
 
 static void test_startup(void) {
+    extern void build_argv(struct __argv * args);
+    _Alignas(4) char storage[64];
+    memset(storage, 0xa5, sizeof(storage));
+    memcpy(storage, "app\0arg", 8);
+    struct __argv args = {.commandLine = storage, .length = 8};
+    build_argv(&args);
+    CHECK(args.argc == 2);
+    CHECK(strcmp(args.argv[0], "app") == 0);
+    CHECK(strcmp(args.argv[1], "arg") == 0);
+    CHECK(args.argv[args.argc] == NULL);
+    CHECK(args.endARGV == &args.argv[args.argc + 1]);
+    CHECK((uintptr_t)args.endARGV <= (uintptr_t)(storage + sizeof(storage)));
+
+    memset(storage, 0xa5, sizeof(storage));
+    args.length = 0;
+    build_argv(&args);
+    CHECK(args.argc == 0 && args.argv[0] == NULL);
+    CHECK(args.endARGV == &args.argv[1]);
+
     CHECK(data_value == 1234);
     bool zero = true;
     for (int i = 0; i < 256; i++)
@@ -226,6 +247,16 @@ static void test_printf(void) {
     CHECK_FORMAT("42   |", "%-5d|", 42);
     CHECK_FORMAT("-0042", "%05d", -42);
     CHECK_FORMAT("007", "%.3d", 7);
+    CHECK_FORMAT("0000000000000000000000001", "%.25d", 1);
+    CHECK_FORMAT("-0000000000000000000000001", "%.25d", -1);
+    CHECK_FORMAT("    -0000000000000000000000001", "%030.25d", -1);
+    CHECK_FORMAT("-0000000000000000000000001    ", "%-30.25d", -1);
+    CHECK_FORMAT("-42  ", "%-05d", -42);
+    CHECK_FORMAT("", "%.0d", 0);
+    CHECK_FORMAT("   ", "%3.0d", 0);
+    CHECK(snprintf(text, 5, "%.25d", 1) == 25);
+    check_string(text, "0000", __LINE__);
+    CHECK(snprintf(NULL, 0, "%.25d", 1) == 25);
     CHECK_FORMAT("4000000000", "%u", 4000000000u);
     CHECK_FORMAT("beef BEEF 0000BEEF", "%x %X %08X", 0xbeef, 0xbeef, 0xbeef);
     CHECK_FORMAT("-1234567890123", "%lld", -1234567890123LL);
@@ -238,6 +269,48 @@ static void test_printf(void) {
 }
 
 static void test_math(void) {
+    // Volatile inputs exercise the libc calls rather than constant folding.
+    volatile float zero = 0.0f, negzero = -0.0f;
+    volatile float inf = __builtin_inff(), nan = __builtin_nanf("");
+    volatile float subnormal = 0x1p-149f;
+    CHECK(isnan(sqrtf(-inf)));
+    CHECK_FLOAT(sqrtf(subnormal), 3.7433921e-23f);
+    CHECK_FLOAT(sqrtf(0x1p-126f), 0x1p-63f);
+    CHECK(float_bits(sqrtf(negzero)) == 0x80000000u);
+    CHECK(isnan(sqrtf(nan)));
+    CHECK(float_bits(fmodf(negzero, 2.0f)) == 0x80000000u);
+    CHECK(float_bits(fmodf(-4.0f, 2.0f)) == 0x80000000u);
+    CHECK_FLOAT(atanf(inf), PI / 2.0f);
+    CHECK_FLOAT(atanf(-inf), -PI / 2.0f);
+    CHECK_FLOAT(atan2f(inf, inf), PI / 4.0f);
+    CHECK_FLOAT(atan2f(inf, -inf), 3.0f * PI / 4.0f);
+    CHECK_FLOAT(atan2f(-inf, inf), -PI / 4.0f);
+    CHECK_FLOAT(atan2f(-inf, -inf), -3.0f * PI / 4.0f);
+    CHECK(isnan(hypotf(zero, nan)));
+    CHECK(isnan(hypotf(nan, zero)));
+    CHECK(hypotf(inf, nan) == inf);
+    CHECK(exp2f(-127.0f) == 0x1p-127f);
+    CHECK(exp2f(-149.0f) == 0x1p-149f);
+    CHECK(exp2f(-150.0f) == 0.0f);
+    CHECK(exp2f(-149.5f) == 0x1p-149f);
+    CHECK(exp2f(-inf) == 0.0f);
+    CHECK(exp2f(inf) == inf);
+    CHECK(float_bits(powf(negzero, 3.0f)) == 0x80000000u);
+    CHECK(float_bits(powf(negzero, -3.0f)) == 0xff800000u);
+    CHECK(float_bits(powf(negzero, 2.0f)) == 0);
+    CHECK(isnan(powf(zero, nan)));
+    CHECK(powf(-1.0f, inf) == 1.0f);
+    CHECK(powf(2.0f, inf) == inf);
+    CHECK(powf(0.5f, inf) == 0.0f);
+    CHECK(powf(2.0f, -inf) == 0.0f);
+    CHECK(powf(0.5f, -inf) == inf);
+    CHECK(powf(-inf, 0.5f) == inf);
+    CHECK(powf(-inf, 3.0f) == -inf);
+    CHECK(float_bits(powf(-inf, -3.0f)) == 0x80000000u);
+    CHECK(isnan(powf(-2.0f, 0.5f)));
+    CHECK(powf(nan, zero) == 1.0f);
+    CHECK(powf(1.0f, nan) == 1.0f);
+
     CHECK_FLOAT(sqrtf(2.0f), 1.41421356f);
     CHECK_FLOAT(sqrtf(1e-30f), 1e-15f);
     CHECK_EXACT(sqrtf(0.0f), 0.0f);
