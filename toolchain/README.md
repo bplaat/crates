@@ -52,6 +52,7 @@ edit and commit in `target/libogc/`, run `./build.sh` to try it and `./build.sh 
 write the commits back. The build stops instead of applying changed patches over commits or edits
 in `target/libogc/` that aren't exported yet.
 
+- `0002` uses standard C headers and removes unused POSIX header dependencies
 - `0001` to `0007` remove the newlib glue: reent structs, devoptab, malloc locks, time hooks,
   the text console and the network cleanup
 - `0008` to `0010` add assembler macros for the Gekko / Broadway paired single instructions,
