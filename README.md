@@ -16,7 +16,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [image](lib/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
-- [macview-appkit](lib/macview-appkit) Shared AppKit image loading for MacView
+- [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services

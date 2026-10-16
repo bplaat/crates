@@ -1127,8 +1127,8 @@ mod tests {
     #[test]
     fn common_raster_extensions_load() {
         autoreleasepool(|_| {
-            let fixtures = Path::new(env!("CARGO_MANIFEST_DIR"))
-                .join("../../../lib/macview-appkit/tests/fixtures");
+            let fixtures =
+                Path::new(env!("CARGO_MANIFEST_DIR")).join("../macview-appkit/tests/fixtures");
             let folder = std::env::temp_dir()
                 .join(format!("macview-raster-extensions-{}", std::process::id()));
             std::fs::create_dir_all(&folder).expect("create raster extension test folder");

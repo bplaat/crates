@@ -1068,7 +1068,7 @@ mod tests {
 
     #[test]
     fn renders_wpt_svg_reference_pairs() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vector/tests");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../lib/vector/tests");
         let image_root = root.join("images/svg");
         let reference_root = root
             .join("reference/svg")
@@ -1109,7 +1109,7 @@ mod tests {
 
     #[test]
     fn renders_tinyvg_reference_pngs() {
-        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../vector/tests");
+        let root = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../../lib/vector/tests");
         let image_root = root.join("images/tinyvg");
         let reference_root = root.join("reference/tinyvg");
         let mut files = Vec::new();

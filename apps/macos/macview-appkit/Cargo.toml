@@ -14,5 +14,5 @@ workspace = true
 
 [dependencies]
 objc2 = "0.6.4"
-image = { path = "../image" }
-vector = { path = "../vector" }
+image = { path = "../../../lib/image" }
+vector = { path = "../../../lib/vector" }
