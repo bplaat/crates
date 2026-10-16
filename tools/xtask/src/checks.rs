@@ -13,7 +13,7 @@ use regex::regex;
 use serde_json::Value;
 
 use crate::metadata::{
-    add_excludes, features_without_swap, package_for_directory, platform_excludes,
+    add_excludes, features_without_swap, has_target_kind, packages, platform_excludes,
 };
 use crate::process::{capture, npm_program, npx_program, run, run_named};
 use crate::utils::{collect_files, relative_slash};
@@ -268,13 +268,21 @@ impl Xtask {
             .find_map(|line| line.strip_prefix("host: "))
             .context("rustc did not report its host target")?;
 
-        for entry in fs::read_dir(self.root.join("lib"))? {
-            let crate_dir = entry?.path();
-            if !crate_dir.is_dir() || crate_dir.ends_with("bwebview") {
+        for package in packages(metadata)? {
+            let name = package
+                .get("name")
+                .and_then(Value::as_str)
+                .context("Cargo package has no name")?;
+            if !has_target_kind(package, &["lib", "proc-macro"]) || name == "bwebview" {
                 continue;
             }
+            let crate_dir = package
+                .get("manifest_path")
+                .and_then(Value::as_str)
+                .and_then(|manifest| Path::new(manifest).parent())
+                .context("Cargo package has no manifest directory")?;
             let mut rust_files = Vec::new();
-            collect_files(&crate_dir, &mut rust_files)?;
+            collect_files(crate_dir, &mut rust_files)?;
             rust_files.retain(|file| file.extension().is_some_and(|ext| ext == "rs"));
             let has_unsafe =
                 rust_files
@@ -285,7 +293,7 @@ impl Xtask {
             if !has_unsafe {
                 continue;
             }
-            let package = package_for_directory(metadata, &crate_dir, &self.root)?;
+            let package = name;
             if excludes.contains(package) {
                 continue;
             }

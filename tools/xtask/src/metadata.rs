@@ -107,23 +107,23 @@ pub(crate) fn features_without_swap(
     }
 }
 
-pub(crate) fn package_for_directory<'a>(
-    metadata: &'a Value,
-    directory: &Path,
-    root: &Path,
-) -> Result<&'a str> {
-    let manifest = directory.join("Cargo.toml");
-    packages(metadata)?
-        .iter()
-        .find(|package| {
-            package
-                .get("manifest_path")
-                .and_then(Value::as_str)
-                .is_some_and(|path| normalize_path(Path::new(path), root) == manifest)
+pub(crate) fn has_target_kind(package: &Value, kinds: &[&str]) -> bool {
+    package
+        .get("targets")
+        .and_then(Value::as_array)
+        .is_some_and(|targets| {
+            targets.iter().any(|target| {
+                target
+                    .get("kind")
+                    .and_then(Value::as_array)
+                    .is_some_and(|target_kinds| {
+                        target_kinds
+                            .iter()
+                            .filter_map(Value::as_str)
+                            .any(|kind| kinds.contains(&kind))
+                    })
+            })
         })
-        .and_then(|package| package.get("name"))
-        .and_then(Value::as_str)
-        .with_context(|| format!("could not determine package for {}", directory.display()))
 }
 
 // MARK: Tests
@@ -242,23 +242,11 @@ mod tests {
     }
 
     #[test]
-    fn package_for_directory_matches_absolute_and_relative_manifests() -> Result<()> {
-        let root = env::temp_dir().join("workspace");
-        let metadata = json!({
-            "packages": [
-                { "name": "foo", "manifest_path": root.join("lib/foo/Cargo.toml").to_string_lossy() },
-                { "name": "bar", "manifest_path": "lib/bar/Cargo.toml" }
-            ]
-        });
-        assert_eq!(
-            package_for_directory(&metadata, &root.join("lib/foo"), &root)?,
-            "foo"
-        );
-        assert_eq!(
-            package_for_directory(&metadata, &root.join("lib/bar"), &root)?,
-            "bar"
-        );
-        assert!(package_for_directory(&metadata, &root.join("lib/missing"), &root).is_err());
-        Ok(())
+    fn has_target_kind_matches_any_requested_kind() {
+        let package = json!({ "targets": [{ "kind": ["bin"] }, { "kind": ["proc-macro"] }] });
+        assert!(has_target_kind(&package, &["lib", "proc-macro"]));
+        assert!(has_target_kind(&package, &["bin"]));
+        assert!(!has_target_kind(&package, &["lib"]));
+        assert!(!has_target_kind(&json!({}), &["bin"]));
     }
 }

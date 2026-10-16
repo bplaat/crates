@@ -11,7 +11,7 @@ use std::{env, fs};
 use anyhow::{Context, Result, bail};
 use serde_json::Value;
 
-use crate::metadata::{InstallableApp, packages, supports_os};
+use crate::metadata::{InstallableApp, has_target_kind, packages, supports_os};
 use crate::process::{npm_program, run};
 use crate::utils::{
     collect_paths, copy_directory, copy_directory_contents, relative_slash,
@@ -299,21 +299,10 @@ impl Xtask {
             let package_directory = Path::new(manifest)
                 .parent()
                 .context("Cargo manifest has no parent directory")?;
-            let has_binary = package
-                .get("targets")
-                .and_then(Value::as_array)
-                .is_some_and(|targets| {
-                    targets.iter().any(|target| {
-                        target
-                            .get("kind")
-                            .and_then(Value::as_array)
-                            .is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"))
-                    })
-                });
             let is_example = package_directory
                 .components()
                 .any(|component| component.as_os_str() == "examples");
-            if !has_binary || is_example {
+            if !has_target_kind(package, &["bin"]) || is_example {
                 continue;
             }
             let bundle = package.pointer("/metadata/bundle");
