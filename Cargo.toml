@@ -4,7 +4,6 @@ members = [
     "games/*",
     "lib/apple/*",
     "lib/build/*",
-    "lib/criterion",
     "lib/crypto/*",
     "lib/data/*",
     "lib/graphics/*",
@@ -13,7 +12,7 @@ members = [
     "lib/net/*",
     "lib/net/*/examples/*",
     "lib/sys/*",
-    "lib/trybuild",
+    "lib/test/*",
     "lib/ui/*",
     "lib/ui/*/examples/*",
     "tools/*",
@@ -75,7 +74,7 @@ small-http = { path = "lib/net/small-http" }
 small-router = { path = "lib/net/small-router" }
 terminal_size = { path = "lib/sys/terminal_size" }
 threadpool = { path = "lib/sys/threadpool" }
-trybuild = { path = "lib/trybuild" }
+trybuild = { path = "lib/test/trybuild" }
 url = { path = "lib/net/url" }
 uuid = { path = "lib/data/uuid" }
 winresource = { path = "lib/build/winresource" }

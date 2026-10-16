@@ -14,7 +14,7 @@ disable-software = []
 disable-simd = []
 
 [dev-dependencies]
-criterion = { path = "../../criterion" }
+criterion = { path = "../../test/criterion" }
 
 [[bench]]
 name = "sha1"

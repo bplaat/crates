@@ -131,7 +131,7 @@ These libraries are minimal replacements for commonly used crates.
 - [block2](lib/apple/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [chrono](lib/data/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/sys/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
-- [criterion](lib/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
+- [criterion](lib/test/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
 - [digest](lib/crypto/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
 - [directories](lib/sys/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [enable-ansi-support](lib/sys/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
@@ -156,7 +156,7 @@ These libraries are minimal replacements for commonly used crates.
 - [sha2](lib/crypto/sha2) A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
 - [simple_logger](lib/sys/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 - [terminal_size](lib/sys/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
-- [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
+- [trybuild](lib/test/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 - [url](lib/net/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/data/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 - [winresource](lib/build/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
@@ -183,7 +183,7 @@ These libraries are minimal replacements for commonly used crates.
 
 ### Additional tools
 
-- Run the local [criterion](lib/criterion) benchmarks with:
+- Run the local [criterion](lib/test/criterion) benchmarks with:
 
     ```sh
     cargo bench -p base64 --bench base64

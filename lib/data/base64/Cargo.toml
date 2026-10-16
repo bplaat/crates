@@ -7,7 +7,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dev-dependencies]
-criterion = { path = "../../criterion" }
+criterion = { path = "../../test/criterion" }
 
 [[bench]]
 name = "base64"
