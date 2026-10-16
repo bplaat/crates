@@ -1,22 +1,5 @@
 [workspace]
-members = [
-    "apps/*/*",
-    "games/*",
-    "lib/apple/*",
-    "lib/build/*",
-    "lib/crypto/*",
-    "lib/data/*",
-    "lib/graphics/*",
-    "lib/graphics/*/examples/*",
-    "lib/js",
-    "lib/net/*",
-    "lib/net/*/examples/*",
-    "lib/sys/*",
-    "lib/test/*",
-    "lib/ui/*",
-    "lib/ui/*/examples/*",
-    "tools/*",
-]
+members = ["apps/*/*", "games/*", "lib/*/*", "lib/*/*/examples/*", "tools/*"]
 exclude = ["games/plaatcraft", "lib/ui/plaatui"]
 resolver = "2"
 

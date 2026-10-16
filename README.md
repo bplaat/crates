@@ -15,7 +15,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [bcanvas](lib/graphics/bcanvas) Native 2D canvas content, without a browser dependency
 - [from_derive](lib/data/from_derive) A FromEnum and FromStruct derive macro library
 - [image](lib/graphics/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
-- [js](lib/js) A WIP JavaScript interpreter
+- [js](lib/lang/js) A WIP JavaScript interpreter
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/build/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/crypto/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
