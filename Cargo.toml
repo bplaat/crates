@@ -1,5 +1,5 @@
 [workspace]
-members = ["xtask", "apps/*/*", "games/*", "lib/*", "lib/*/examples/*", "tools/*"]
+members = ["apps/*/*", "games/*", "lib/*", "lib/*/examples/*", "tools/*"]
 exclude = ["games/plaatcraft"]
 resolver = "2"
 

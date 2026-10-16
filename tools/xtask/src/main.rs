@@ -60,7 +60,8 @@ impl Xtask {
     fn new() -> Result<Self> {
         let root = Path::new(env!("CARGO_MANIFEST_DIR"))
             .parent()
-            .context("xtask must live at <workspace>/xtask")?
+            .and_then(Path::parent)
+            .context("xtask must live at <workspace>/tools/xtask")?
             .to_owned();
         env::set_current_dir(&root)
             .with_context(|| format!("failed to enter {}", root.display()))?;

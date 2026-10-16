@@ -234,7 +234,7 @@ Rather than pulling in large, general-purpose dependencies, this repo grows a cu
 
 **3. Tools and a custom build system for complex multi-language projects**
 
-Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](tools/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](tools/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with the [xtask](xtask) crate these tools keep the build pipeline typed, cross-platform and easy to follow.
+Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](tools/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](tools/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with the [xtask](tools/xtask) crate these tools keep the build pipeline typed, cross-platform and easy to follow.
 
 ### Repo organization
 
@@ -242,7 +242,7 @@ This repo is organized as a monorepo with `Cargo` as the single build system. Mo
 
 All Rust code lives in a single `Cargo` workspace that builds everything together. Some crates extend this with custom build steps that invoke other tools like `npm` or `vite`, but those are orchestrated from within `Cargo` build scripts.
 
-The root-level [xtask](xtask) crate contains all top-level tasks and is used through `cargo xtask` both from the command line and in CI. The only exception is the [bob/examples](tools/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](tools/bob) build tool itself.
+The root-level [xtask](tools/xtask) crate contains all top-level tasks and is used through `cargo xtask` both from the command line and in CI. The only exception is the [bob/examples](tools/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](tools/bob) build tool itself.
 
 ## License
 
