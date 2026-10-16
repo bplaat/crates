@@ -193,7 +193,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 ## Getting Started
 
-- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [Hadolint](https://github.com/hadolint/hadolint), a C toolchain (such as GCC, Clang or MSVC) and clang-format
+- Install [Rust](https://rustup.rs/), [Node.js](https://nodejs.org/), [Hadolint](https://github.com/hadolint/hadolint), a C toolchain (such as GCC, Clang or MSVC), clang-format and [Dolphin emulator](https://dolphin-emu.org/)
 - Install Rust nightly toolchain, `cargo-binstall`, `cargo-deny` and `cargo-nextest`:
 
     ```sh

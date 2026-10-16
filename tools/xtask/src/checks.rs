@@ -29,7 +29,8 @@ impl Xtask {
         self.check_docker()?;
         self.check_rust()?;
         self.check_rust_deps()?;
-        self.check_e2e()
+        self.check_e2e()?;
+        self.check_wii()
     }
 
     pub(crate) fn check_shared(&self) -> Result<()> {
@@ -355,6 +356,11 @@ impl Xtask {
 
         run(Command::new("cargo").args(["build", "-p", "plaatnotes", "--locked"]))?;
         run(Command::new(npm_program(self.os)).args(["test", "--workspace", "plaatnotes"]))
+    }
+
+    pub(crate) fn check_wii(&self) -> Result<()> {
+        println!("Running Wii toolchain tests...");
+        run(Command::new("bash").args(["tools/wii-toolchain/build.sh", "test"]))
     }
 
     pub(crate) fn coverage(&self) -> Result<()> {
