@@ -43,7 +43,7 @@ fn main() {
             .write(true)
             .create(true)
             .truncate(false)
-            .open(env::temp_dir().join("bplaat-crates-npm-install.lock"))
+            .open(env::temp_dir().join("bplaat-bron-npm-install.lock"))
             .expect("Failed to open npm install lock file");
         npm_lock
             .lock()
