@@ -319,6 +319,14 @@ impl Xtask {
             ]);
             command.args(feature_args);
             command.args(["--target", target, "-Zbuild-std"]);
+            if target == "aarch64-unknown-linux-gnu" {
+                // Unoptimized outlined atomics call ASan-instrumented core code
+                // before ASan initializes. Inline those calls in compiler_builtins.
+                command.args([
+                    "--config",
+                    "profile.dev.package.compiler_builtins.opt-level=3",
+                ]);
+            }
             run(&mut command)?;
         }
         Ok(())
