@@ -38,8 +38,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 <table>
 <tr>
 <td width="100" align="center">
-    <a href="./bin/game2048">
-        <img src="bin/game2048/meta/freedesktop/icons/128x128.png" alt="2048 icon" width="48" height="48"/><br/>
+    <a href="./games/game2048">
+        <img src="games/game2048/meta/freedesktop/icons/128x128.png" alt="2048 icon" width="48" height="48"/><br/>
         2048
     </a>
 </td>
@@ -102,7 +102,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 </tr>
 </table>
 
-- [2048](bin/game2048) An offline desktop 2048 game app
+- [2048](games/game2048) An offline desktop 2048 game app
 - [BassieLight](apps/desktop/bassielight) A simple lights controller with GUI
 - [Binman](apps/windows/binman) A safe and minimal Windows cleanup tool
 - [MacView](apps/macos/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](apps/macos/macview-preview) and [thumbnail](apps/macos/macview-thumbnail) extensions
