@@ -310,7 +310,10 @@ impl Xtask {
                             .is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"))
                     })
                 });
-            if !has_binary || package_directory.starts_with(self.root.join("examples")) {
+            let is_example = package_directory
+                .components()
+                .any(|component| component.as_os_str() == "examples");
+            if !has_binary || is_example {
                 continue;
             }
             let bundle = package.pointer("/metadata/bundle");
