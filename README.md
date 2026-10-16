@@ -88,8 +88,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/reversi">
-        <img src="bin/reversi/meta/freedesktop/icons/128x128.png" alt="Reversi icon" width="48" height="48"/><br/>
+    <a href="./games/reversi">
+        <img src="games/reversi/meta/freedesktop/icons/128x128.png" alt="Reversi icon" width="48" height="48"/><br/>
         Reversi
     </a>
 </td>
@@ -110,7 +110,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 - [Navidrome](apps/desktop/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](apps/desktop/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](apps/desktop/pixelfont) An 8x8 pixel font editor
-- [Reversi](bin/reversi) A native canvas board game with a background AI
+- [Reversi](games/reversi) A native canvas board game with a background AI
 - [Sequel Explorer](apps/desktop/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
 
 ### Tools / Websites
