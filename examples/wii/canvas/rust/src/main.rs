@@ -1,15 +1,22 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #![no_std]
 #![no_main]
 #![allow(unsafe_op_in_unsafe_fn)]
+
+use alloc::format;
+use core::ffi::{c_int, c_void};
+use core::ptr;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::libogc::*;
 use crate::memory::{AlignedBuffer, Framebuffer};
 use crate::render::*;
 use crate::texture::Texture;
-use alloc::format;
-use core::ffi::{c_int, c_void};
-use core::ptr;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 mod font;
 mod libogc;

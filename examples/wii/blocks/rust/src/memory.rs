@@ -1,10 +1,17 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use core::alloc::{GlobalAlloc, Layout};
+use core::ffi::c_void;
+use core::ptr::NonNull;
+
 use crate::libogc::{
     DCInvalidateRange, GXRModeObj, SYS_AllocateFramebuffer, SYS_BASE_CACHED, SYS_BASE_UNCACHED,
     free, memalign,
 };
-use core::alloc::{GlobalAlloc, Layout};
-use core::ffi::c_void;
-use core::ptr::NonNull;
 
 struct HeapBuffer(NonNull<c_void>);
 

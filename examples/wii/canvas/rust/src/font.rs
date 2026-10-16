@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 pub struct FontChar {
     pub n: u32,  // Unicode codepoint
     pub x: u16,  // Glyph render x

@@ -95,6 +95,11 @@ Various tools and websites. For the deployed sites, go to [bron.bplaat.nl](https
 - [ccontinue](tools/ccontinue) A transpiler that translates an OOP extension for the C programming language back to C
 - [cargo-bundle](tools/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
 - [plaatnotes](apps/web/plaatnotes) A self-hosted note-taking web app with rich Markdown support
+- [wii-toolchain](tools/wii-toolchain/) An LLVM-based Wii toolchain with a small C library, patched libogc, and Dolphin emulator tests
+
+### Examples
+
+- [Wii Examples](examples/wii/) Wii homebrew examples in C and Rust: triangles, a 2D canvas, and voxel blocks
 
 ### Libraries
 
@@ -265,15 +270,16 @@ Building projects that span multiple languages and artifact types (Rust, JavaScr
 This repo is a monorepo. Projects are grouped by what they are, not by the language they are written in:
 
 - [apps](apps/) - applications, grouped by platform: `desktop` for cross-platform apps, plus `macos`, `windows` and `web`
+- [examples](examples/) - standalone examples, grouped by platform
 - [games](games/) - games and their engines
 - [lib](lib/) - libraries, grouped by topic like `ui`, `graphics`, `net`, `data` and `crypto`
 - [tools](tools/) - developer tools, including the build tooling of this repo
 
-Examples live next to the library they show off, in its `examples` directory.
+Library examples live next to the library they show off, in its `examples` directory. Standalone platform examples live under the top-level `examples` directory.
 
-All Rust code is built by one `Cargo` workspace and all JavaScript code by one `npm` workspace. When a Rust app has a web frontend, its `Cargo` build script runs `npm` for you, so `Cargo` stays the one place where everything comes together.
+The main Rust projects share one `Cargo` workspace and the JavaScript projects share one `npm` workspace. The Wii Rust examples are standalone nightly projects with a custom PowerPC target. When a Rust app has a web frontend, its `Cargo` build script runs `npm` for you, so `Cargo` stays the one place where everything comes together.
 
-Every top-level task, like checking, building and installing, goes through the [xtask](tools/xtask) crate with `cargo xtask`, both on your machine and in CI. The only exception is the [bob/examples](tools/bob/examples) directory, which uses [bob](tools/bob) on purpose to show off that build tool.
+Every top-level task, like checking, building and installing, goes through the [xtask](tools/xtask) crate with `cargo xtask`, both on your machine and in CI. The [bob/examples](tools/bob/examples) directory uses [bob](tools/bob) to show off that build tool. The [Wii examples](examples/wii/) use Make and Cargo directly, backed by [wii-toolchain](tools/wii-toolchain/).
 
 ## License
 

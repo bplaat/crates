@@ -1,14 +1,16 @@
 # Make rules to build a Wii program with clang and lld, include this from an example Makefile:
 #
 #   NAME := triangles
-#   include ../../toolchain/wii.mk
+#   include ../../../../tools/wii-toolchain/wii.mk
 #
-# Then `make` builds target/$(NAME).dol from src/*.c and `make run` starts it in Dolphin.
+# Then `make` builds $(BUILD)/$(NAME).dol from src/*.c and `make run` starts it in Dolphin.
 
 TOOLCHAIN := $(patsubst %/,%,$(dir $(lastword $(MAKEFILE_LIST))))
-LIBOGC := $(TOOLCHAIN)/target/libogc
-ELF2DOL := $(TOOLCHAIN)/target/elf2dol
-GXTEXCONV := $(TOOLCHAIN)/target/gxtexconv
+TOOLCHAIN_BUILD := $(abspath $(TOOLCHAIN)/../../target/wii-toolchain)
+BUILD ?= target
+LIBOGC := $(TOOLCHAIN_BUILD)/libogc
+ELF2DOL := $(TOOLCHAIN_BUILD)/elf2dol
+GXTEXCONV := $(TOOLCHAIN_BUILD)/gxtexconv
 
 # Apple's clang can't target PowerPC, so prefer Homebrew's LLVM when it's installed
 LLVM := $(firstword $(wildcard /opt/homebrew/opt/llvm/bin/ /usr/local/opt/llvm/bin/))
@@ -22,29 +24,29 @@ CFLAGS := --target=powerpc-none-eabi -mcpu=750 -ffreestanding -nostdlibinc \
 	-I$(TOOLCHAIN)/libc/include -I$(LIBOGC)/gc -I$(LIBOGC)/gc/ogc -I$(LIBOGC)/gc/ogc/machine \
 	-I$(LIBOGC)/gc/bte -I$(LIBOGC)/gc/wiiuse
 
-OBJECTS := $(patsubst src/%.c,target/%.o,$(wildcard src/*.c))
-LIBRARIES := $(addprefix $(TOOLCHAIN)/target/,libogc.a libc.a libcompiler-rt.a)
+OBJECTS := $(patsubst src/%.c,$(BUILD)/%.o,$(wildcard src/*.c))
+LIBRARIES := $(addprefix $(TOOLCHAIN_BUILD)/,libogc.a libc.a libcompiler-rt.a)
 
-target/$(NAME).dol: target/$(NAME).elf
+$(BUILD)/$(NAME).dol: $(BUILD)/$(NAME).elf
 	$(ELF2DOL) $< $@
 
-target/$(NAME).elf: $(OBJECTS) $(LIBRARIES)
+$(BUILD)/$(NAME).elf: $(OBJECTS) $(LIBRARIES)
 	$(LD) -T $(TOOLCHAIN)/wii.ld --gc-sections $^ -o $@
 
-target/%.o: src/%.c | $(TOOLCHAIN)/target/libogc.a
+$(BUILD)/%.o: src/%.c | $(TOOLCHAIN_BUILD)/libogc.a
 	@mkdir -p $(dir $@)
 	$(CC) $(CFLAGS) -MMD -MP -c $< -o $@
 
 # The toolchain script knows itself when it needs to rebuild, one run builds all libraries
-$(TOOLCHAIN)/target/libogc.a: FORCE
+$(TOOLCHAIN_BUILD)/libogc.a: FORCE
 	@$(TOOLCHAIN)/build.sh
-$(TOOLCHAIN)/target/libc.a $(TOOLCHAIN)/target/libcompiler-rt.a: $(TOOLCHAIN)/target/libogc.a ;
+$(TOOLCHAIN_BUILD)/libc.a $(TOOLCHAIN_BUILD)/libcompiler-rt.a: $(TOOLCHAIN_BUILD)/libogc.a ;
 
-run: target/$(NAME).elf
+run: $(BUILD)/$(NAME).elf
 	$(TOOLCHAIN)/run.sh $<
 
 clean:
-	rm -rf target
+	rm -rf $(BUILD)
 
 .PHONY: run clean FORCE
 

@@ -1,8 +1,15 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use alloc::vec::Vec;
+
 use crate::libogc::*;
 use crate::materials::Materials;
 use crate::memory::AlignedBuffer;
 use crate::world::{Face, Material};
-use alloc::vec::Vec;
 
 const UV: [[u8; 2]; 4] = [[0, 1], [1, 1], [1, 0], [0, 0]];
 const MAX_FACES_PER_BATCH: usize = 16_000;

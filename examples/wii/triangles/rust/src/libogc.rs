@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use core::ffi::{c_char, c_int, c_void};
 
 // System and video values

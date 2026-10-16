@@ -1,7 +1,14 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use core::ffi::c_char;
+
 use crate::font::{FONT, FONT_RENDER_SIZE};
 use crate::libogc::*;
 use crate::texture::Texture;
-use core::ffi::c_char;
 
 #[inline]
 unsafe fn pipe_u32(value: u32) {

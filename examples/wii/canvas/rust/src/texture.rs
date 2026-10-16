@@ -1,7 +1,14 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
+use core::ffi::c_void;
+
 use crate::libogc::{GX_CLAMP, GX_FALSE, GX_InitTexObj, GX_TF_RGBA8, GXTexObj};
 use crate::memory::AlignedBuffer;
 use crate::png;
-use core::ffi::c_void;
 
 pub struct Texture {
     object: GXTexObj,

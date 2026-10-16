@@ -1,3 +1,9 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #![allow(non_snake_case)]
 
 use core::ffi::{c_char, c_int, c_void};

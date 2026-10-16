@@ -16,7 +16,7 @@
 #define PI 3.14159265358979f
 
 _Alignas(32) static const uint8_t test_tpl[] = {
-#embed "../target/test.tpl"
+#embed "../../../../target/wii-toolchain/test/test.tpl"
 };
 
 _Alignas(32) static char results[16 * 1024];

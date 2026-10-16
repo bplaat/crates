@@ -6,7 +6,7 @@ set -eu
 elf=$(realpath "$1")
 shift
 dol="${elf%.elf}.dol"
-"$(dirname "$0")/target/elf2dol" "$elf" "$dol"
+"$(dirname "$0")/../../target/wii-toolchain/elf2dol" "$elf" "$dol"
 
 if [ -z "${DOLPHIN:-}" ]; then
     if [ "$(uname)" = Darwin ]; then

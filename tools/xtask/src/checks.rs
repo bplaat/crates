@@ -16,7 +16,7 @@ use crate::metadata::{
     add_excludes, features_without_swap, has_target_kind, packages, platform_excludes,
 };
 use crate::process::{capture, npm_program, npx_program, run, run_named};
-use crate::utils::{collect_files, relative_slash};
+use crate::utils::{collect_files, collect_source_files, relative_slash};
 use crate::{Os, Xtask};
 
 pub(crate) const BACKEND_SWAP_PAIRS: [(&str, &str); 2] =
@@ -113,9 +113,11 @@ impl Xtask {
 
         println!("Checking clang-format formatting...");
         let mut files = Vec::new();
-        collect_files(&self.root.join("tools/bob/examples"), &mut files)?;
+        for directory in ["tools/bob/examples", "examples/wii", "tools/wii-toolchain"] {
+            collect_source_files(&self.root.join(directory), &mut files)?;
+        }
         files.retain(|file| {
-            !relative_slash(&self.root, file).contains("/target/")
+            file.file_name().is_none_or(|name| name != "stb_image.h")
                 && file
                     .extension()
                     .and_then(|ext| ext.to_str())

@@ -1,5 +1,12 @@
-use crate::libogc::{floorf, powf};
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use alloc::vec::Vec;
+
+use crate::libogc::{floorf, powf};
 
 pub const SIZE: usize = 64;
 

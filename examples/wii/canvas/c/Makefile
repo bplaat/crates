@@ -1,2 +1,2 @@
 NAME := canvas
-include ../../toolchain/wii.mk
+include ../../../../tools/wii-toolchain/wii.mk

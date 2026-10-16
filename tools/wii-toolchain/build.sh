@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Builds the Wii toolchain in target/: fetches libogc, gamecube-tools and LLVM's compiler-rt,
+# Builds the Wii toolchain in the repository target/wii-toolchain/: fetches libogc, gamecube-tools and LLVM's compiler-rt,
 # applies libogc/patches/ and builds libogc.a, libc.a (our tiny libc), libcompiler-rt.a,
 # elf2dol and gxtexconv.
 # The example Makefiles and Rust build.rs files run this before they build.
 #
 # Usage: ./build.sh [command]...
 #   (none)          fetch, patch and build
-#   export-patches  write the commits in target/libogc/ back to libogc/patches/
+#   export-patches  write the commits in ../../target/wii-toolchain/libogc/ back to libogc/patches/
 #   test            build test/ and run it in Dolphin
-#   clean           remove target/
+#   clean           remove ../../target/wii-toolchain/
 set -euo pipefail
 cd "$(dirname "$0")"
 
@@ -23,7 +23,7 @@ llvm_version='llvmorg-23.1.3'
 llvm_commit='0d261d1ca552c95a8f007e061c787ac7132fbcbc'
 
 TOOLCHAIN_DIR="$PWD"
-BUILD_DIR="$TOOLCHAIN_DIR/target"
+BUILD_DIR="$(cd ../.. && pwd)/target/wii-toolchain"
 LIBOGC_DIR="$BUILD_DIR/libogc"
 TOOLS_DIR="$BUILD_DIR/gamecube-tools"
 COMPILER_RT_DIR="$BUILD_DIR/compiler-rt"
@@ -114,16 +114,16 @@ fetch() {
 # Applies the patches as commits on top of the upstream tag, again when they changed
 patch() {
     outdated "$LIBOGC_DIR/.patched" "$TOOLCHAIN_DIR"/libogc/patches || return 0
-    # Applying resets target/libogc/, so stop when it has work that isn't exported yet
+    # Applying resets ../../target/wii-toolchain/libogc/, so stop when it has work that isn't exported yet
     if [ -s "$LIBOGC_DIR/.patched" ] && { [ -n "$(git_libogc status --porcelain --untracked-files=no)" ] ||
         [ "$(git_libogc rev-parse HEAD)" != "$(cat "$LIBOGC_DIR/.patched")" ]; }; then
-        die "target/libogc/ has changes that aren't in libogc/patches/, run ./build.sh export-patches or remove target/libogc/"
+        die "../../target/wii-toolchain/libogc/ has changes that aren't in libogc/patches/, run ./build.sh export-patches or remove ../../target/wii-toolchain/libogc/"
     fi
     msg "Applying patches"
     # git am keeps the authors of the patches, but needs a committer identity
     if [ -z "$(git_libogc config user.email || true)" ]; then
-        git_libogc config user.name wii-examples
-        git_libogc config user.email wii-examples@localhost
+        git_libogc config user.name wii-toolchain
+        git_libogc config user.email wii-toolchain@localhost
     fi
     git_libogc config commit.gpgsign false
     git_libogc tag -f upstream "$libogc_commit" > /dev/null
@@ -149,7 +149,7 @@ export_patches() {
     msg "Exported $(git_libogc rev-list --count upstream..HEAD) patches"
 }
 
-# Compiles sources at the same time and archives them to target/<library>,
+# Compiles sources at the same time and archives them to the build directory,
 # usage: build_archive <library> <flags>... -- <sources>...
 build_archive() {
     local library="$BUILD_DIR/$1" objects_dir="$BUILD_DIR/objects/${1%.a}" flags=() source object
@@ -218,7 +218,7 @@ build_tools() {
 # Builds test/ with the toolchain and runs it in Dolphin without its user interface, the test
 # writes its results to /tmp/test.txt on Dolphin's NAND. Doesn't lock, make runs the build itself.
 run_test() {
-    local test_dir="$TOOLCHAIN_DIR/test" user="$TOOLCHAIN_DIR/test/target/dolphin" pid
+    local test_dir="$TOOLCHAIN_DIR/test" test_build="$BUILD_DIR/test" user="$BUILD_DIR/test/dolphin" pid
     local results="$user/Wii/tmp/test.txt"
     make -C "$test_dir" --no-print-directory
     msg "Running the test in Dolphin"
@@ -227,8 +227,8 @@ run_test() {
     mkdir -p "$user/Config"
     printf '[Analytics]\nPermissionAsked = True\n[Interface]\nUsePanicHandlers = False\n' \
         > "$user/Config/Dolphin.ini"
-    "$TOOLCHAIN_DIR/run.sh" "$test_dir/target/test.elf" --batch --user="$user" \
-        > "$test_dir/target/dolphin.log" 2>&1 &
+    "$TOOLCHAIN_DIR/run.sh" "$test_build/test.elf" --batch --user="$user" \
+        > "$test_build/dolphin.log" 2>&1 &
     pid=$!
     # Wait at most a minute for the test to finish
     for _ in $(seq 120); do
@@ -250,7 +250,7 @@ lock() {
     $locked && return
     mkdir -p "$BUILD_DIR"
     if ! mkdir "$BUILD_DIR/.lock" 2> /dev/null; then
-        msg "Waiting for another build, remove target/.lock if none is running"
+        msg "Waiting for another build, remove ../../target/wii-toolchain/.lock if none is running"
         until mkdir "$BUILD_DIR/.lock" 2> /dev/null; do sleep 1; done
     fi
     trap 'rmdir "$BUILD_DIR/.lock"' EXIT

@@ -8,9 +8,6 @@
     "vendor": "nintendo",
     "linker-flavor": "gnu-lld",
     "linker": "rust-lld",
-    "pre-link-args": {
-        "gnu-lld": ["-T../../toolchain/wii.ld"]
-    },
     "executables": true,
     "exe-suffix": ".elf",
     "panic-strategy": "abort",

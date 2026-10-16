@@ -17,4 +17,3 @@ float atan2f(float y, float x);
 float exp2f(float x);
 float log2f(float x);
 float powf(float x, float y);
-

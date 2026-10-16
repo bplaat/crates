@@ -1,7 +1,15 @@
-use std::env;
-use std::fs;
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 use std::path::PathBuf;
 use std::process::Command;
+use std::{env, fs};
+
+#[path = "../../../../tools/wii-toolchain/build.rs"]
+mod wii;
 
 fn main() {
     let manifest_dir = PathBuf::from(env::var_os("CARGO_MANIFEST_DIR").unwrap());
@@ -28,16 +36,8 @@ fn main() {
     for &image in &image_names {
         println!("cargo:rerun-if-changed={}", assets.join(image).display());
     }
-    // Build the toolchain, it has gxtexconv, libogc.a and libc.a
-    let toolchain = manifest_dir.join("../../toolchain");
-    let status = Command::new(toolchain.join("build.sh"))
-        .status()
-        .expect("failed to run build.sh");
-    assert!(status.success(), "failed to build the toolchain");
-    for path in ["build.sh", "libc", "libogc"] {
-        println!("cargo:rerun-if-changed={}", toolchain.join(path).display());
-    }
-    let status = Command::new(toolchain.join("target/gxtexconv"))
+    let toolchain_build = wii::build(manifest_dir.join("../../../../tools/wii-toolchain"));
+    let status = Command::new(toolchain_build.join("gxtexconv"))
         .arg("-s")
         .arg(&script)
         .arg("-d")
@@ -87,11 +87,4 @@ fn main() {
         );
     }
     fs::write(image_data, images).expect("failed to write materials.bin");
-
-    println!(
-        "cargo:rustc-link-search=native={}",
-        toolchain.join("target").display()
-    );
-    println!("cargo:rustc-link-lib=static=ogc");
-    println!("cargo:rustc-link-lib=static=c");
 }

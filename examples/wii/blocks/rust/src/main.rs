@@ -1,15 +1,22 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #![no_std]
 #![no_main]
+
+use core::f32::consts::TAU;
+use core::ffi::{c_int, c_void};
+use core::ptr;
+use core::sync::atomic::{AtomicBool, Ordering};
 
 use crate::libogc::*;
 use crate::materials::Materials;
 use crate::memory::{AlignedBuffer, Framebuffer};
 use crate::mesh::Mesh;
 use crate::world::World;
-use core::f32::consts::TAU;
-use core::ffi::{c_int, c_void};
-use core::ptr;
-use core::sync::atomic::{AtomicBool, Ordering};
 
 mod libogc;
 mod materials;

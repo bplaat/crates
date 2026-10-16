@@ -1,11 +1,18 @@
+/*
+ * Copyright (c) 2026 Bastiaan van der Plaat
+ *
+ * SPDX-License-Identifier: MIT
+ */
+
 #![no_std]
 #![no_main]
 
-use crate::libogc::*;
 use core::ffi::{c_int, c_void};
 use core::ptr;
 use core::ptr::NonNull;
 use core::sync::atomic::{AtomicBool, Ordering};
+
+use crate::libogc::*;
 
 mod libogc;
 

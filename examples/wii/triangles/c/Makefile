@@ -1,2 +1,2 @@
 NAME := triangles
-include ../../toolchain/wii.mk
+include ../../../../tools/wii-toolchain/wii.mk

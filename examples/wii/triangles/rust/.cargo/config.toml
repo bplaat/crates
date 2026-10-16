@@ -1,8 +1,8 @@
 [build]
-target = "../../toolchain/wii.json"
+target = "../../../../tools/wii-toolchain/wii.json"
 
 [target.wii]
-runner = "../../toolchain/run.sh"
+runner = "../../../../tools/wii-toolchain/run.sh"
 
 [unstable]
 build-std = ["core", "compiler_builtins"]
