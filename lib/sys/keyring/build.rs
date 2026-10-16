@@ -96,7 +96,7 @@ fn command_stdout(command: &str, args: &[&str]) -> Option<String> {
     output
         .status
         .success()
-        .then(|| String::from_utf8_lossy(&output.stdout).into_owned())
+        .then(|| String::from_utf8_lossy_owned(output.stdout))
 }
 
 fn push_unique(paths: &mut Vec<PathBuf>, path: PathBuf) {

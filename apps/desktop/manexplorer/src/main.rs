@@ -77,9 +77,9 @@ fn man_show(req: &Request, _ctx: &()) -> Result<Response> {
         .arg(page)
         .arg(name)
         .output()?;
-    Ok(Response::with_body(
-        String::from_utf8_lossy(&output.stdout).to_string(),
-    ))
+    Ok(Response::with_body(String::from_utf8_lossy_owned(
+        output.stdout,
+    )))
 }
 
 pub(crate) enum AppEvent {
