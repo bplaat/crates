@@ -120,7 +120,7 @@ Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](htt
 - [baksteen](apps/web/baksteen/) A brick-laying robot simulator
 - [bob](tools/bob) A simple build system for my projects, because I like the simplicity of Cargo
 - [ccontinue](bin/ccontinue) A transpiler that translates an OOP extension for the C programming language back to C
-- [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
+- [cargo-bundle](tools/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
 - [plaatnotes](apps/web/plaatnotes) A self-hosted note-taking web app with rich Markdown support
 
 ### Replacement libraries
@@ -234,7 +234,7 @@ Rather than pulling in large, general-purpose dependencies, this repo grows a cu
 
 **3. Tools and a custom build system for complex multi-language projects**
 
-Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](tools/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](bin/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with the [xtask](xtask) crate these tools keep the build pipeline typed, cross-platform and easy to follow.
+Building projects that span multiple languages and artifact types (Rust, JavaScript, WASM, native bundles) requires coordination that general-purpose build systems handle poorly. [bob](tools/bob) is a minimal build system inspired by `Cargo`'s simplicity, designed to describe and orchestrate such projects cleanly. [cargo-bundle](tools/cargo-bundle) handles macOS `.app` bundle packaging from within the `Cargo` ecosystem. Together with the [xtask](xtask) crate these tools keep the build pipeline typed, cross-platform and easy to follow.
 
 ### Repo organization
 

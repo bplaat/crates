@@ -164,7 +164,7 @@ impl Xtask {
     }
 
     fn build_bundles(&self, apps: &[InstallableApp]) -> Result<()> {
-        cargo_install_path("bin/cargo-bundle", false)?;
+        cargo_install_path("tools/cargo-bundle", false)?;
         for app in apps {
             run(Command::new("cargo")
                 .arg("bundle")
