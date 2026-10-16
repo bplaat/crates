@@ -76,7 +76,7 @@ assert_eq!(bitmap.width(), 128);
 ```
 
 Run `cargo run -p example-bcanvas-headless` to draw and save `canvas.png`
-without creating a window. The [example](../../examples/bcanvas-headless) enables
+without creating a window. The [example](examples/headless) enables
 the image crate's PNG feature and calls `image::encode`.
 
 ## License
