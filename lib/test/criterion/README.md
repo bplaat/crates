@@ -1,7 +1,8 @@
 # criterion
 
-A small, std-only benchmark runner for this workspace. It provides the
-Criterion-style APIs used by the SHA benchmarks and has no dependencies.
+A minimal replacement for the [criterion](https://crates.io/crates/criterion) crate. It is a small,
+std-only benchmark runner that provides the Criterion-style APIs used by the benchmarks in this
+workspace and has no dependencies.
 
 Supported APIs: `Criterion`, `BenchmarkGroup`, `BenchmarkId`, `Throughput`,
 `Bencher::iter`, `iter_batched`, `iter_batched_ref`, `iter_custom`,

@@ -182,7 +182,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 **Testing**
 
-- [criterion](lib/test/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
+- [criterion](lib/test/criterion) A minimal replacement for the [criterion](https://crates.io/crates/criterion) crate
 - [trybuild](lib/test/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 
 ## Getting Started
