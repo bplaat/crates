@@ -61,7 +61,7 @@ cargo run -p example-wgpu-headless
 
 See [wgpu-triangle](../../examples/wgpu-triangle),
 [wgpu-cube](../../examples/wgpu-cube),
-[wgpu-blocks](../../examples/wgpu-blocks), and
+[wgpu-blocks](examples/blocks), and
 [wgpu-headless](../../examples/wgpu-headless). The headless example writes
 `frame.png` in the current directory.
 
