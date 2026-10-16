@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 bcanvas = { path = "../.." }
-bwindow = { path = "../../../ui/bwindow", default-features = false }
+bwindow = { path = "../../../../ui/bwindow", default-features = false }
 
 [lints]
 workspace = true

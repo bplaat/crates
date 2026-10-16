@@ -17,7 +17,7 @@ icon = "meta/macos/icon.icon"
 
 [dependencies]
 bwindow = { path = "../../lib/ui/bwindow", features = ["menu"] }
-bcanvas = { path = "../../lib/bcanvas" }
+bcanvas = { path = "../../lib/graphics/bcanvas" }
 reversi-engine = { path = "../reversi-engine" }
 
 [build-dependencies]

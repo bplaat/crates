@@ -18,7 +18,7 @@ tinyvg = []
 xmlparser = { version = "0.13.6", optional = true }
 
 [dev-dependencies]
-criterion = { path = "../criterion" }
+criterion = { path = "../../criterion" }
 image = { path = "../image", default-features = false, features = ["png"] }
 
 [[bench]]

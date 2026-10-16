@@ -1,7 +1,7 @@
 # Bassie Window Rust library
 
 Cross-platform native windows and a main event loop for Rust, using AppKit on macOS,
-Win32 on Windows, and GTK 3 on Linux. Add [bcanvas](../../bcanvas) for native 2D
+Win32 on Windows, and GTK 3 on Linux. Add [bcanvas](../../graphics/bcanvas) for native 2D
 drawing or [bwebview](../bwebview) for web content.
 
 ## Getting Started

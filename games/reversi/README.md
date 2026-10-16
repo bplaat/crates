@@ -1,6 +1,6 @@
 # Reversi
 
-A native Reversi game built with [bwindow](../../lib/ui/bwindow) and [bcanvas](../../lib/bcanvas).
+A native Reversi game built with [bwindow](../../lib/ui/bwindow) and [bcanvas](../../lib/graphics/bcanvas).
 
 ## Features
 

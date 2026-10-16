@@ -1,6 +1,6 @@
 # Bassie Canvas Rust library
 
-Cross-platform 2D drawing for [bwindow](../ui/bwindow) windows using the system-native
+Cross-platform 2D drawing for [bwindow](../../ui/bwindow) windows using the system-native
 graphics API: Core Graphics on macOS, Direct2D on Windows, and Cairo on Linux.
 
 ## Features
@@ -83,4 +83,4 @@ the image crate's PNG feature and calls `image::encode`.
 
 Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

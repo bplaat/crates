@@ -32,4 +32,4 @@ and `b8d8c7e88ed221f2ce1100f9e25b5c6e7e6dc78d`.
 
 Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

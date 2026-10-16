@@ -7,7 +7,7 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bwindow = { path = "../../../ui/bwindow", default-features = false }
+bwindow = { path = "../../../../ui/bwindow", default-features = false }
 wgpu = { path = "../.." }
 
 [build-dependencies]

@@ -12,9 +12,9 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
 - [bwebview](lib/ui/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [bwindow](lib/ui/bwindow) Native windows and one typed main event loop
-- [bcanvas](lib/bcanvas) Native 2D canvas content, without a browser dependency
+- [bcanvas](lib/graphics/bcanvas) Native 2D canvas content, without a browser dependency
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
-- [image](lib/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
+- [image](lib/graphics/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
@@ -27,13 +27,13 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
-- [vector](lib/vector) SVG (subset) and TinyVG decoders with a backend-neutral display list
-- [wgpu](lib/wgpu) A native GPU rendering library for bwindow
-- [wgpu-shader-build](lib/wgpu-shader-build) Build-time native WGSL compilation for wgpu
+- [vector](lib/graphics/vector) SVG (subset) and TinyVG decoders with a backend-neutral display list
+- [wgpu](lib/graphics/wgpu) A native GPU rendering library for bwindow
+- [wgpu-shader-build](lib/graphics/wgpu-shader-build) Build-time native WGSL compilation for wgpu
 
 ### Apps
 
-Some desktop apps written with the [bwindow](lib/ui/bwindow), [bwebview](lib/ui/bwebview), and [bcanvas](lib/bcanvas) libraries.
+Some desktop apps written with the [bwindow](lib/ui/bwindow), [bwebview](lib/ui/bwebview), and [bcanvas](lib/graphics/bcanvas) libraries.
 
 <table>
 <tr>
