@@ -59,7 +59,7 @@ cargo run -p example-wgpu-blocks
 cargo run -p example-wgpu-headless
 ```
 
-See [wgpu-triangle](../../examples/wgpu-triangle),
+See [wgpu-triangle](examples/triangle),
 [wgpu-cube](examples/cube),
 [wgpu-blocks](examples/blocks), and
 [wgpu-headless](examples/headless). The headless example writes

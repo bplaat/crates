@@ -7,11 +7,11 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bwindow = { path = "../../lib/bwindow", default-features = false }
-wgpu = { path = "../../lib/wgpu" }
+bwindow = { path = "../../../bwindow", default-features = false }
+wgpu = { path = "../.." }
 
 [build-dependencies]
-wgpu-shader-build = { path = "../../lib/wgpu-shader-build" }
+wgpu-shader-build = { path = "../../../wgpu-shader-build" }
 
 [lints]
 workspace = true
