@@ -4,9 +4,9 @@ A simple native macOS image viewer with local raster decoders and support for SV
 
 ## Features
 
-- Decode JPEG, PNG/APNG, GIF, BMP, and QOI with a custom [image](../../lib/image) decoder crate
+- Decode JPEG, PNG/APNG, GIF, BMP, and QOI with a custom [image](../../../lib/image) decoder crate
 - Play GIF/APNG animations with frame timings and loop counts
-- Render SVG and TinyVG with the shared [vector](../../lib/vector) decoder and AppKit renderer
+- Render SVG and TinyVG with the shared [vector](../../../lib/vector) decoder and AppKit renderer
 - Fall back to NSImage when local decoding fails, including 16-bit PNG files
 - Zoom, pan, and fit images to the window
 - Automatically refresh an open image when its file changes, without resetting the zoom
@@ -26,4 +26,4 @@ The main app does not use the `com.apple.security.app-sandbox` entitlement becau
 
 Copyright © 2026 [Bastiaan van der Plaat](https://bplaat.nl/)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

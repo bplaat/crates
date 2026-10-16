@@ -38,4 +38,4 @@ workspace = true
 [dependencies]
 block2 = "0.6.2"
 objc2 = "0.6.4"
-macview-appkit = { path = "../../lib/macview-appkit" }
+macview-appkit = { path = "../../../lib/macview-appkit" }

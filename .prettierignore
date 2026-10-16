@@ -1,7 +1,7 @@
 # Produced by Icon Composer on macOS
 apps/desktop/bassielight/meta/macos/icon.icon/icon.json
 bin/game2048/meta/macos/icon.icon/icon.json
-bin/macview/meta/macos/icon.icon/icon.json
+apps/macos/macview/meta/macos/icon.icon/icon.json
 apps/desktop/manexplorer/meta/macos/icon.icon/icon.json
 apps/desktop/music-dl/meta/macos/icon.icon/icon.json
 apps/desktop/navidrome/meta/macos/icon.icon/icon.json
@@ -11,4 +11,4 @@ apps/desktop/sequelexplorer/meta/macos/icon.icon/icon.json
 bin/bob/examples/bin/objc-bundle-xstreaks/icons/icon.icon/icon.json
 
 # External test fixture
-bin/macview/examples/tiger.svg
+apps/macos/macview/examples/tiger.svg
