@@ -5,7 +5,7 @@ bin/macview/meta/macos/icon.icon/icon.json
 apps/desktop/manexplorer/meta/macos/icon.icon/icon.json
 apps/desktop/music-dl/meta/macos/icon.icon/icon.json
 apps/desktop/navidrome/meta/macos/icon.icon/icon.json
-bin/pixelfont/meta/macos/icon.icon/icon.json
+apps/desktop/pixelfont/meta/macos/icon.icon/icon.json
 bin/reversi/meta/macos/icon.icon/icon.json
 bin/sequelexplorer/meta/macos/icon.icon/icon.json
 bin/bob/examples/bin/objc-bundle-xstreaks/icons/icon.icon/icon.json

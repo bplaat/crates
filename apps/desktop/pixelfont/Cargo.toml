@@ -18,8 +18,8 @@ entitlements = "meta/macos/Entitlements.plist"
 workspace = true
 
 [dependencies]
-bwindow = { path = "../../lib/bwindow", features = ["dialog", "file_drop", "menu"] }
-bwebview = { path = "../../lib/bwebview", features = [
+bwindow = { path = "../../../lib/bwindow", features = ["dialog", "file_drop", "menu"] }
+bwebview = { path = "../../../lib/bwebview", features = [
     "rust-embed",
     "file_drop"] }
 rust-embed = "8.12"
