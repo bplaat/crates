@@ -50,8 +50,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/binman">
-        <img src="bin/binman/docs/images/icon.png" alt="Binman icon" width="48" height="48"/><br/>
+    <a href="./apps/windows/binman">
+        <img src="apps/windows/binman/docs/images/icon.png" alt="Binman icon" width="48" height="48"/><br/>
         Binman
     </a>
 </td>
@@ -104,7 +104,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 
 - [2048](bin/game2048) An offline desktop 2048 game app
 - [BassieLight](apps/desktop/bassielight) A simple lights controller with GUI
-- [Binman](bin/binman) A safe and minimal Windows cleanup tool
+- [Binman](apps/windows/binman) A safe and minimal Windows cleanup tool
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [ManExplorer](apps/desktop/manexplorer) A simple man page explorer tool
 - [Navidrome](apps/desktop/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
