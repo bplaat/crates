@@ -3,8 +3,8 @@ members = [
     "apps/*/*",
     "games/*",
     "lib/*/examples/*",
+    "lib/apple/*",
     "lib/base64",
-    "lib/block2",
     "lib/bsql",
     "lib/bsql_derive",
     "lib/chrono",
@@ -27,8 +27,6 @@ members = [
     "lib/mime",
     "lib/mime_guess",
     "lib/native-tls",
-    "lib/objc2",
-    "lib/objc2-proc-macros",
     "lib/openapi-generator",
     "lib/pbkdf2",
     "lib/plist",
@@ -81,7 +79,7 @@ missing_const_for_fn = "deny"
 
 [patch.crates-io]
 base64 = { path = "lib/base64" }
-block2 = { path = "lib/block2" }
+block2 = { path = "lib/apple/block2" }
 bsql = { path = "lib/bsql" }
 bsql_derive = { path = "lib/bsql_derive" }
 chrono = { path = "lib/chrono" }
@@ -98,8 +96,8 @@ maxminddb = { path = "lib/maxminddb" }
 mime = { path = "lib/mime" }
 mime_guess = { path = "lib/mime_guess" }
 native-tls = { path = "lib/native-tls" }
-objc2 = { path = "lib/objc2" }
-objc2-proc-macros = { path = "lib/objc2-proc-macros" }
+objc2 = { path = "lib/apple/objc2" }
+objc2-proc-macros = { path = "lib/apple/objc2-proc-macros" }
 plist = { path = "lib/plist" }
 regex = { path = "lib/regex" }
 rusb = { path = "lib/rusb" }

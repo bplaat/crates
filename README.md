@@ -128,7 +128,7 @@ Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](htt
 These libraries are minimal replacements for commonly used crates.
 
 - [base64](lib/base64) A minimal replacement for the [base64](https://crates.io/crates/base64) crate
-- [block2](lib/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
+- [block2](lib/apple/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
 - [criterion](lib/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
@@ -144,8 +144,8 @@ These libraries are minimal replacements for commonly used crates.
 - [maxminddb](lib/maxminddb) A minimal replacement for the [maxminddb](https://crates.io/crates/maxminddb) crate
 - [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
 - [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
-- [objc2](lib/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
-- [objc2-proc-macros](lib/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
+- [objc2](lib/apple/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
+- [objc2-proc-macros](lib/apple/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
 - [plist](lib/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
 - [regex](lib/regex) A minimal replacement for the [regex](https://crates.io/crates/regex) crate
 - [rusb](lib/rusb) A minimal replacement for the [rusb](https://crates.io/crates/rusb) crate
