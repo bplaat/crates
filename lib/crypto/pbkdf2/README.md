@@ -22,4 +22,4 @@ assert!(!pbkdf2::password_verify("wrong_password", &hash).unwrap());
 
 Copyright © 2024-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

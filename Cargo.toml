@@ -5,25 +5,20 @@ members = [
     "lib/apple/*",
     "lib/copy_dir",
     "lib/criterion",
+    "lib/crypto/*",
     "lib/data/*",
-    "lib/digest",
     "lib/directories",
     "lib/enable-ansi-support",
-    "lib/getrandom",
     "lib/graphics/*",
     "lib/graphics/*/examples/*",
-    "lib/hmac",
     "lib/js",
     "lib/keyring",
     "lib/net/*",
     "lib/net/*/examples/*",
     "lib/openapi-generator",
-    "lib/pbkdf2",
     "lib/rusb",
     "lib/rust-embed",
     "lib/rust-embed-impl",
-    "lib/sha1",
-    "lib/sha2",
     "lib/simple_logger",
     "lib/terminal_size",
     "lib/threadpool",
@@ -62,11 +57,11 @@ bsql = { path = "lib/data/bsql" }
 bsql_derive = { path = "lib/data/bsql_derive" }
 chrono = { path = "lib/data/chrono" }
 copy_dir = { path = "lib/copy_dir" }
-digest = { path = "lib/digest" }
+digest = { path = "lib/crypto/digest" }
 directories = { path = "lib/directories" }
 enable-ansi-support = { path = "lib/enable-ansi-support" }
-getrandom = { path = "lib/getrandom" }
-hmac = { path = "lib/hmac" }
+getrandom = { path = "lib/crypto/getrandom" }
+hmac = { path = "lib/crypto/hmac" }
 keyring = { path = "lib/keyring" }
 libsqlite3-sys = { path = "lib/data/libsqlite3-sys" }
 local-ip-address = { path = "lib/net/local-ip-address" }
@@ -82,8 +77,8 @@ rusb = { path = "lib/rusb" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 serde_yaml = { path = "lib/data/serde_yaml" }
-sha1 = { path = "lib/sha1" }
-sha2 = { path = "lib/sha2" }
+sha1 = { path = "lib/crypto/sha1" }
+sha2 = { path = "lib/crypto/sha2" }
 simple-useragent = { path = "lib/net/simple-useragent" }
 simple_logger = { path = "lib/simple_logger" }
 small-http = { path = "lib/net/small-http" }

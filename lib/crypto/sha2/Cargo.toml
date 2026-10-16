@@ -1,5 +1,5 @@
 [package]
-name = "sha1"
+name = "sha2"
 version = "0.11.0+patch"
 edition.workspace = true
 license.workspace = true
@@ -14,10 +14,10 @@ disable-software = []
 disable-simd = []
 
 [dev-dependencies]
-criterion = { path = "../criterion" }
+criterion = { path = "../../criterion" }
 
 [[bench]]
-name = "sha1"
+name = "sha2"
 harness = false
 
 [lints]

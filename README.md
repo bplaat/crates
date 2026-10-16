@@ -18,7 +18,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [js](lib/js) A WIP JavaScript interpreter
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
-- [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
+- [pbkdf2](lib/crypto/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](lib/ui/plaatui) A Preact web components ui library for my own services
 - [simple-useragent](lib/net/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 - [small-http](lib/net/small-http) A simple and small HTTP/1.1 server/client library
@@ -132,12 +132,12 @@ These libraries are minimal replacements for commonly used crates.
 - [chrono](lib/data/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
 - [criterion](lib/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
-- [digest](lib/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
+- [digest](lib/crypto/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
-- [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
+- [getrandom](lib/crypto/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
 - [gzip](lib/data/gzip) A gzip library and command-line utility with a benchmark
-- [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
+- [hmac](lib/crypto/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 - [libsqlite3-sys](lib/data/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/net/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [native-tls](lib/net/native-tls) A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate
@@ -152,8 +152,8 @@ These libraries are minimal replacements for commonly used crates.
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [serde_yaml](lib/data/serde_yaml) A minimal replacement for the [serde_yaml](https://crates.io/crates/serde_yaml) crate
-- [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
-- [sha2](lib/sha2) A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
+- [sha1](lib/crypto/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
+- [sha2](lib/crypto/sha2) A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
 - [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 - [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 - [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
