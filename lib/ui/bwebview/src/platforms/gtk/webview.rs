@@ -84,7 +84,7 @@ impl PlatformWebview {
                     web_context,
                     scheme.as_ptr(),
                     webview_custom_uri_scheme as *const c_void,
-                    Box::leak(Box::new(custom_protocol)) as *mut _ as *mut c_void,
+                    Box::into_raw(Box::new(custom_protocol)) as *mut c_void,
                     custom_protocol_destroy as *const c_void,
                 );
             }
