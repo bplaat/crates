@@ -5,7 +5,7 @@
  */
 
 use std::collections::BTreeSet;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
 use anyhow::{Context, Result};
@@ -16,6 +16,7 @@ use crate::utils::{normalize_path, relative_slash};
 
 pub(crate) struct InstallableApp {
     pub(crate) package: String,
+    pub(crate) directory: PathBuf,
     pub(crate) name: String,
     pub(crate) identifier: String,
 }

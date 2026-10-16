@@ -166,7 +166,10 @@ impl Xtask {
     fn build_bundles(&self, apps: &[InstallableApp]) -> Result<()> {
         cargo_install_path("bin/cargo-bundle", false)?;
         for app in apps {
-            run(Command::new("cargo").args(["bundle", "--path", &format!("bin/{}", app.package)]))?;
+            run(Command::new("cargo")
+                .arg("bundle")
+                .arg("--path")
+                .arg(&app.directory))?;
         }
         Ok(())
     }
@@ -187,8 +190,8 @@ impl Xtask {
         }
 
         if selected.is_none() {
-            for package in ["bob", "ccontinue", "music-dl"] {
-                cargo_install_path(&format!("bin/{package}"), true)?;
+            for path in ["bin/bob", "bin/ccontinue", "bin/music-dl"] {
+                cargo_install_path(path, true)?;
             }
         }
 
@@ -247,19 +250,15 @@ impl Xtask {
                         self.root.join(format!("target/release/{}", app.package)),
                         &executable,
                     )?;
-                    let desktop_template = fs::read_to_string(
-                        self.root
-                            .join(format!("bin/{}/meta/freedesktop/.desktop", app.package)),
-                    )?;
+                    let desktop_template =
+                        fs::read_to_string(app.directory.join("meta/freedesktop/.desktop"))?;
                     let desktop_entry =
                         desktop_template.replace("$BIN_DIR", &bin.to_string_lossy());
                     fs::write(
                         applications.join(format!("{}.desktop", app.identifier)),
                         desktop_entry,
                     )?;
-                    let mime_package = self
-                        .root
-                        .join(format!("bin/{}/meta/freedesktop/mime.xml", app.package));
+                    let mime_package = app.directory.join("meta/freedesktop/mime.xml");
                     if mime_package.exists() {
                         fs::copy(
                             mime_package,
@@ -270,10 +269,8 @@ impl Xtask {
                         let destination = icons.join(format!("{size}x{size}/apps"));
                         fs::create_dir_all(&destination)?;
                         fs::copy(
-                            self.root.join(format!(
-                                "bin/{}/meta/freedesktop/icons/{size}x{size}.png",
-                                app.package
-                            )),
+                            app.directory
+                                .join(format!("meta/freedesktop/icons/{size}x{size}.png")),
                             destination.join(format!("{}.png", app.identifier)),
                         )?;
                     }
@@ -299,7 +296,21 @@ impl Xtask {
                 .get("manifest_path")
                 .and_then(Value::as_str)
                 .context("Cargo package has no manifest path")?;
-            if !Path::new(manifest).starts_with(self.root.join("bin")) {
+            let package_directory = Path::new(manifest)
+                .parent()
+                .context("Cargo manifest has no parent directory")?;
+            let has_binary = package
+                .get("targets")
+                .and_then(Value::as_array)
+                .is_some_and(|targets| {
+                    targets.iter().any(|target| {
+                        target
+                            .get("kind")
+                            .and_then(Value::as_array)
+                            .is_some_and(|kinds| kinds.iter().any(|kind| kind == "bin"))
+                    })
+                });
+            if !has_binary || package_directory.starts_with(self.root.join("examples")) {
                 continue;
             }
             let bundle = package.pointer("/metadata/bundle");
@@ -326,9 +337,6 @@ impl Xtask {
                 .next()
                 .map(|first| first.to_uppercase().chain(name_characters).collect())
                 .unwrap_or_default();
-            let package_directory = Path::new(manifest)
-                .parent()
-                .context("Cargo manifest has no parent directory")?;
             let identity =
                 freedesktop_identity(&package_directory.join("meta/freedesktop/.desktop"))?;
             let (mut name, identifier) = identity.unwrap_or_else(|| {
@@ -344,6 +352,7 @@ impl Xtask {
             }
             apps.push(InstallableApp {
                 package: package_name.to_owned(),
+                directory: package_directory.to_path_buf(),
                 identifier,
                 name,
             });
