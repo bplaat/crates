@@ -60,7 +60,7 @@ impl Xtask {
             let relative = relative_slash(&self.root, &file);
             if relative.starts_with("tools/bob/examples/")
                 || relative.ends_with(".min.js")
-                || (relative.starts_with("bin/ccontinue/tests/")
+                || (relative.starts_with("tools/ccontinue/tests/")
                     && file.extension().is_some_and(|ext| ext == "cc"))
             {
                 continue;
