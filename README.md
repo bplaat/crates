@@ -76,8 +76,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/navidrome">
-        <img src="bin/navidrome/meta/freedesktop/icons/128x128.png" alt="Navidrome icon" width="48" height="48"/><br/>
+    <a href="./apps/desktop/navidrome">
+        <img src="apps/desktop/navidrome/meta/freedesktop/icons/128x128.png" alt="Navidrome icon" width="48" height="48"/><br/>
         Navidrome
     </a>
 </td>
@@ -107,7 +107,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 - [Binman](bin/binman) A safe and minimal Windows cleanup tool
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [ManExplorer](apps/desktop/manexplorer) A simple man page explorer tool
-- [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
+- [Navidrome](apps/desktop/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
 - [Music Downloader](apps/desktop/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
 - [Reversi](bin/reversi) A native canvas board game with a background AI

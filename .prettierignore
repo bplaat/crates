@@ -4,7 +4,7 @@ bin/game2048/meta/macos/icon.icon/icon.json
 bin/macview/meta/macos/icon.icon/icon.json
 apps/desktop/manexplorer/meta/macos/icon.icon/icon.json
 apps/desktop/music-dl/meta/macos/icon.icon/icon.json
-bin/navidrome/meta/macos/icon.icon/icon.json
+apps/desktop/navidrome/meta/macos/icon.icon/icon.json
 bin/pixelfont/meta/macos/icon.icon/icon.json
 bin/reversi/meta/macos/icon.icon/icon.json
 bin/sequelexplorer/meta/macos/icon.icon/icon.json

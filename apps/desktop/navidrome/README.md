@@ -10,4 +10,4 @@ A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper.
 
 Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.
