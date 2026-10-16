@@ -68,4 +68,4 @@ The rule grants the logged-in user access, so BassieLight does not need root.
 
 Copyright © 2023-2026 [Bastiaan van der Plaat](https://bplaat.nl/)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

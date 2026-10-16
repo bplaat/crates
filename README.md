@@ -44,8 +44,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/bassielight">
-        <img src="bin/bassielight/meta/freedesktop/icons/128x128.png" alt="BassieLight icon" width="48" height="48"/><br/>
+    <a href="./apps/desktop/bassielight">
+        <img src="apps/desktop/bassielight/meta/freedesktop/icons/128x128.png" alt="BassieLight icon" width="48" height="48"/><br/>
         BassieLight
     </a>
 </td>
@@ -103,7 +103,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 </table>
 
 - [2048](bin/game2048) An offline desktop 2048 game app
-- [BassieLight](bin/bassielight) A simple lights controller with GUI
+- [BassieLight](apps/desktop/bassielight) A simple lights controller with GUI
 - [Binman](bin/binman) A safe and minimal Windows cleanup tool
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [ManExplorer](bin/manexplorer) A simple man page explorer tool

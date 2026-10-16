@@ -15,9 +15,9 @@ fn main() {
     const NPM: &str = if cfg!(windows) { "npm.cmd" } else { "npm" };
 
     // Install npm packages at the npm workspace root if needed
-    println!("cargo:rerun-if-changed=../../.npmrc");
-    println!("cargo:rerun-if-changed=../../package.json");
-    println!("cargo:rerun-if-changed=../../package-lock.json");
+    println!("cargo:rerun-if-changed=../../../.npmrc");
+    println!("cargo:rerun-if-changed=../../../package.json");
+    println!("cargo:rerun-if-changed=../../../package-lock.json");
     {
         let npm_lock = OpenOptions::new()
             .read(true)
@@ -29,10 +29,10 @@ fn main() {
         npm_lock
             .lock()
             .expect("Failed to lock npm install lock file");
-        if !Path::new("../../node_modules/.package-lock.json").exists() {
+        if !Path::new("../../../node_modules/.package-lock.json").exists() {
             let status = std::process::Command::new(NPM)
                 .arg("ci")
-                .current_dir("../..")
+                .current_dir("../../..")
                 .status()
                 .expect("Failed to run npm ci");
             assert!(status.success(), "npm ci failed with {status}");

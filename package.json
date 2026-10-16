@@ -1,6 +1,7 @@
 {
     "private": true,
     "workspaces": [
+        "apps/*/*/web",
         "bin/*/web",
         "npm-lib/*",
         "npm-lib/plaatui/showcase"
