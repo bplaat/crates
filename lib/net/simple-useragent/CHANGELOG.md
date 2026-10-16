@@ -6,6 +6,23 @@ All notable changes to this project will be documented in this file.
 
 _Placeholder_
 
+## [0.1.4] - 2026-10-16
+
+### Added
+
+- Add a `simple-useragent` CLI for inspecting one or more user-agent strings.
+- Add CLI integration tests and benchmarks for parser creation and parsing.
+- Document command-line usage and package installation.
+
+### Changed
+
+- Raise the minimum supported Rust version to 1.85.
+
+### Fixed
+
+- Restore package metadata, include the license file, and specify a registry version for the benchmark dependency so the crate can be packaged for publication.
+- Update the homepage for the crate's current location.
+
 ## [0.1.3] - 2026-08-25
 
 ### Changed
@@ -39,7 +56,8 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.3...HEAD
+[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.4...HEAD
+[0.1.4]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.4
 [0.1.3]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.3
 [0.1.2]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.2
 [0.1.1]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.1
