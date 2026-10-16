@@ -119,7 +119,7 @@ impl Xtask {
     fn build_pages_baksteen(&self, pages: &Path) -> Result<()> {
         let destination = pages.join("baksteen");
         fs::create_dir_all(&destination)?;
-        copy_directory_contents(&self.root.join("bin/baksteen/public"), &destination)?;
+        copy_directory_contents(&self.root.join("apps/web/baksteen/public"), &destination)?;
         run(Command::new("cargo").args([
             "build",
             "--release",

@@ -117,7 +117,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 
 Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](https://crates.bplaat.nl/).
 
-- [baksteen](bin/baksteen/) A brick-laying robot simulator
+- [baksteen](apps/web/baksteen/) A brick-laying robot simulator
 - [bob](bin/bob) A simple build system for my projects, because I like the simplicity of Cargo
 - [ccontinue](bin/ccontinue) A transpiler that translates an OOP extension for the C programming language back to C
 - [cargo-bundle](bin/cargo-bundle) A simple Cargo plugin that builds macOS app bundles
