@@ -190,7 +190,7 @@ impl Xtask {
         }
 
         if selected.is_none() {
-            for path in ["bin/bob", "bin/ccontinue", "bin/music-dl"] {
+            for path in ["bin/bob", "bin/ccontinue", "apps/desktop/music-dl"] {
                 cargo_install_path(path, true)?;
             }
         }

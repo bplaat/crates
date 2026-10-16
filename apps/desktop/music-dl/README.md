@@ -55,4 +55,4 @@ The `com.apple.security.app-sandbox` entitlement is not used because files need 
 
 Copyright © 2024-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

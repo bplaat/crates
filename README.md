@@ -70,8 +70,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 </tr>
 <tr>
 <td width="100" align="center">
-    <a href="./bin/music-dl">
-        <img src="bin/music-dl/meta/freedesktop/icons/128x128.png" alt="Music Downloader icon" width="48" height="48"/><br/>
+    <a href="./apps/desktop/music-dl">
+        <img src="apps/desktop/music-dl/meta/freedesktop/icons/128x128.png" alt="Music Downloader icon" width="48" height="48"/><br/>
         Music Downloader
     </a>
 </td>
@@ -108,7 +108,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 - [MacView](bin/macview) A macOS bitmap, QOI, SVG, and TinyVG image viewer with Quick Look [preview](bin/macview-preview) and [thumbnail](bin/macview-thumbnail) extensions
 - [ManExplorer](apps/desktop/manexplorer) A simple man page explorer tool
 - [Navidrome](bin/navidrome) A [music.bplaat.nl](https://music.bplaat.nl/) webview wrapper
-- [Music Downloader](bin/music-dl) A tool that downloads complete albums with the correct metadata
+- [Music Downloader](apps/desktop/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](bin/pixelfont) An 8x8 pixel font editor
 - [Reversi](bin/reversi) A native canvas board game with a background AI
 - [Sequel Explorer](bin/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
