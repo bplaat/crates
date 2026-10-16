@@ -1,6 +1,10 @@
 [workspace]
 members = ["apps/*/*", "games/*", "lib/*/*", "lib/*/*/examples/*", "tools/*"]
-exclude = ["games/plaatcraft", "lib/ui/plaatui", "lib/ui/plaatui/examples/showcase"]
+exclude = [
+    "games/plaatcraft",
+    "lib/ui/plaatui",
+    "lib/ui/plaatui/examples/showcase",
+]
 resolver = "2"
 
 [workspace.package]
@@ -70,6 +74,9 @@ strip = true
 panic = "abort"
 overflow-checks = false
 
+[profile.release.package.reversi-engine]
+opt-level = 3
+
 [profile.release.package.image]
 opt-level = 3
 
@@ -79,7 +86,7 @@ opt-level = 3
 [profile.release.package.pbkdf2]
 opt-level = 3
 
-[profile.release.package.reversi-engine]
+[profile.release.package.sha1]
 opt-level = 3
 
 [profile.release.package.sha2]
