@@ -1,8 +1,8 @@
-# Bassie's Rust crates
+# Bassie's Bron des Codes
 
-A collection of minimal Rust crates and tools that I created for myself and others.
+My personal monorepo for most of my hobby projects
 
-## Crates
+## Projects
 
 ### Apps / Games
 
@@ -88,7 +88,7 @@ Some desktop apps and games written with the [bwindow](lib/ui/bwindow), [bwebvie
 
 ### Tools / Websites
 
-Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](https://crates.bplaat.nl/).
+Various tools and websites. For the deployed sites, go to [bron.bplaat.nl](https://bron.bplaat.nl/).
 
 - [baksteen](apps/web/baksteen/) A brick-laying robot simulator
 - [bob](tools/bob) A simple build system for my projects, because I like the simplicity of Cargo
