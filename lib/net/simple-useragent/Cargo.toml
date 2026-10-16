@@ -3,7 +3,6 @@ name = "simple-useragent"
 version = "0.1.4"
 rust-version = "1.85"
 description = "A simple user agent parser library based on the uap-core regexes"
-readme = "README.md"
 keywords = ["useragent", "user-agent", "user-agent-parser", "uap", "uap-core"]
 categories = ["parser-implementations", "web-programming"]
 homepage = "https://github.com/bplaat/crates/tree/master/lib/net/simple-useragent"
