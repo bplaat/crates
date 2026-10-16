@@ -1,6 +1,6 @@
 [workspace]
 members = ["xtask", "apps/*/*", "bin/*", "examples/*", "games/*", "lib/*"]
-exclude = ["bin/plaatcraft"]
+exclude = ["games/plaatcraft"]
 resolver = "2"
 
 [workspace.package]
