@@ -32,4 +32,4 @@ validate = { path = "../../../../data/validate" }
 bsql = { version = "0.1.2", features = ["uuid", "chrono", "sqlite-bundled"] }
 
 [build-dependencies]
-openapi-generator = { path = "../../../../openapi-generator" }
+openapi-generator = { path = "../../../../build/openapi-generator" }

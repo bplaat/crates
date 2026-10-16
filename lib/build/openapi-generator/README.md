@@ -23,4 +23,4 @@ Use `typescript` as the generator to create TypeScript definitions instead.
 
 Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

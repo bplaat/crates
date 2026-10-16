@@ -17,7 +17,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [image](lib/graphics/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
-- [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
+- [openapi-generator](lib/build/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/crypto/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](lib/ui/plaatui) A Preact web components ui library for my own services
 - [simple-useragent](lib/net/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
@@ -149,8 +149,8 @@ These libraries are minimal replacements for commonly used crates.
 - [plist](lib/data/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
 - [regex](lib/data/regex) A minimal replacement for the [regex](https://crates.io/crates/regex) crate
 - [rusb](lib/sys/rusb) A minimal replacement for the [rusb](https://crates.io/crates/rusb) crate
-- [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
-- [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
+- [rust-embed](lib/build/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
+- [rust-embed-impl](lib/build/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
 - [serde_yaml](lib/data/serde_yaml) A minimal replacement for the [serde_yaml](https://crates.io/crates/serde_yaml) crate
 - [sha1](lib/crypto/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
 - [sha2](lib/crypto/sha2) A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
@@ -159,7 +159,7 @@ These libraries are minimal replacements for commonly used crates.
 - [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 - [url](lib/net/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/data/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
-- [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
+- [winresource](lib/build/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 - [zip](lib/data/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate
 
 ## Getting Started

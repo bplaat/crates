@@ -3,6 +3,7 @@ members = [
     "apps/*/*",
     "games/*",
     "lib/apple/*",
+    "lib/build/*",
     "lib/criterion",
     "lib/crypto/*",
     "lib/data/*",
@@ -11,14 +12,10 @@ members = [
     "lib/js",
     "lib/net/*",
     "lib/net/*/examples/*",
-    "lib/openapi-generator",
-    "lib/rust-embed",
-    "lib/rust-embed-impl",
     "lib/sys/*",
     "lib/trybuild",
     "lib/ui/*",
     "lib/ui/*/examples/*",
-    "lib/winresource",
     "tools/*",
 ]
 exclude = ["games/plaatcraft", "lib/ui/plaatui"]
@@ -67,8 +64,8 @@ objc2-proc-macros = { path = "lib/apple/objc2-proc-macros" }
 plist = { path = "lib/data/plist" }
 regex = { path = "lib/data/regex" }
 rusb = { path = "lib/sys/rusb" }
-rust-embed = { path = "lib/rust-embed" }
-rust-embed-impl = { path = "lib/rust-embed-impl" }
+rust-embed = { path = "lib/build/rust-embed" }
+rust-embed-impl = { path = "lib/build/rust-embed-impl" }
 serde_yaml = { path = "lib/data/serde_yaml" }
 sha1 = { path = "lib/crypto/sha1" }
 sha2 = { path = "lib/crypto/sha2" }
@@ -81,7 +78,7 @@ threadpool = { path = "lib/sys/threadpool" }
 trybuild = { path = "lib/trybuild" }
 url = { path = "lib/net/url" }
 uuid = { path = "lib/data/uuid" }
-winresource = { path = "lib/winresource" }
+winresource = { path = "lib/build/winresource" }
 zip = { path = "lib/data/zip" }
 
 [profile.release]

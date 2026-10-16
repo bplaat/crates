@@ -44,4 +44,4 @@ native-tls = { version = "0.2.18", features = ["vendored"] }
 
 [build-dependencies]
 copy_dir = "0.1.3"
-openapi-generator = { path = "../../../lib/openapi-generator" }
+openapi-generator = { path = "../../../lib/build/openapi-generator" }

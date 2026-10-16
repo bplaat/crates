@@ -19,7 +19,7 @@ trait RustEmbed {
 }
 
 #[derive(Embed)]
-#[folder = "../../../../lib/rust-embed-impl/tests/ui/assets"]
+#[folder = "../../../../lib/build/rust-embed-impl/tests/ui/assets"]
 struct Assets;
 
 fn main() {
