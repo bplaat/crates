@@ -1,6 +1,6 @@
 # Pixel Font Editor
 
-An 8x8 pixel font editor built with [bwebview](../../../lib/bwebview), a clone of the [8x8 Pixel Font Editor](https://www.min.at/prinz/o/software/pixelfont/) by Richard Prinz.
+An 8x8 pixel font editor built with [bwebview](../../../lib/ui/bwebview), a clone of the [8x8 Pixel Font Editor](https://www.min.at/prinz/o/software/pixelfont/) by Richard Prinz.
 
 ## Features
 

@@ -17,8 +17,8 @@ icon = "meta/macos/icon.icon"
 entitlements = "meta/macos/Entitlements.plist"
 
 [dependencies]
-bwindow = { path = "../../lib/bwindow" }
-bwebview = { path = "../../lib/bwebview", features = ["rust-embed"] }
+bwindow = { path = "../../lib/ui/bwindow" }
+bwebview = { path = "../../lib/ui/bwebview", features = ["rust-embed"] }
 rust-embed = "8.12"
 
 [build-dependencies]

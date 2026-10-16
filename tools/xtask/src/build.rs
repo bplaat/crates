@@ -153,7 +153,7 @@ impl Xtask {
         let destination = pages.join("plaatui");
         fs::create_dir_all(&destination)?;
         copy_directory_contents(
-            &self.root.join("npm-lib/plaatui/showcase/dist"),
+            &self.root.join("lib/ui/plaatui/showcase/dist"),
             &destination,
         )
     }

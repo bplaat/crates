@@ -128,6 +128,6 @@ jobs:
         if: always()
         with:
           name: E2E Tests
-          path: apps/web/plaatnotes/web/test-results/junit.xml,npm-lib/plaatui/showcase/test-results/junit.xml
+          path: apps/web/plaatnotes/web/test-results/junit.xml,lib/ui/plaatui/showcase/test-results/junit.xml
           reporter: java-junit
           fail-on-error: 'false'

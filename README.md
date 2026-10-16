@@ -10,8 +10,8 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 - [bsql](lib/bsql) A simple and minimal Rust SQLite and MySQL library with an ergonomic API
 - [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
-- [bwebview](lib/bwebview) A cross-platform webview library for Rust with minimal dependencies
-- [bwindow](lib/bwindow) Native windows and one typed main event loop
+- [bwebview](lib/ui/bwebview) A cross-platform webview library for Rust with minimal dependencies
+- [bwindow](lib/ui/bwindow) Native windows and one typed main event loop
 - [bcanvas](lib/bcanvas) Native 2D canvas content, without a browser dependency
 - [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
 - [image](lib/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
@@ -19,7 +19,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
-- [plaatui](npm-lib/plaatui) A Preact web components ui library for my own services
+- [plaatui](lib/ui/plaatui) A Preact web components ui library for my own services
 - [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
 - [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
 - [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
@@ -33,7 +33,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 ### Apps
 
-Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebview), and [bcanvas](lib/bcanvas) libraries.
+Some desktop apps written with the [bwindow](lib/ui/bwindow), [bwebview](lib/ui/bwebview), and [bcanvas](lib/bcanvas) libraries.
 
 <table>
 <tr>
@@ -230,7 +230,7 @@ Rather than pulling in large, general-purpose dependencies, this repo grows a cu
 
 **2. A minimal Electron/Tauri-like desktop platform**
 
-[bwebview](lib/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](apps/) in this repo: a 2048 game, a SQLite and MySQL viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
+[bwebview](lib/ui/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](apps/) in this repo: a 2048 game, a SQLite and MySQL viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
 
 **3. Tools and a custom build system for complex multi-language projects**
 

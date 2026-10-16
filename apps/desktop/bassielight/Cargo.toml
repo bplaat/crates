@@ -17,8 +17,8 @@ entitlements = "meta/macos/Entitlements.plist"
 workspace = true
 
 [dependencies]
-bwindow = { path = "../../../lib/bwindow" }
-bwebview = { path = "../../../lib/bwebview", features = ["rust-embed"] }
+bwindow = { path = "../../../lib/ui/bwindow" }
+bwebview = { path = "../../../lib/ui/bwebview", features = ["rust-embed"] }
 directories = "6.0"
 log = "0.4.34"
 local-ip-address = { version = "0.6.13" }

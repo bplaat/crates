@@ -17,8 +17,8 @@ entitlements = "meta/macos/Entitlements.plist"
 workspace = true
 
 [dependencies]
-bwindow = { path = "../../../lib/bwindow" }
-bwebview = { path = "../../../lib/bwebview" }
+bwindow = { path = "../../../lib/ui/bwindow" }
+bwebview = { path = "../../../lib/ui/bwebview" }
 
 [build-dependencies]
 winresource = "0.1.31"

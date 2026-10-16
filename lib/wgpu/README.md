@@ -1,6 +1,6 @@
 # wgpu Rust library
 
-A native GPU rendering library for [bwindow](../bwindow) and offscreen bitmaps,
+A native GPU rendering library for [bwindow](../ui/bwindow) and offscreen bitmaps,
 backed by Metal on macOS, Vulkan on Linux, and Direct3D 12 on Windows.
 
 Despite sharing its name and part of its API with upstream `wgpu`, this crate is
@@ -10,7 +10,7 @@ groups, shaders, pipelines, render passes, and bitmap readback.
 
 ## Features
 
-- `window` (default): presentation surfaces for [bwindow](../bwindow) windows
+- `window` (default): presentation surfaces for [bwindow](../ui/bwindow) windows
 - `image` (default): offscreen render targets read back as
   [image](../image) bitmaps
 

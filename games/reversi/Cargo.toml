@@ -16,7 +16,7 @@ copyright = "Copyright (c) 2026 Bastiaan van der Plaat"
 icon = "meta/macos/icon.icon"
 
 [dependencies]
-bwindow = { path = "../../lib/bwindow", features = ["menu"] }
+bwindow = { path = "../../lib/ui/bwindow", features = ["menu"] }
 bcanvas = { path = "../../lib/bcanvas" }
 reversi-engine = { path = "../reversi-engine" }
 

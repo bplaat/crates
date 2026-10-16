@@ -8,7 +8,7 @@ repository.workspace = true
 
 [dependencies]
 bcanvas = { path = "../../../bcanvas" }
-bwindow = { path = "../../../bwindow", default-features = false }
+bwindow = { path = "../../../ui/bwindow", default-features = false }
 wgpu = { path = "../.." }
 image = { path = "../../../image", default-features = false, features = [
     "jpeg",
