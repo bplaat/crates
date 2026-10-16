@@ -7,8 +7,8 @@ authors.workspace = true
 repository.workspace = true
 
 [dependencies]
-bcanvas = { path = "../../lib/bcanvas" }
-bwindow = { path = "../../lib/bwindow", default-features = false }
+bcanvas = { path = "../.." }
+bwindow = { path = "../../../bwindow", default-features = false }
 
 [lints]
 workspace = true
