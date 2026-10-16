@@ -10,7 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dependencies]
-rust-embed-impl = { path = "../rust-embed-impl" }
+rust-embed-impl = "8.12"
 
 [features]
 interpolate-folder-path = ["rust-embed-impl/interpolate-folder-path"]

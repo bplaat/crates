@@ -10,7 +10,7 @@ repository.workspace = true
 workspace = true
 
 [dev-dependencies]
-criterion = { path = "../../lib/test/criterion" }
+criterion = "0.7"
 
 [[bench]]
 name = "reversi-engine"

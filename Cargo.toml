@@ -33,6 +33,7 @@ bsql = { path = "lib/data/bsql" }
 bsql_derive = { path = "lib/data/bsql_derive" }
 chrono = { path = "lib/data/chrono" }
 copy_dir = { path = "lib/sys/copy_dir" }
+criterion = { path = "lib/test/criterion" }
 digest = { path = "lib/crypto/digest" }
 directories = { path = "lib/sys/directories" }
 enable-ansi-support = { path = "lib/sys/enable-ansi-support" }
