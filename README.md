@@ -31,9 +31,9 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [wgpu](lib/graphics/wgpu) A native GPU rendering library for bwindow
 - [wgpu-shader-build](lib/graphics/wgpu-shader-build) Build-time native WGSL compilation for wgpu
 
-### Apps
+### Apps / Games
 
-Some desktop apps written with the [bwindow](lib/ui/bwindow), [bwebview](lib/ui/bwebview), and [bcanvas](lib/graphics/bcanvas) libraries.
+Some desktop apps and games written with the [bwindow](lib/ui/bwindow), [bwebview](lib/ui/bwebview), and [bcanvas](lib/graphics/bcanvas) libraries.
 
 <table>
 <tr>
@@ -230,7 +230,7 @@ Rather than pulling in large, general-purpose dependencies, this repo grows a cu
 
 **2. A minimal Electron/Tauri-like desktop platform**
 
-[bwebview](lib/ui/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](apps/) in this repo: a 2048 game, a SQLite and MySQL viewer, a pixel font editor, a man page browser, serve as real-world validation of this platform.
+[bwebview](lib/ui/bwebview) is a cross-platform native webview library that lets you ship desktop applications using web technologies, without the weight of bundling a full browser engine. It uses the system-native webview on each platform (WebKit on macOS/iOS, WebKitGTK on Linux, WebView2 on Windows) and exposes a small, clean Rust API. The [desktop apps](apps/desktop) and [games](games/) in this repo, like a SQLite and MySQL viewer, a pixel font editor, a man page browser and a 2048 game, show that this works in practice.
 
 **3. Tools and a custom build system for complex multi-language projects**
 
@@ -238,11 +238,18 @@ Building projects that span multiple languages and artifact types (Rust, JavaScr
 
 ### Repo organization
 
-This repo is organized as a monorepo with `Cargo` as the single build system. Monorepos work best when one build system acts as the central organization point for all submodules, and `Cargo` fills that role here perfectly.
+This repo is a monorepo. Projects are grouped by what they are, not by the language they are written in:
 
-All Rust code lives in a single `Cargo` workspace that builds everything together. Some crates extend this with custom build steps that invoke other tools like `npm` or `vite`, but those are orchestrated from within `Cargo` build scripts.
+- [apps](apps/) - applications, grouped by platform: `desktop` for cross-platform apps, plus `macos`, `windows` and `web`
+- [games](games/) - games and their engines
+- [lib](lib/) - libraries, grouped by topic like `ui`, `graphics`, `net`, `data` and `crypto`
+- [tools](tools/) - developer tools, including the build tooling of this repo
 
-The root-level [xtask](tools/xtask) crate contains all top-level tasks and is used through `cargo xtask` both from the command line and in CI. The only exception is the [bob/examples](tools/bob/examples) directory, which intentionally uses a different build system as a showcase for the [bob](tools/bob) build tool itself.
+Examples live next to the library they show off, in its `examples` directory.
+
+All Rust code is built by one `Cargo` workspace and all JavaScript code by one `npm` workspace. When a Rust app has a web frontend, its `Cargo` build script runs `npm` for you, so `Cargo` stays the one place where everything comes together.
+
+Every top-level task, like checking, building and installing, goes through the [xtask](tools/xtask) crate with `cargo xtask`, both on your machine and in CI. The only exception is the [bob/examples](tools/bob/examples) directory, which uses [bob](tools/bob) on purpose to show off that build tool.
 
 ## License
 
