@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! A minimal compile-pass and compile-fail test runner.
+//! A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 
 use std::cell::RefCell;
 use std::collections::BTreeMap;
