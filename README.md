@@ -94,8 +94,8 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
     </a>
 </td>
 <td width="100" align="center">
-    <a href="./bin/sequelexplorer">
-        <img src="bin/sequelexplorer/meta/freedesktop/icons/128x128.png" alt="Sequel Explorer icon" width="48" height="48"/><br/>
+    <a href="./apps/desktop/sequelexplorer">
+        <img src="apps/desktop/sequelexplorer/meta/freedesktop/icons/128x128.png" alt="Sequel Explorer icon" width="48" height="48"/><br/>
         Sequel Explorer
     </a>
 </td>
@@ -111,7 +111,7 @@ Some desktop apps written with the [bwindow](lib/bwindow), [bwebview](lib/bwebvi
 - [Music Downloader](apps/desktop/music-dl) A tool that downloads complete albums with the correct metadata
 - [Pixel Font Editor](apps/desktop/pixelfont) An 8x8 pixel font editor
 - [Reversi](bin/reversi) A native canvas board game with a background AI
-- [Sequel Explorer](bin/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
+- [Sequel Explorer](apps/desktop/sequelexplorer) A read-only SQLite and MySQL database GUI viewer
 
 ### Tools / Websites
 

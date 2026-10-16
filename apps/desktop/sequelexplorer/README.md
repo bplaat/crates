@@ -1,7 +1,7 @@
 # Sequel Explorer
 
-A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../lib/bwebview) and
-[bsql](../../lib/bsql).
+A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../../lib/bwebview) and
+[bsql](../../../lib/bsql).
 
 ## Features
 
@@ -30,4 +30,4 @@ explicitly. Ad-hoc signing remains the fallback when no certificate is available
 
 Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.
