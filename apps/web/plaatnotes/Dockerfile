@@ -34,7 +34,7 @@ RUN if [ "$TARGETARCH" = "arm64" ]; then \
 # Run container
 FROM scratch
 
-LABEL org.opencontainers.image.source="https://github.com/bplaat/crates"
+LABEL org.opencontainers.image.source="https://github.com/bplaat/bron"
 LABEL org.opencontainers.image.description="A simple note-taking app"
 LABEL org.opencontainers.image.licenses=MIT
 

@@ -8,7 +8,7 @@ Run without arguments to open the GUI; pass arguments to use the CLI.
 First install [yt-dlp](https://github.com/yt-dlp/yt-dlp#installation) and [ffmpeg](https://ffmpeg.org/download.html), then:
 
 ```sh
-cargo install --git https://github.com/bplaat/crates.git music-dl
+cargo install --git https://github.com/bplaat/bron.git music-dl
 ```
 
 ## GUI usage

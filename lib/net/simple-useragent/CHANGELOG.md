@@ -56,9 +56,9 @@ _Placeholder_
 
 _Initial release_
 
-[Unreleased]: https://github.com/bplaat/crates/compare/simple-useragent%2Fv0.1.4...HEAD
-[0.1.4]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.4
-[0.1.3]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.3
-[0.1.2]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.2
-[0.1.1]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.1
-[0.1.0]: https://github.com/bplaat/crates/releases/tag/simple-useragent%2Fv0.1.0
+[Unreleased]: https://github.com/bplaat/bron/compare/simple-useragent%2Fv0.1.4...HEAD
+[0.1.4]: https://github.com/bplaat/bron/releases/tag/simple-useragent%2Fv0.1.4
+[0.1.3]: https://github.com/bplaat/bron/releases/tag/simple-useragent%2Fv0.1.3
+[0.1.2]: https://github.com/bplaat/bron/releases/tag/simple-useragent%2Fv0.1.2
+[0.1.1]: https://github.com/bplaat/bron/releases/tag/simple-useragent%2Fv0.1.1
+[0.1.0]: https://github.com/bplaat/bron/releases/tag/simple-useragent%2Fv0.1.0

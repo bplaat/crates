@@ -28,7 +28,7 @@ A simple build system for my projects, because I really like the simplicity of C
 - Install bob
 
     ```sh
-    cargo install --git https://github.com/bplaat/crates bob
+    cargo install --git https://github.com/bplaat/bron bob
     ```
 
 - Create a `bob.toml` manifest file in your project root:

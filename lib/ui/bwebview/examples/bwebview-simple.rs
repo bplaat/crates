@@ -14,7 +14,7 @@ fn main() {
 
     let window = WindowBuilder::new().title("Webview Simple Example").build();
     let mut _webview = WebviewBuilder::new(&window)
-        .load_url("https://github.com/bplaat/crates")
+        .load_url("https://github.com/bplaat/bron")
         .build();
 
     event_loop.run(|_event| {});

@@ -4,7 +4,7 @@ A brick-laying robot simulator.
 
 ## Demo
 
-[crates.bplaat.nl/baksteen/](https://crates.bplaat.nl/baksteen/)
+[bron.bplaat.nl/baksteen/](https://bron.bplaat.nl/baksteen/)
 
 ## License
 
