@@ -1,6 +1,6 @@
 # rusb
 
-A minimal replacement for the [`rusb`](https://crates.io/crates/rusb) crate that provides the
+A minimal replacement for the [rusb](https://crates.io/crates/rusb) crate that provides the
 synchronous USB operations used in this workspace.
 
 ## Supported API
