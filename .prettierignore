@@ -8,7 +8,7 @@ apps/desktop/navidrome/meta/macos/icon.icon/icon.json
 apps/desktop/pixelfont/meta/macos/icon.icon/icon.json
 games/reversi/meta/macos/icon.icon/icon.json
 apps/desktop/sequelexplorer/meta/macos/icon.icon/icon.json
-bin/bob/examples/bin/objc-bundle-xstreaks/icons/icon.icon/icon.json
+tools/bob/examples/bin/objc-bundle-xstreaks/icons/icon.icon/icon.json
 
 # External test fixture
 apps/macos/macview/examples/tiger.svg

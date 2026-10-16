@@ -58,7 +58,7 @@ impl Xtask {
         let mut bad = Vec::new();
         for file in self.source_files(&extensions)? {
             let relative = relative_slash(&self.root, &file);
-            if relative.starts_with("bin/bob/examples/")
+            if relative.starts_with("tools/bob/examples/")
                 || relative.ends_with(".min.js")
                 || (relative.starts_with("bin/ccontinue/tests/")
                     && file.extension().is_some_and(|ext| ext == "cc"))
@@ -113,7 +113,7 @@ impl Xtask {
 
         println!("Checking clang-format formatting...");
         let mut files = Vec::new();
-        collect_files(&self.root.join("bin/bob/examples"), &mut files)?;
+        collect_files(&self.root.join("tools/bob/examples"), &mut files)?;
         files.retain(|file| {
             !relative_slash(&self.root, file).contains("/target/")
                 && file
