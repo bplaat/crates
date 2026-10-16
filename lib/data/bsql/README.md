@@ -148,4 +148,4 @@ authentication over TCP requires TLS; RSA password exchange is not implemented.
 
 Copyright © 2024-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

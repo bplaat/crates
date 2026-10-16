@@ -8,12 +8,12 @@ A collection of minimal Rust crates and tools that I created for myself and othe
 
 Most of these libraries are intended primarily for personal use, but can still be useful.
 
-- [bsql](lib/bsql) A simple and minimal Rust SQLite and MySQL library with an ergonomic API
-- [bsql_derive](lib/bsql_derive) The derive macros for the [bsql](lib/bsql) crate
+- [bsql](lib/data/bsql) A simple and minimal Rust SQLite and MySQL library with an ergonomic API
+- [bsql_derive](lib/data/bsql_derive) The derive macros for the [bsql](lib/data/bsql) crate
 - [bwebview](lib/ui/bwebview) A cross-platform webview library for Rust with minimal dependencies
 - [bwindow](lib/ui/bwindow) Native windows and one typed main event loop
 - [bcanvas](lib/graphics/bcanvas) Native 2D canvas content, without a browser dependency
-- [from_derive](lib/from_derive) A FromEnum and FromStruct derive macro library
+- [from_derive](lib/data/from_derive) A FromEnum and FromStruct derive macro library
 - [image](lib/graphics/image) A minimal JPEG, PNG/APNG, GIF, BMP, and QOI image decoder crate
 - [js](lib/js) A WIP JavaScript interpreter
 - [macview-appkit](apps/macos/macview-appkit) Shared AppKit image loading for MacView
@@ -25,8 +25,8 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [small-router](lib/net/small-router) A simple and small router for the [small-http](lib/net/small-http) library
 - [small-websocket](lib/net/small-websocket) A simple and small WebSocket library for the [small-http](lib/net/small-http) library
 - [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
-- [validate](lib/validate) A simple struct validation library
-- [validate_derive](lib/validate_derive) Validation derive macros library
+- [validate](lib/data/validate) A simple struct validation library
+- [validate_derive](lib/data/validate_derive) Validation derive macros library
 - [vector](lib/graphics/vector) SVG (subset) and TinyVG decoders with a backend-neutral display list
 - [wgpu](lib/graphics/wgpu) A native GPU rendering library for bwindow
 - [wgpu-shader-build](lib/graphics/wgpu-shader-build) Build-time native WGSL compilation for wgpu
@@ -127,18 +127,18 @@ Various tools and websites. For the deployed sites, go to [crates.bplaat.nl](htt
 
 These libraries are minimal replacements for commonly used crates.
 
-- [base64](lib/base64) A minimal replacement for the [base64](https://crates.io/crates/base64) crate
+- [base64](lib/data/base64) A minimal replacement for the [base64](https://crates.io/crates/base64) crate
 - [block2](lib/apple/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
-- [chrono](lib/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
+- [chrono](lib/data/chrono) A minimal replacement for the [chrono](https://crates.io/crates/chrono) crate
 - [copy_dir](lib/copy_dir) A minimal replacement for the [copy_dir](https://crates.io/crates/copy_dir) crate
 - [criterion](lib/criterion) A std-only benchmark runner with a Criterion-style API for groups, throughput, sampling, and baselines
 - [digest](lib/digest) A minimal replacement for the [digest](https://crates.io/crates/digest) crate
 - [directories](lib/directories) A minimal replacement for the [directories](https://crates.io/crates/directories) crate
 - [enable-ansi-support](lib/enable-ansi-support) A minimal replacement for the [enable-ansi-support](https://crates.io/crates/enable-ansi-support) crate
 - [getrandom](lib/getrandom) A minimal replacement for the [getrandom](https://crates.io/crates/getrandom) crate
-- [gzip](lib/gzip) A gzip library and command-line utility with a benchmark
+- [gzip](lib/data/gzip) A gzip library and command-line utility with a benchmark
 - [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
-- [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
+- [libsqlite3-sys](lib/data/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
 - [local-ip-address](lib/net/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
 - [native-tls](lib/net/native-tls) A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate
 - [maxminddb](lib/net/maxminddb) A minimal replacement for the [maxminddb](https://crates.io/crates/maxminddb) crate
@@ -146,21 +146,21 @@ These libraries are minimal replacements for commonly used crates.
 - [mime_guess](lib/net/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 - [objc2](lib/apple/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 - [objc2-proc-macros](lib/apple/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
-- [plist](lib/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
-- [regex](lib/regex) A minimal replacement for the [regex](https://crates.io/crates/regex) crate
+- [plist](lib/data/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
+- [regex](lib/data/regex) A minimal replacement for the [regex](https://crates.io/crates/regex) crate
 - [rusb](lib/rusb) A minimal replacement for the [rusb](https://crates.io/crates/rusb) crate
 - [rust-embed](lib/rust-embed) A minimal replacement for the [rust-embed](https://crates.io/crates/rust-embed) crate
 - [rust-embed-impl](lib/rust-embed-impl) A minimal replacement for the [rust-embed-impl](https://crates.io/crates/rust-embed-impl) crate
-- [serde_yaml](lib/serde_yaml) A minimal replacement for the [serde_yaml](https://crates.io/crates/serde_yaml) crate
+- [serde_yaml](lib/data/serde_yaml) A minimal replacement for the [serde_yaml](https://crates.io/crates/serde_yaml) crate
 - [sha1](lib/sha1) A minimal replacement for the [sha1](https://crates.io/crates/sha1) crate
 - [sha2](lib/sha2) A minimal replacement for the [sha2](https://crates.io/crates/sha2) crate
 - [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 - [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 - [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
 - [url](lib/net/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
-- [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
+- [uuid](lib/data/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 - [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
-- [zip](lib/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate
+- [zip](lib/data/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate
 
 ## Getting Started
 

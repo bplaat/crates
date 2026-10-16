@@ -33,4 +33,4 @@ let user = User::from(ApiUser {
 
 Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

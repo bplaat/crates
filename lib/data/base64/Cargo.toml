@@ -1,19 +1,16 @@
 [package]
-name = "gzip"
-version = "0.1.0"
+name = "base64"
+version = "0.23.1+patch"
 edition.workspace = true
 license.workspace = true
 authors.workspace = true
 repository.workspace = true
 
-[dependencies]
-miniz_oxide = "0.9.1"
-
 [dev-dependencies]
-criterion = { path = "../criterion" }
+criterion = { path = "../../criterion" }
 
 [[bench]]
-name = "gzip"
+name = "base64"
 harness = false
 
 [lints]

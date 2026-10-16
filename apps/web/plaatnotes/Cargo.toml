@@ -18,9 +18,9 @@ chrono = { version = "0.4.45", default-features = false, features = [
     "serde",
 ] }
 getrandom = "0.4.3"
-gzip = { path = "../../../lib/gzip" }
+gzip = { path = "../../../lib/data/gzip" }
 dotenvy = "0.15.7"
-from_derive = { path = "../../../lib/from_derive" }
+from_derive = { path = "../../../lib/data/from_derive" }
 log = "0.4.34"
 maxminddb = "0.30.3"
 mime_guess = { version = "2.0", default-features = false }
@@ -34,7 +34,7 @@ simple_logger = "5.2"
 small-http = { version = "0.2.1", features = ["json", "form", "log", "tls"] }
 small-router = { version = "0.2.1", features = ["log"] }
 uuid = { version = "1.25", features = ["v7", "serde"] }
-validate = { path = "../../../lib/validate" }
+validate = { path = "../../../lib/data/validate" }
 zip = "8.6"
 zeroize = "1.9"
 

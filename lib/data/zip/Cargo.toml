@@ -14,7 +14,7 @@ bitflags = "2.13"
 miniz_oxide = "0.9.1"
 
 [dev-dependencies]
-criterion = { path = "../criterion" }
+criterion = { path = "../../criterion" }
 
 [[bench]]
 name = "zip"

@@ -3,34 +3,25 @@ members = [
     "apps/*/*",
     "games/*",
     "lib/apple/*",
-    "lib/base64",
-    "lib/bsql",
-    "lib/bsql_derive",
-    "lib/chrono",
     "lib/copy_dir",
     "lib/criterion",
+    "lib/data/*",
     "lib/digest",
     "lib/directories",
     "lib/enable-ansi-support",
-    "lib/from_derive",
     "lib/getrandom",
     "lib/graphics/*",
     "lib/graphics/*/examples/*",
-    "lib/gzip",
     "lib/hmac",
     "lib/js",
     "lib/keyring",
-    "lib/libsqlite3-sys",
     "lib/net/*",
     "lib/net/*/examples/*",
     "lib/openapi-generator",
     "lib/pbkdf2",
-    "lib/plist",
-    "lib/regex",
     "lib/rusb",
     "lib/rust-embed",
     "lib/rust-embed-impl",
-    "lib/serde_yaml",
     "lib/sha1",
     "lib/sha2",
     "lib/simple_logger",
@@ -39,11 +30,7 @@ members = [
     "lib/trybuild",
     "lib/ui/*",
     "lib/ui/*/examples/*",
-    "lib/uuid",
-    "lib/validate",
-    "lib/validate_derive",
     "lib/winresource",
-    "lib/zip",
     "tools/*",
 ]
 exclude = ["games/plaatcraft", "lib/ui/plaatui"]
@@ -69,11 +56,11 @@ undocumented_unsafe_blocks = "deny"
 missing_const_for_fn = "deny"
 
 [patch.crates-io]
-base64 = { path = "lib/base64" }
+base64 = { path = "lib/data/base64" }
 block2 = { path = "lib/apple/block2" }
-bsql = { path = "lib/bsql" }
-bsql_derive = { path = "lib/bsql_derive" }
-chrono = { path = "lib/chrono" }
+bsql = { path = "lib/data/bsql" }
+bsql_derive = { path = "lib/data/bsql_derive" }
+chrono = { path = "lib/data/chrono" }
 copy_dir = { path = "lib/copy_dir" }
 digest = { path = "lib/digest" }
 directories = { path = "lib/directories" }
@@ -81,7 +68,7 @@ enable-ansi-support = { path = "lib/enable-ansi-support" }
 getrandom = { path = "lib/getrandom" }
 hmac = { path = "lib/hmac" }
 keyring = { path = "lib/keyring" }
-libsqlite3-sys = { path = "lib/libsqlite3-sys" }
+libsqlite3-sys = { path = "lib/data/libsqlite3-sys" }
 local-ip-address = { path = "lib/net/local-ip-address" }
 maxminddb = { path = "lib/net/maxminddb" }
 mime = { path = "lib/net/mime" }
@@ -89,12 +76,12 @@ mime_guess = { path = "lib/net/mime_guess" }
 native-tls = { path = "lib/net/native-tls" }
 objc2 = { path = "lib/apple/objc2" }
 objc2-proc-macros = { path = "lib/apple/objc2-proc-macros" }
-plist = { path = "lib/plist" }
-regex = { path = "lib/regex" }
+plist = { path = "lib/data/plist" }
+regex = { path = "lib/data/regex" }
 rusb = { path = "lib/rusb" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
-serde_yaml = { path = "lib/serde_yaml" }
+serde_yaml = { path = "lib/data/serde_yaml" }
 sha1 = { path = "lib/sha1" }
 sha2 = { path = "lib/sha2" }
 simple-useragent = { path = "lib/net/simple-useragent" }
@@ -105,9 +92,9 @@ terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 trybuild = { path = "lib/trybuild" }
 url = { path = "lib/net/url" }
-uuid = { path = "lib/uuid" }
+uuid = { path = "lib/data/uuid" }
 winresource = { path = "lib/winresource" }
-zip = { path = "lib/zip" }
+zip = { path = "lib/data/zip" }
 
 [profile.release]
 opt-level = "z"

@@ -1,7 +1,7 @@
 # Sequel Explorer
 
 A read-only SQLite and MySQL database GUI viewer built with [bwebview](../../../lib/ui/bwebview) and
-[bsql](../../../lib/bsql).
+[bsql](../../../lib/data/bsql).
 
 ## Features
 
