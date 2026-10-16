@@ -1,0 +1,47 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Remove the newlib clock and gettimeofday hooks
+
+They need newlib's reent struct and are left to the C library. The
+nanosleep hook stays for the C library's nanosleep.
+---
+ libogc/timesupp.c | 24 ------------------------
+ 1 file changed, 24 deletions(-)
+
+diff --git a/libogc/timesupp.c b/libogc/timesupp.c
+index 8c505e5..153b0f2 100644
+--- a/libogc/timesupp.c
++++ b/libogc/timesupp.c
+@@ -1,6 +1,3 @@
+-#include <_ansi.h>
+-#include <_syslist.h>
+-
+ #include "asm.h"
+ #include "processor.h"
+ #include "lwp.h"
+@@ -168,24 +165,3 @@ int __libogc_nanosleep(const struct timespec *tb, struct timespec *rem)
+ 	__lwp_thread_dispatchenable();
+ 	return TB_SUCCESSFUL;
+ }
+-
+-clock_t clock(void) {
+-	return -1;
+-}
+-
+-int __libogc_gettod_r(struct _reent *ptr, struct timeval *tp, struct timezone *tz)
+-{
+-	u64 now;
+-	if (tp != NULL) {
+-		now = gettime();
+-		tp->tv_sec = ticks_to_secs(now) + 946684800;
+-		tp->tv_usec = tick_microsecs(now);
+-	}
+-	if (tz != NULL) {
+-		tz->tz_minuteswest = 0;
+-		tz->tz_dsttime = 0;
+-
+-	}
+-	return 0;
+-}
+-

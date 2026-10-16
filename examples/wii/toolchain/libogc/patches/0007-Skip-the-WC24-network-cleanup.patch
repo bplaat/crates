@@ -1,0 +1,23 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Skip the WC24 network cleanup
+
+It lives in the network library that we don't build.
+---
+ libogc/wiilaunch.c | 2 --
+ 1 file changed, 2 deletions(-)
+
+diff --git a/libogc/wiilaunch.c b/libogc/wiilaunch.c
+index 29072cb..82eb2a5 100644
+--- a/libogc/wiilaunch.c
++++ b/libogc/wiilaunch.c
+@@ -263,8 +263,6 @@ s32 WII_LaunchTitle(u64 titleID)
+ 	if(res < 0)
+ 		return res;
+ 
+-	net_wc24cleanup();
+-
+ 	if (args_set == 0)
+ 	{
+ 		memset(&nandboot,0,sizeof(NANDBootInfo));

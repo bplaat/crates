@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Show a red screen on crashes instead of the console
+
+The text console needs newlib's devoptab, so a crash shows a red screen
+and reloads on reset or timeout instead of printing a register dump.
+---
+ libogc/exception.c | 111 ++++-----------------------------------------
+ 1 file changed, 9 insertions(+), 102 deletions(-)
+
+diff --git a/libogc/exception.c b/libogc/exception.c
+index bf008e8..ad98361 100644
+--- a/libogc/exception.c
++++ b/libogc/exception.c
+@@ -44,7 +44,6 @@ distribution.
+ #include "pad.h"
+ #include "consol.h"
+ #include "color.h"
+-#include "console_internal.h"
+ #include "lwp_threads.h"
+ #include "ios.h"
+ #include "video.h"
+@@ -160,119 +159,27 @@ void __exception_sethandler(u32 nExcept, void (*pHndl)(frame_context*))
+ 	_exceptionhandlertable[nExcept] = pHndl;
+ }
+ 
+-static void _cpu_print_stack(void *pc,void *lr,void *r1)
+-{
+-	register u32 i = 0;
+-	register frame_rec_t l,p = (frame_rec_t)lr;
+-
+-	l = p;
+-	p = r1;
+-	if(!p) __asm__ __volatile__("mr %0,%%r1" : "=r"(p));
+-
+-	kprintf("\n\tSTACK DUMP:");
+-
+-	for(i=0;i<CPU_STACK_TRACE_DEPTH-1 && p->up;p=p->up,i++) {
+-		if(i%4) kprintf(" --> ");
+-		else {
+-			if(i>0) kprintf(" -->\n\t");
+-			else kprintf("\n\t");
+-		}
+-
+-		switch(i) {
+-			case 0:
+-				if(pc) kprintf("%p",pc);
+-				break;
+-			case 1:
+-				if(!l) l = (frame_rec_t)mfspr(8);
+-				kprintf("%p",(void*)l);
+-				break;
+-			default:
+-				kprintf("%p",(void*)(p->up->lr));
+-				break;
+-		}
+-	}
+-}
+-
+ void __exception_setreload(int t)
+ {
+ 	reload_timer = t*50;
+ }
+ 
+-static void waitForReload(void)
+-{
+-	u32 level;
+-
+-	PAD_Init();
+-	
+-	if(reload_timer > 0)
+-		kprintf("\n\tReloading in %d seconds\n", reload_timer/50);
+-
+-	while ( 1 )
+-	{
+-		PAD_ScanPads();
+-
+-		int buttonsDown = PAD_ButtonsDown(0);
+-
+-		if( (buttonsDown & PAD_TRIGGER_Z) || SYS_ResetButtonDown() || 
+-			reload_timer == 0 )
+-		{
+-			kprintf("\n\tReload\n\n\n");
+-			_CPU_ISR_Disable(level);
+-			__reload ();
+-		}
+-
+-		if ( buttonsDown & PAD_BUTTON_A )
+-		{
+-			kprintf("\n\tReset\n\n\n");
+-#if defined(HW_DOL)
+-			SYS_ResetSystem(SYS_HOTRESET,0,FALSE);
+-#else
+-			__reload ();
+-#endif
+-		}
+-
+-		udelay(20000);
+-		if(reload_timer > 0)
+-			reload_timer--;
+-	}
+-}
+-
+ //just implement core for unrecoverable exceptions.
+ void c_default_exceptionhandler(frame_context *pCtx)
+ {
+ 	const u16 console_height = 680;
+ 	const u16 console_width = 574;
++	u32 level;
+ 
++	// There is no console without newlib, so show a red screen and reload on reset or timeout
+ 	GX_AbortFrame();
+ 	VIDEO_SetFramebuffer(exception_xfb);
+-	__VIClearFramebuffer(exception_xfb, console_height * console_width * VI_DISPLAY_PIX_SZ, COLOR_BLACK);
+-	__console_init(exception_xfb, 20, 20, console_height-40, console_width-40, 1280);
+-	CON_EnableGecko(1, true);
+-
+-	kprintf("\n\n\n\tException (%s) occurred!\n", exception_name[pCtx->EXCPT_Number]);
+-
+-	kprintf("\tGPR00 %08X GPR08 %08X GPR16 %08X GPR24 %08X\n",pCtx->GPR[0], pCtx->GPR[8], pCtx->GPR[16], pCtx->GPR[24]);
+-	kprintf("\tGPR01 %08X GPR09 %08X GPR17 %08X GPR25 %08X\n",pCtx->GPR[1], pCtx->GPR[9], pCtx->GPR[17], pCtx->GPR[25]);
+-	kprintf("\tGPR02 %08X GPR10 %08X GPR18 %08X GPR26 %08X\n",pCtx->GPR[2], pCtx->GPR[10], pCtx->GPR[18], pCtx->GPR[26]);
+-	kprintf("\tGPR03 %08X GPR11 %08X GPR19 %08X GPR27 %08X\n",pCtx->GPR[3], pCtx->GPR[11], pCtx->GPR[19], pCtx->GPR[27]);
+-	kprintf("\tGPR04 %08X GPR12 %08X GPR20 %08X GPR28 %08X\n",pCtx->GPR[4], pCtx->GPR[12], pCtx->GPR[20], pCtx->GPR[28]);
+-	kprintf("\tGPR05 %08X GPR13 %08X GPR21 %08X GPR29 %08X\n",pCtx->GPR[5], pCtx->GPR[13], pCtx->GPR[21], pCtx->GPR[29]);
+-	kprintf("\tGPR06 %08X GPR14 %08X GPR22 %08X GPR30 %08X\n",pCtx->GPR[6], pCtx->GPR[14], pCtx->GPR[22], pCtx->GPR[30]);
+-	kprintf("\tGPR07 %08X GPR15 %08X GPR23 %08X GPR31 %08X\n",pCtx->GPR[7], pCtx->GPR[15], pCtx->GPR[23], pCtx->GPR[31]);
+-	kprintf("\tLR %08X SRR0 %08x SRR1 %08x MSR %08x\n", pCtx->LR, pCtx->SRR0, pCtx->SRR1,pCtx->MSR);
+-	kprintf("\tDAR %08X DSISR %08X\n", mfspr(19), mfspr(18));
+-
+-	_cpu_print_stack((void*)pCtx->SRR0,(void*)pCtx->LR,(void*)pCtx->GPR[1]);
+-
+-	if((pCtx->EXCPT_Number==EX_DSI) || (pCtx->EXCPT_Number==EX_FP)) {
+-		u32 i;
+-		u32 *pAdd = (u32*)pCtx->SRR0;
+-		kprintf("\n\n\tCODE DUMP:\n");
+-		for (i=0; i<12; i+=4)
+-			kprintf("\t%p:  %08X %08X %08X %08X\n",
+-			&(pAdd[i]),pAdd[i], pAdd[i+1], pAdd[i+2], pAdd[i+3]);
++	__VIClearFramebuffer(exception_xfb, console_height * console_width * VI_DISPLAY_PIX_SZ, COLOR_RED);
++	while(!SYS_ResetButtonDown() && reload_timer != 0) {
++		udelay(20000);
++		if(reload_timer > 0)
++			reload_timer--;
+ 	}
+-
+-	waitForReload();
++	_CPU_ISR_Disable(level);
++	__reload();
+ }
+-

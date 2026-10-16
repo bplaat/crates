@@ -1,0 +1,31 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Add a pregenerated libversion.h
+
+The upstream Makefile generates this header, but we build libogc with our
+own build script, so it is added with the values of the v2.11.0 release.
+---
+ gc/ogc/libversion.h | 13 +++++++++++++
+ 1 file changed, 13 insertions(+)
+ create mode 100644 gc/ogc/libversion.h
+
+diff --git a/gc/ogc/libversion.h b/gc/ogc/libversion.h
+new file mode 100644
+index 0000000..b67b43f
+--- /dev/null
++++ b/gc/ogc/libversion.h
+@@ -0,0 +1,13 @@
++#ifndef __LIBVERSION_H__
++#define __LIBVERSION_H__
++
++#define _V_MAJOR_	2
++#define _V_MINOR_	11
++#define _V_PATCH_	0
++
++#define _V_DATE_			__DATE__
++#define _V_TIME_			__TIME__
++
++#define _V_STRING "libOGC Release 2.11.0"
++
++#endif // __LIBVERSION_H__

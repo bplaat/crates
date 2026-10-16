@@ -1,0 +1,10 @@
+[build]
+target = "../../toolchain/wii.json"
+
+[target.wii]
+runner = "../../toolchain/run.sh"
+rustflags = ["--extern", "alloc"]
+
+[unstable]
+build-std = ["core", "alloc", "compiler_builtins"]
+json-target-spec = true

@@ -1,0 +1,414 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Bastiaan van der Plaat <bastiaan.v.d.plaat@gmail.com>
+Date: Sat, 10 Oct 2026 12:35:54 +0200
+Subject: [PATCH] Remove the es: devoptab filesystem
+
+Reading title contents as files needs newlib's devoptab, the ES functions
+themselves stay.
+---
+ libogc/es.c | 362 +---------------------------------------------------
+ 1 file changed, 1 insertion(+), 361 deletions(-)
+
+diff --git a/libogc/es.c b/libogc/es.c
+index 583cc6b..e9b5176 100644
+--- a/libogc/es.c
++++ b/libogc/es.c
+@@ -31,13 +31,11 @@ distribution.
+ 
+ #if defined(HW_RVL)
+ 
+-#include <sys/iosupport.h>
+-#include <sys/fcntl.h>
+ #include <stdio.h>
+ #include <string.h>
+ #include <stdlib.h>
+ #include <malloc.h>
+-#include <sys/errno.h>
++#include <errno.h>
+ #include "ipc.h"
+ #include "asm.h"
+ #include "processor.h"
+@@ -118,8 +116,6 @@ static char __es_fs[] ATTRIBUTE_ALIGN(32) = "/dev/es";
+ static s32 __es_fd = -1;
+ static s32 __es_hid = -1;
+ 
+-static void __ES_InitFS(void);
+-static void __ES_DeinitFS(void);
+ 
+ s32 __ES_Init(void)
+ {
+@@ -146,7 +142,6 @@ s32 __ES_Init(void)
+ 	printf("ES FD %d\n",__es_fd);
+ #endif
+ 
+-	__ES_InitFS();
+ 
+ 	return 0;
+ }
+@@ -157,7 +152,6 @@ s32 __ES_Close(void)
+ 
+ 	if(__es_fd < 0) return 0;
+ 
+-	__ES_DeinitFS();
+ 
+ 	ret = IOS_Close(__es_fd);
+ 
+@@ -938,358 +932,4 @@ s32 ES_CheckHasKoreanKey(void)
+ 	return IOS_IoctlvFormat(__es_hid, __es_fd, IOCTL_ES_CHECKHASKOREANKEY, "");
+ }
+ 
+-// 64k buffer size for alignment
+-#define ES_READ_BUF_SIZE 65536
+-
+-typedef struct {
+-	s32 cfd;
+-	u64 titleID;
+-	tmd_content content;
+-	void *iobuf;
+-	mutex_t mutex;
+-} es_fd;
+-
+-// valid path formats:
+-// format            example                          description
+-// es:%08x           es:00000004                      Content index for current title ID
+-// es:ID%08x         es:ID00000033                    Content ID for current title ID
+-// es:%016llx/%08x   es:0000000100000002/00000004     Content index for some title ID (not fully implemented yet)
+-// es:%016llx/ID%08x es:0000000100000002/ID00000033   Content ID for some title ID (not fully implemented yet)
+-// leading zeroes may be omitted, 0x prefix allowed. All numbers in hex.
+-
+-static s32 _ES_decodepath (struct _reent *r, const char *path, u64 *titleID, tmd_content *content)
+-{
+-	u64 _tid = 0;
+-	u32 tmd_size;
+-	STACK_ALIGN(u8, _tmdbuf, MAX_SIGNED_TMD_SIZE, 32);
+-	signed_blob *_stmd;
+-	tmd *_tmd;
+-	tmd_content *_contents;
+-	tmd_content _content;
+-	int is_cid;
+-	u32 arg;
+-	char *bad;
+-	int i;
+-	u64 mytid;
+-	
+-	// check the device
+-	if(strncmp(path,"es:",3)) {
+-		r->_errno = EINVAL;
+-		return -1;
+-	}
+-	path += 3;
+-
+-	// Get our Title ID
+-	if(ES_GetTitleID(&mytid) < 0) {
+-		r->_errno = EIO;
+-		return -1;
+-	}
+-
+-	// Read in Title ID, if this is an absolute path
+-	if(path[0] == '/') {
+-		path++;
+-		if(!path[0]) {
+-			r->_errno = EINVAL;
+-			return -1;
+-		}
+-		r->_errno = 0;
+-		_tid = _strtoull_r(r, path, &bad, 16);
+-		if(r->_errno) return -1;
+-		if((bad == path) || (bad[0] != '/')) {
+-			r->_errno = EINVAL;
+-			return -1;
+-		}
+-		path = bad + 1;
+-	} else {
+-		_tid = mytid;
+-	}
+-
+-	// check if path is a content ID
+-	if(!strncmp(path,"ID",2)) {
+-		path += 2;
+-		is_cid = 1;
+-	} else {
+-		is_cid = 0;
+-	}
+-
+-	// read in the argument (content ID or content index)
+-	r->_errno = 0;
+-	arg = _strtoul_r(r, path, &bad, 16);
+-	if(r->_errno) return -1;
+-	if((bad == path) || (bad[0] != 0)) {
+-		r->_errno = EINVAL;
+-		return -1;
+-	}
+-
+-	// now get the TMD and find the content entry
+-	if(ES_GetStoredTMDSize(_tid, &tmd_size) < 0) {
+-		r->_errno = ENOENT;
+-		return -1;
+-	}
+-	
+-	_stmd = (signed_blob*)_tmdbuf;
+-	if(ES_GetStoredTMD(_tid, _stmd, tmd_size) < 0) {
+-		r->_errno = EIO;
+-		return -1;
+-	}
+-	if(!IS_VALID_SIGNATURE(_stmd)) {
+-		r->_errno = EIO;
+-		return -1;
+-	}
+-	_tmd = SIGNATURE_PAYLOAD(_stmd);
+-	_contents = TMD_CONTENTS(_tmd);
+-
+-	for(i=0;i<_tmd->num_contents;i++) {
+-		if(is_cid) {
+-			if(_contents[i].cid == arg) {
+-				_content = _contents[i];
+-				break;
+-			}
+-		} else {
+-			if(_contents[i].index == arg) {
+-				_content = _contents[i];
+-				break;
+-			}
+-		}
+-	}
+-	if(i >= _tmd->num_contents) {
+-		r->_errno = ENOENT;
+-		return -1;
+-	}
+-
+-	if(titleID) {
+-		if(_tid == mytid) *titleID = 0;
+-		else *titleID = _tid;
+-	}
+-	if(content) *content = _content;
+-	return 0;
+-}
+-
+-static int _ES_open_r (struct _reent *r, void *fileStruct, const char *path, int flags, int mode) {
+-	es_fd *file = (es_fd *) fileStruct;
+-
+-	// decode the path
+-	if(_ES_decodepath(r, path, &file->titleID, &file->content) < 0) {
+-		return -1;
+-	}
+-
+-	// writing not supported
+-	if ((flags & 0x03) != O_RDONLY) {
+-		r->_errno = EROFS;
+-		return -1;
+-	}
+-
+-	// open the content
+-	if(file->titleID == 0)
+-		file->cfd = ES_OpenContent(file->content.index);
+-	else
+-	{
+-		u32 cnt ATTRIBUTE_ALIGN(32)={0};
+-		ES_GetNumTicketViews(file->titleID, &cnt);
+-		tikview *views = (tikview *)memalign( 32, sizeof(tikview)*cnt );
+-		if(views == NULL)
+-		{
+-			return -1;
+-		}
+-		ES_GetTicketViews(file->titleID, views, cnt);
+-		file->cfd = ES_OpenTitleContent(file->titleID, views, file->content.index);
+-		free(views);
+-	}
+-
+-	if(file->cfd<0) {
+-		r->_errno = EIO;
+-		return -1;
+-	}
+-
+-	file->iobuf = NULL;
+-
+-	LWP_MutexInit(&file->mutex, false);
+-
+-	return (int)file;
+-}
+-
+-static int _ES_close_r (struct _reent *r, void *fd) {
+-	es_fd *file = (es_fd *) fd;
+-
+-	LWP_MutexLock(file->mutex);
+-
+-	if(ES_CloseContent(file->cfd) < 0) {
+-		r->_errno = EBADF;
+-		return -1;
+-	}
+-	file->cfd = -1;
+-
+-	if(file->iobuf) _free_r(r,file->iobuf);
+-
+-	LWP_MutexUnlock(file->mutex);
+-	LWP_MutexDestroy(file->mutex);
+-	return 0;
+-}
+-
+-static int _ES_read_r (struct _reent *r, void *fd, char *ptr, size_t len) {
+-	es_fd *file = (es_fd *) fd;
+-	int read = 0;
+-	int res;
+-
+-	
+-	LWP_MutexLock(file->mutex);
+-	if(file->cfd < 0) {
+-		LWP_MutexUnlock(file->mutex);
+-		r->_errno = EBADF;
+-		return -1;
+-	}
+-
+-	// if aligned, just pass through the read
+-	if(ISALIGNED(ptr, 32))
+-	{
+-		res = ES_ReadContent(file->cfd, (u8*)ptr, len);
+-		if(res < 0) {
+-			LWP_MutexUnlock(file->mutex);
+-			// we don't really know what the error codes mean...
+-			r->_errno = EIO;
+-			return -1;
+-		}
+-		read = res;
+-	// otherwise read in blocks to an aligned buffer
+-	} else {
+-		int chunk;
+-		if(!file->iobuf) {
+-			file->iobuf = _memalign_r(r, 32, ES_READ_BUF_SIZE);
+-			if(!file->iobuf) {
+-				r->_errno = ENOMEM;
+-				return -1;
+-			}
+-		}
+-		while(len) {
+-			if(len > ES_READ_BUF_SIZE) chunk = ES_READ_BUF_SIZE;
+-			else chunk = len;
+-			res = ES_ReadContent(file->cfd, file->iobuf, chunk);
+-			if(res < 0) {
+-				LWP_MutexUnlock(file->mutex);
+-				// we don't really know what the error codes mean...
+-				r->_errno = EIO;
+-				return -1;
+-			}
+-			len -= res;
+-			read += res;
+-			memcpy(ptr, file->iobuf, res);
+-			ptr += res;
+-			if(res < chunk) break;
+-		}
+-	}
+-
+-	LWP_MutexUnlock(file->mutex);
+-	return read;
+-}
+-
+-static off_t _ES_seek_r (struct _reent *r, void *fd, off_t where, int whence) {
+-	es_fd *file = (es_fd *) fd;
+-	s32 res;
+-
+-	LWP_MutexLock(file->mutex);
+-	if(file->cfd < 0) {
+-		LWP_MutexUnlock(file->mutex);
+-		r->_errno = EBADF;
+-		return -1;
+-	}
+-
+-	res = ES_SeekContent(file->cfd, where, whence);
+-	LWP_MutexUnlock(file->mutex);
+-
+-	if(res < 0) {
+-		r->_errno = EINVAL;
+-		return -1;
+-	}
+-	return res;
+-}
+-
+-static void _ES_fillstat(u64 titleID, tmd_content *content, struct stat *st) {
+-	memset(st, 0, sizeof(*st));
+-	// the inode is the content ID
+-	// (pretend each Title ID is a different filesystem)
+-	st->st_ino = content->cid;
+-	// st_dev is only a short, so do the best we can and use the middle two letters
+-	// of the title ID if it's not a system content, otherwise use the low 16 bits
+-	if((titleID>>32) == 1)
+-		st->st_dev = titleID & 0xFFFF;
+-	else
+-		st->st_dev = (titleID>>8) & 0xFFFF;
+-
+-	// not necessarily true due to shared contents, but
+-	// we're not going to implement shared content scan here and now
+-	st->st_nlink = 1;
+-	// instead, give the file group read permissions if it's a shared content
+-	st->st_mode = S_IFREG | S_IRUSR;
+-	if(content->type & 0x8000)
+-		st->st_mode |= S_IRGRP;
+-
+-	// use st_dev as a uid too, see above
+-	st->st_uid = st->st_dev;
+-	// no group
+-	st->st_gid = 0;
+-	// content size
+-	st->st_size = content->size;
+-	st->st_blocks = (st->st_size + 511) / 512;
+-	// NAND fs cluster size (not like anyone cares, but...)
+-	st->st_blksize = 16384;
+-}
+-
+-static int _ES_fstat_r (struct _reent *r, void *fd, struct stat *st) {
+-	es_fd *file = (es_fd *) fd;
+-
+-	LWP_MutexLock(file->mutex);
+-	if(file->cfd < 0) {
+-		LWP_MutexUnlock(file->mutex);
+-		r->_errno = EBADF;
+-		return -1;
+-	}
+-
+-	_ES_fillstat(file->titleID, &file->content, st);
+-	LWP_MutexUnlock(file->mutex);
+-
+-	return 0;
+-}
+-
+-static int _ES_stat_r (struct _reent *r, const char *path, struct stat *st) {
+-	tmd_content content;
+-	u64 titleID;
+-
+-	if(_ES_decodepath(r, path, &titleID, &content) < 0) {
+-		return -1;
+-	}
+-	_ES_fillstat(titleID, &content, st);
+-	return 0;
+-}
+-
+-static const devoptab_t dotab_es = {
+-	"es",
+-	sizeof (es_fd),
+-	_ES_open_r,
+-	_ES_close_r,
+-	NULL,
+-	_ES_read_r,
+-	_ES_seek_r,
+-	_ES_fstat_r,
+-	_ES_stat_r,
+-	NULL,
+-	NULL,
+-	NULL,
+-	NULL,
+-	NULL,
+-	0,
+-	NULL,
+-	NULL,
+-	NULL,
+-	NULL,
+-	NULL
+-};
+-
+-static void __ES_InitFS(void) {
+-	AddDevice(&dotab_es);
+-}
+-
+-static void __ES_DeinitFS(void) {
+-	RemoveDevice("es:");
+-}
+-
+ #endif /* defined(HW_RVL) */
