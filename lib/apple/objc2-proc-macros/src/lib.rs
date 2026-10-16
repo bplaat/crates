@@ -4,7 +4,9 @@
  * SPDX-License-Identifier: MIT
  */
 
-//! Proc-macro support for the objc2 crate: provides the `define_class!` macro.
+//! A minimal replacement for the [objc2-proc-macros](https://crates.io/crates/objc2-proc-macros) crate
+//!
+//! Provides the `define_class!` macro for the objc2 crate.
 
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};

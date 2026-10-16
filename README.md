@@ -118,7 +118,7 @@ Most of these libraries are intended primarily for personal use, but can still b
 
 - [block2](lib/apple/block2) A minimal replacement for the [block2](https://crates.io/crates/block2) crate
 - [objc2](lib/apple/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
-- [objc2-proc-macros](lib/apple/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
+- [objc2-proc-macros](lib/apple/objc2-proc-macros) A minimal replacement for the [objc2-proc-macros](https://crates.io/crates/objc2-proc-macros) crate
 
 **Networking**
 
