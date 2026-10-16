@@ -26,7 +26,7 @@ fn is_generated_database(root: &Path, path: &Path) -> bool {
         .unwrap_or_default();
     name.contains(".db")
         || (name.ends_with(".mmdb")
-            && path != root.join("lib/maxminddb/test-data/GeoLite2-City-Test.mmdb"))
+            && path != root.join("lib/net/maxminddb/test-data/GeoLite2-City-Test.mmdb"))
 }
 
 fn cargo_install_path(path: &str, force: bool) -> Result<()> {

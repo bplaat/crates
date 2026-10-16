@@ -57,4 +57,4 @@ cargo update -p idna_adapter --precise 1.0.0
 
 Copyright © 2023-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

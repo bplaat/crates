@@ -44,4 +44,4 @@ See the [documentation](https://docs.rs/simple-useragent) for more information.
 
 Copyright © 2024-2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

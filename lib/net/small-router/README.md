@@ -41,4 +41,4 @@ See the [examples](examples/) for many more examples.
 
 Copyright © 2024-2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

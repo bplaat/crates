@@ -51,4 +51,4 @@ async-only API does not fit a synchronous `Read`/`Write` interface.
 
 Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

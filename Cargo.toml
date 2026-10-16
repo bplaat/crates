@@ -2,7 +2,6 @@
 members = [
     "apps/*/*",
     "games/*",
-    "lib/*/examples/*",
     "lib/apple/*",
     "lib/base64",
     "lib/bsql",
@@ -22,11 +21,8 @@ members = [
     "lib/js",
     "lib/keyring",
     "lib/libsqlite3-sys",
-    "lib/local-ip-address",
-    "lib/maxminddb",
-    "lib/mime",
-    "lib/mime_guess",
-    "lib/native-tls",
+    "lib/net/*",
+    "lib/net/*/examples/*",
     "lib/openapi-generator",
     "lib/pbkdf2",
     "lib/plist",
@@ -37,17 +33,12 @@ members = [
     "lib/serde_yaml",
     "lib/sha1",
     "lib/sha2",
-    "lib/simple-useragent",
     "lib/simple_logger",
-    "lib/small-http",
-    "lib/small-router",
-    "lib/small-websocket",
     "lib/terminal_size",
     "lib/threadpool",
     "lib/trybuild",
     "lib/ui/*",
     "lib/ui/*/examples/*",
-    "lib/url",
     "lib/uuid",
     "lib/validate",
     "lib/validate_derive",
@@ -91,11 +82,11 @@ getrandom = { path = "lib/getrandom" }
 hmac = { path = "lib/hmac" }
 keyring = { path = "lib/keyring" }
 libsqlite3-sys = { path = "lib/libsqlite3-sys" }
-local-ip-address = { path = "lib/local-ip-address" }
-maxminddb = { path = "lib/maxminddb" }
-mime = { path = "lib/mime" }
-mime_guess = { path = "lib/mime_guess" }
-native-tls = { path = "lib/native-tls" }
+local-ip-address = { path = "lib/net/local-ip-address" }
+maxminddb = { path = "lib/net/maxminddb" }
+mime = { path = "lib/net/mime" }
+mime_guess = { path = "lib/net/mime_guess" }
+native-tls = { path = "lib/net/native-tls" }
 objc2 = { path = "lib/apple/objc2" }
 objc2-proc-macros = { path = "lib/apple/objc2-proc-macros" }
 plist = { path = "lib/plist" }
@@ -106,14 +97,14 @@ rust-embed-impl = { path = "lib/rust-embed-impl" }
 serde_yaml = { path = "lib/serde_yaml" }
 sha1 = { path = "lib/sha1" }
 sha2 = { path = "lib/sha2" }
-simple-useragent = { path = "lib/simple-useragent" }
+simple-useragent = { path = "lib/net/simple-useragent" }
 simple_logger = { path = "lib/simple_logger" }
-small-http = { path = "lib/small-http" }
-small-router = { path = "lib/small-router" }
+small-http = { path = "lib/net/small-http" }
+small-router = { path = "lib/net/small-router" }
 terminal_size = { path = "lib/terminal_size" }
 threadpool = { path = "lib/threadpool" }
 trybuild = { path = "lib/trybuild" }
-url = { path = "lib/url" }
+url = { path = "lib/net/url" }
 uuid = { path = "lib/uuid" }
 winresource = { path = "lib/winresource" }
 zip = { path = "lib/zip" }

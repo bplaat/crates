@@ -31,4 +31,4 @@ the [example](examples/small-websocket-simple.rs) for a complete echo server.
 
 Copyright © 2025 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

@@ -20,10 +20,10 @@ Most of these libraries are intended primarily for personal use, but can still b
 - [openapi-generator](lib/openapi-generator) A simple OpenAPI code generator
 - [pbkdf2](lib/pbkdf2) A PBKDF2-HMAC-SHA256 password hashing library
 - [plaatui](lib/ui/plaatui) A Preact web components ui library for my own services
-- [simple-useragent](lib/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
-- [small-http](lib/small-http) A simple and small HTTP/1.1 server/client library
-- [small-router](lib/small-router) A simple and small router for the [small-http](lib/small-http) library
-- [small-websocket](lib/small-websocket) A simple and small WebSocket library for the [small-http](lib/small-http) library
+- [simple-useragent](lib/net/simple-useragent) A simple user agent parser library based on the uap-core regexes **([crates.io](https://crates.io/crates/simple-useragent))**
+- [small-http](lib/net/small-http) A simple and small HTTP/1.1 server/client library
+- [small-router](lib/net/small-router) A simple and small router for the [small-http](lib/net/small-http) library
+- [small-websocket](lib/net/small-websocket) A simple and small WebSocket library for the [small-http](lib/net/small-http) library
 - [threadpool](lib/threadpool) A fixed and scalable thread pool for Rust
 - [validate](lib/validate) A simple struct validation library
 - [validate_derive](lib/validate_derive) Validation derive macros library
@@ -139,11 +139,11 @@ These libraries are minimal replacements for commonly used crates.
 - [gzip](lib/gzip) A gzip library and command-line utility with a benchmark
 - [hmac](lib/hmac) A minimal replacement for the [hmac](https://crates.io/crates/hmac) crate
 - [libsqlite3-sys](lib/libsqlite3-sys) A minimal replacement for the [libsqlite3-sys](https://crates.io/crates/libsqlite3-sys) crate
-- [local-ip-address](lib/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
-- [native-tls](lib/native-tls) A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate
-- [maxminddb](lib/maxminddb) A minimal replacement for the [maxminddb](https://crates.io/crates/maxminddb) crate
-- [mime](lib/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
-- [mime_guess](lib/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
+- [local-ip-address](lib/net/local-ip-address) A minimal replacement for the [local-ip-address](https://crates.io/crates/local-ip-address) crate
+- [native-tls](lib/net/native-tls) A minimal replacement for the [native-tls](https://crates.io/crates/native-tls) crate
+- [maxminddb](lib/net/maxminddb) A minimal replacement for the [maxminddb](https://crates.io/crates/maxminddb) crate
+- [mime](lib/net/mime) A minimal replacement for the [mime](https://crates.io/crates/mime) crate
+- [mime_guess](lib/net/mime_guess) A minimal replacement for the [mime_guess](https://crates.io/crates/mime_guess) crate
 - [objc2](lib/apple/objc2) A minimal replacement for the [objc2](https://crates.io/crates/objc2) crate
 - [objc2-proc-macros](lib/apple/objc2-proc-macros) A minimal replacement for the [objc2](https://crates.io/crates/objc2-proc-macros) crate
 - [plist](lib/plist) A minimal replacement for the [plist](https://crates.io/crates/plist) crate
@@ -157,7 +157,7 @@ These libraries are minimal replacements for commonly used crates.
 - [simple_logger](lib/simple_logger) A minimal replacement for the [simple_logger](https://crates.io/crates/simple_logger) crate
 - [terminal_size](lib/terminal_size) A minimal replacement for the [terminal_size](https://crates.io/crates/terminal_size) crate
 - [trybuild](lib/trybuild) A minimal replacement for the [trybuild](https://crates.io/crates/trybuild) crate
-- [url](lib/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
+- [url](lib/net/url) A minimal replacement for the [url](https://crates.io/crates/url) crate
 - [uuid](lib/uuid) A minimal replacement for the [uuid](https://crates.io/crates/uuid) crate
 - [winresource](lib/winresource) A minimal replacement for the [winresource](https://crates.io/crates/winresource) crate
 - [zip](lib/zip) A minimal replacement for the [zip](https://crates.io/crates/zip) crate

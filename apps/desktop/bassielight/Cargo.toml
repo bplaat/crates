@@ -29,7 +29,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 simple_logger = "5.2"
 small-http = { version = "0.2.1", default-features = false }
-small-websocket = { path = "../../../lib/small-websocket", default-features = false }
+small-websocket = { path = "../../../lib/net/small-websocket", default-features = false }
 
 [build-dependencies]
 copy_dir = "0.1.3"
