@@ -67,4 +67,4 @@ fn print_usb_devices() -> Result<(), rusb::Error> {
 
 Copyright © 2026 [Bastiaan van der Plaat](https://github.com/bplaat)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

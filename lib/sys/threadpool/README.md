@@ -61,4 +61,4 @@ pool.join();
 
 Copyright © 2023-2026 Bastiaan van der Plaat
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

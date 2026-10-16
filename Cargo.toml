@@ -3,25 +3,18 @@ members = [
     "apps/*/*",
     "games/*",
     "lib/apple/*",
-    "lib/copy_dir",
     "lib/criterion",
     "lib/crypto/*",
     "lib/data/*",
-    "lib/directories",
-    "lib/enable-ansi-support",
     "lib/graphics/*",
     "lib/graphics/*/examples/*",
     "lib/js",
-    "lib/keyring",
     "lib/net/*",
     "lib/net/*/examples/*",
     "lib/openapi-generator",
-    "lib/rusb",
     "lib/rust-embed",
     "lib/rust-embed-impl",
-    "lib/simple_logger",
-    "lib/terminal_size",
-    "lib/threadpool",
+    "lib/sys/*",
     "lib/trybuild",
     "lib/ui/*",
     "lib/ui/*/examples/*",
@@ -56,13 +49,13 @@ block2 = { path = "lib/apple/block2" }
 bsql = { path = "lib/data/bsql" }
 bsql_derive = { path = "lib/data/bsql_derive" }
 chrono = { path = "lib/data/chrono" }
-copy_dir = { path = "lib/copy_dir" }
+copy_dir = { path = "lib/sys/copy_dir" }
 digest = { path = "lib/crypto/digest" }
-directories = { path = "lib/directories" }
-enable-ansi-support = { path = "lib/enable-ansi-support" }
+directories = { path = "lib/sys/directories" }
+enable-ansi-support = { path = "lib/sys/enable-ansi-support" }
 getrandom = { path = "lib/crypto/getrandom" }
 hmac = { path = "lib/crypto/hmac" }
-keyring = { path = "lib/keyring" }
+keyring = { path = "lib/sys/keyring" }
 libsqlite3-sys = { path = "lib/data/libsqlite3-sys" }
 local-ip-address = { path = "lib/net/local-ip-address" }
 maxminddb = { path = "lib/net/maxminddb" }
@@ -73,18 +66,18 @@ objc2 = { path = "lib/apple/objc2" }
 objc2-proc-macros = { path = "lib/apple/objc2-proc-macros" }
 plist = { path = "lib/data/plist" }
 regex = { path = "lib/data/regex" }
-rusb = { path = "lib/rusb" }
+rusb = { path = "lib/sys/rusb" }
 rust-embed = { path = "lib/rust-embed" }
 rust-embed-impl = { path = "lib/rust-embed-impl" }
 serde_yaml = { path = "lib/data/serde_yaml" }
 sha1 = { path = "lib/crypto/sha1" }
 sha2 = { path = "lib/crypto/sha2" }
 simple-useragent = { path = "lib/net/simple-useragent" }
-simple_logger = { path = "lib/simple_logger" }
+simple_logger = { path = "lib/sys/simple_logger" }
 small-http = { path = "lib/net/small-http" }
 small-router = { path = "lib/net/small-router" }
-terminal_size = { path = "lib/terminal_size" }
-threadpool = { path = "lib/threadpool" }
+terminal_size = { path = "lib/sys/terminal_size" }
+threadpool = { path = "lib/sys/threadpool" }
 trybuild = { path = "lib/trybuild" }
 url = { path = "lib/net/url" }
 uuid = { path = "lib/data/uuid" }
