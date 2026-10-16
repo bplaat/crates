@@ -23,7 +23,7 @@ one of these addresses.
 Example command to build the Docker image for PlaatNotes locally (from the root of the repository):
 
 ```sh
-docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:latest --file bin/plaatnotes/Dockerfile .
+docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:latest --file apps/web/plaatnotes/Dockerfile .
 ```
 
 ## Screenshot
@@ -34,4 +34,4 @@ docker build --platform linux/amd64,linux/arm64 --tag ghcr.io/bplaat/plaatnotes:
 
 Copyright © 2025-2026 [Bastiaan van der Plaat](https://bplaat.nl/)
 
-Licensed under the [MIT](../../LICENSE) license.
+Licensed under the [MIT](../../../LICENSE) license.

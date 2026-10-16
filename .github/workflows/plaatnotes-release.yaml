@@ -28,15 +28,15 @@ jobs:
         uses: docker/setup-buildx-action@v3
       - name: Build and push Docker image
         run: |
-          VERSION=$(grep '^version' bin/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(grep '^version' apps/web/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
           docker buildx build --platform linux/amd64,linux/arm64 \
             --tag ghcr.io/bplaat/plaatnotes:${VERSION} \
             --tag ghcr.io/bplaat/plaatnotes:latest \
-            --file bin/plaatnotes/Dockerfile \
+            --file apps/web/plaatnotes/Dockerfile \
             --push .
       - name: Create Git tag and GitHub Release
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION=$(grep '^version' bin/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
+          VERSION=$(grep '^version' apps/web/plaatnotes/Cargo.toml | head -n1 | sed 's/version = "\(.*\)"/\1/')
           gh release create "plaatnotes/v${VERSION}" --title "PlaatNotes v${VERSION}"

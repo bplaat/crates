@@ -10,7 +10,7 @@
         "test": "npm exec --node-options=--no-deprecation -- playwright test"
     },
     "dependencies": {
-        "plaatui": "file:../../../npm-lib/plaatui",
+        "plaatui": "file:../../../../npm-lib/plaatui",
         "@preact/signals": "^2.3.1",
         "@types/dompurify": "^3.0.5",
         "@types/turndown": "^5.0.6",
